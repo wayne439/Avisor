@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -460,7 +460,7 @@ canvas#cgc{display:block;width:100%;height:auto}
       </select>
     </div>
     <div class="row2">
-      <div class="field"><label>Rules</label><select id="rules"><option value="IFR">IFR</option><option value="VFR">VFR</option></select></div>
+      <div class="field"><label>Rules</label><select id="rules"><option value="VFR" selected>VFR</option></select></div>
       <div class="field"><label>Priority</label><select id="pri"><option value="fastest">Fastest</option><option value="fuel">Fuel Save</option><option value="smooth">Smoothest</option><option value="safe">Safest Wx</option></select></div>
     </div>
     <div class="row2">
@@ -539,6 +539,7 @@ canvas#cgc{display:block;width:100%;height:auto}
   <div class="tabbar">
     <div class="t on" onclick="tab('brief')" id="t-brief">BRIEF</div>
     <div class="t" onclick="tab('route')" id="t-route">WAYPOINTS</div>
+    <div class="t" onclick="tab('map')" id="t-map">🗺 SECTIONAL MAP</div>
     <div class="t" onclick="tab('wx')" id="t-wx">WEATHER</div>
     <div class="t" onclick="tab('notams')" id="t-notams">NOTAMs</div>
     <div class="t" onclick="tab('approach')" id="t-approach">APPROACH</div>
@@ -548,7 +549,7 @@ canvas#cgc{display:block;width:100%;height:auto}
     <div class="t t-atc" onclick="tab('atc')" id="t-atc">🎙 ATC LIVE</div>
     <div class="t" onclick="tab('chat')" id="t-chat">AI ADVISOR</div>
     <div class="t" onclick="tab('radio')" id="t-radio">📻 RADIO</div>
-    <div class="t" onclick="tab('map')" id="t-map">🗺 SECTIONAL MAP</div>
+    
   </div>
 
   <!-- BRIEF -->
@@ -618,7 +619,7 @@ canvas#cgc{display:block;width:100%;height:auto}
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="bsm bsm-g" onclick="window.open('https://nfdc.faa.gov/xwiki/bin/view/NFDC/56DaySub/56DaySubscriptionFiles/','_blank','noopener')">📄 FAA Part 95 / Airways</button>
             <button class="bsm bsm-g" onclick="window.open('https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/vfr/','_blank','noopener')">🗺 FAA VFR Charts</button>
-            <button class="bsm bsm-g" onclick="window.open('https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/ifr/','_blank','noopener')">🗺 FAA IFR Charts</button>
+            <button class="bsm bsm-g" onclick="window.open('https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/vfr/','_blank','noopener')">🗺 FAA VFR Charts</button>
             <button class="bsm" onclick="window.open('https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/dtpp/','_blank','noopener')">📘 FAA Terminal Procedures</button>
             <button class="bsm" onclick="window.open('https://adds-faa.opendata.arcgis.com/','_blank','noopener')">🗂 FAA ArcGIS Open Data</button>
             <button class="bsm" onclick="window.open('https://adip.faa.gov/agis/public/#/public','_blank','noopener')">🛬 FAA ADIP / AGIS</button>
@@ -1597,7 +1598,7 @@ function readEnrouteWpSpacingProfile(){
   var el=document.getElementById('opt-wp-spacing');
   var v=(el&&el.value)||'auto';
   if(v==='auto')
-    return{corridorNm:55,targetNm:55,minLegNm:50,maxLegNm:62,minAlongPickSep:22};
+    return{corridorNm:55,targetNm:55,minlegNm: 60,maxlegNm:  60,minAlongPickSep:22};
   var n=parseInt(v,10);
   if(!isFinite(n)||n<25) n=55;
   var pad=Math.max(8,Math.round(n*0.14));
