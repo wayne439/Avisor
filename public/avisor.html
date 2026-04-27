@@ -1444,6 +1444,29 @@ async function fetchJSONTimeout(url,opts,ms){
     clearTimeout(to);
   }
 }
+/** Same-origin Vite proxy (vite.config.ts). Direct AWC/FAA fetch fails CORS on Safari/iPhone and many browsers. */
+function avisorUseFetchProxy(){
+  try{
+    return location && (location.protocol === 'http:' || location.protocol === 'https:');
+  }catch(e){return false;}
+}
+function awcMetarUrls(icao){
+  var b=avisorUseFetchProxy()
+    ? '/awc-api/data/metar?ids='+encodeURIComponent(icao)+'&format='
+    : 'https://aviationweather.gov/api/data/metar?ids='+encodeURIComponent(icao)+'&format=';
+  return [b+'json',b+'JSON'];
+}
+function awcTafUrls(icao){
+  var b=avisorUseFetchProxy()
+    ? '/awc-api/data/taf?ids='+encodeURIComponent(icao)+'&format='
+    : 'https://aviationweather.gov/api/data/taf?ids='+encodeURIComponent(icao)+'&format=';
+  return [b+'json',b+'JSON'];
+}
+function faaNotamUrl(icao,key){
+  var q='icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key);
+  if(avisorUseFetchProxy()) return '/faa-api/notamapi/v1/notams?'+q;
+  return 'https://api.faa.gov/notamapi/v1/notams?'+q;
+}
 /** AWC JSON often gives altim in millibars (>50); UI expects inHg for display */
 function normalizeAwMetarTaf(ob){
   if(!ob||typeof ob!=='object')return ob;
@@ -1455,10 +1478,7 @@ function normalizeAwMetarTaf(ob){
 }
 async function fMetar(icao){
   try{
-    const urls=[
-      `https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(icao)}&format=json`,
-      `https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(icao)}&format=JSON`
-    ];
+    const urls=awcMetarUrls(icao);
     for(var i=0;i<urls.length;i++){
       const r=await fetchJSONTimeout(urls[i],{cache:'no-store'},8000);
       if(!r||!r.ok) continue;
@@ -1470,10 +1490,7 @@ async function fMetar(icao){
 }
 async function fTaf(icao){
   try{
-    const urls=[
-      `https://aviationweather.gov/api/data/taf?ids=${encodeURIComponent(icao)}&format=json`,
-      `https://aviationweather.gov/api/data/taf?ids=${encodeURIComponent(icao)}&format=JSON`
-    ];
+    const urls=awcTafUrls(icao);
     for(var i=0;i<urls.length;i++){
       const r=await fetchJSONTimeout(urls[i],{cache:'no-store'},8000);
       if(!r||!r.ok) continue;
@@ -1491,7 +1508,7 @@ async function fNotam(icao){
   var key=getFaaNotamApiKey();
   if(!key) return localNotamFallback(icao,'Add FAA API key in sidebar to pull live NOTAM API feed.');
   try{
-    var url='https://api.faa.gov/notamapi/v1/notams?icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key);
+    var url=faaNotamUrl(icao,key);
     const r=await fetchJSONTimeout(url,{headers:{accept:'application/json'}},12000);
     if(!r.ok){
       console.warn('NOTAM HTTP',icao,r.status);
@@ -2216,6 +2233,7 @@ async function buildPlan(){
     if(rules==='VFR'&&(arr.elev||0)>5000)hazards.push(`High-elevation destination ${arr.elev.toLocaleString()} ft — density altitude affects performance.`);
     if(dm?.wspd>20)hazards.push(`Dep wind ${wfmt(dm)} — verify crosswind component is within aircraft limits.`);
     if(location.protocol==='file:')hazards.push('Page opened as file:// — many browsers block weather, NOTAMs, and map tiles. Use http://localhost (see orange banner) or `npm run dev` in avisor-native-shell.');
+    if(!avisorUseFetchProxy()&&(location.protocol==='capacitor:'||location.protocol==='ionic:'))hazards.push('Native WebView cannot use the dev-server weather/NOTAM proxy. For live METAR/TAF/NOTAM use Safari to http://YOUR-PC:5173/avisor.html on Wi‑Fi, or host the build with /awc-api and /faa-api forwarded like Vite.');
     if(!dm&&!am)hazards.push('METAR/TAF did not load — check internet, CORS (use http server), or AviationWeather.gov status.');
     if((!dn||!dn.length)&&(!an||!an.length)){
       if(!getFaaNotamApiKey())hazards.push('NOTAMs empty — add your free FAA NOTAM API key in the sidebar (api.faa.gov).');

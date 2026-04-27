@@ -4,6 +4,7 @@ export default defineConfig({
   base: "./",
   publicDir: "public",
   server: {
+    host: true,
     // tunnelmole / localtunnel / ngrok send a different Host header than localhost
     allowedHosts: true,
     // AWC JSON API does not send Access-Control-Allow-Origin; browser fetch must be same-origin.
@@ -21,6 +22,7 @@ export default defineConfig({
     },
   },
   preview: {
+    host: true,
     allowedHosts: true,
     proxy: {
       "/awc-api": {
