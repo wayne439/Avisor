@@ -342,7 +342,7 @@ canvas#cgc{display:block;width:100%;height:auto}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://unpkg.com/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
-</head>
+<script>function avisorUseFetchProxy(){try{return location&&(location.protocol==='http:'||location.protocol==='https:');}catch(e){return false;}}function awcMetarUrls(icao){var b=avisorUseFetchProxy();return b?['./awc-api/data/metar?ids='+encodeURIComponent(icao)+'&format=json','./awc-api/data/metar?ids='+encodeURIComponent(icao)+'&format=JSON']:['https://aviationweather.gov/api/data/metar?ids='+encodeURIComponent(icao)+'&format=json','https://aviationweather.gov/api/data/metar?ids='+encodeURIComponent(icao)+'&format=JSON'];}function awcTafUrls(icao){var b=avisorUseFetchProxy();return b?['./awc-api/data/taf?ids='+encodeURIComponent(icao)+'&format=json']:['https://aviationweather.gov/api/data/taf?ids='+encodeURIComponent(icao)+'&format=json'];}function faaNotamUrl(icao,key){var b=avisorUseFetchProxy();return b?'./faa-api/v1/notams?icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key):'https://api.faa.gov/notamapi/v1/notams?icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key);}</script></head>
 <body>
 
 <!-- LOADING -->
@@ -1621,7 +1621,7 @@ function pruneNotClosingOnDest(depRef,arrRef,wpts){
 function densifyWaypointsByDistance(wpts,depRef,arrRef,profile){
   if(!Array.isArray(wpts)||wpts.length<2) return wpts||[];
   profile=profile||readEnrouteWpSpacingProfile();
-  var maxLeg=Math.max(48,Number(profile.maxLegNm)||62);
+  var maxLeg=Math.max(48,Number(profile.maxLegNm)||60);
   var minPickGap=Math.max(14,Number(profile.minAlongPickSep)||22);
   var out=[wpts[0]];
   var used={};
@@ -2336,7 +2336,7 @@ function openFFApp(){ openFF(); }
 function printBrief(){
   if(!STATE.plan)return;const p=STATE.plan;
   const w=window.open('','_blank');
-  w.document.write(`<html><head><title>Flight Brief</title><style>body{font-family:monospace;font-size:12px;padding:22px;white-space:pre-wrap;line-height:1.8}</style></head><body>PilotAvisor FLIGHT PLAN BRIEF\n${'='.repeat(50)}\nRoute:      ${p.primary}\nAircraft:   ${p.ac.name}\nRules:      ${p.rules}\nAlt:        ${p.alt.toLocaleString()} ft MSL\nDistance:   ${p.dist} NM\nETE:        ${p.eteMin} min\nGroundspeed:${p.gs} KTAS\nFuel:       ${p.totalFuel} gal (trip ${p.tripFuel} + reserve ${p.resFuel})\n\nDEPARTURE: ${p.depIcao} — ${p.dep.name}\n  Wind: ${p.depWind}\n  METAR: ${p.dm?.rawOb||'N/A'}\n\nDESTINATION: ${p.arrIcao} — ${p.arr.name}\n  Wind: ${p.arrWind}\n  Runway: ${p.favRwy?'RWY '+p.favRwy.id:'TBD'}\n  METAR: ${p.am?.rawOb||'N/A'}\n\nWAYPOINTS (${STATE.waypoints.length} fixes):\n${STATE.waypoints.map(x=>'  '+x.id.padEnd(8)+x.desc).join('\n')}\n\nHAZARDS:\n${p.hazards.map(h=>'  △ '+h).join('\n')||'  ✓ None flagged'}\n\n${'─'.repeat(50)}\n⚠ FOR PLANNING USE ONLY — not approved flight-planning software.\nGenerated: ${new Date().toUTCString()}</body></html>`);
+  w.document.write(`<html><head><title>Flight Brief</title><style>body{font-family:monospace;font-size:12px;padding:22px;white-space:pre-wrap;line-height:1.8}</style><script>function avisorUseFetchProxy(){try{return location&&(location.protocol==='http:'||location.protocol==='https:');}catch(e){return false;}}function awcMetarUrls(icao){var b=avisorUseFetchProxy();return b?['./awc-api/data/metar?ids='+encodeURIComponent(icao)+'&format=json','./awc-api/data/metar?ids='+encodeURIComponent(icao)+'&format=JSON']:['https://aviationweather.gov/api/data/metar?ids='+encodeURIComponent(icao)+'&format=json','https://aviationweather.gov/api/data/metar?ids='+encodeURIComponent(icao)+'&format=JSON'];}function awcTafUrls(icao){var b=avisorUseFetchProxy();return b?['./awc-api/data/taf?ids='+encodeURIComponent(icao)+'&format=json']:['https://aviationweather.gov/api/data/taf?ids='+encodeURIComponent(icao)+'&format=json'];}function faaNotamUrl(icao,key){var b=avisorUseFetchProxy();return b?'./faa-api/v1/notams?icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key):'https://api.faa.gov/notamapi/v1/notams?icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key);}</script></head><body>PilotAvisor FLIGHT PLAN BRIEF\n${'='.repeat(50)}\nRoute:      ${p.primary}\nAircraft:   ${p.ac.name}\nRules:      ${p.rules}\nAlt:        ${p.alt.toLocaleString()} ft MSL\nDistance:   ${p.dist} NM\nETE:        ${p.eteMin} min\nGroundspeed:${p.gs} KTAS\nFuel:       ${p.totalFuel} gal (trip ${p.tripFuel} + reserve ${p.resFuel})\n\nDEPARTURE: ${p.depIcao} — ${p.dep.name}\n  Wind: ${p.depWind}\n  METAR: ${p.dm?.rawOb||'N/A'}\n\nDESTINATION: ${p.arrIcao} — ${p.arr.name}\n  Wind: ${p.arrWind}\n  Runway: ${p.favRwy?'RWY '+p.favRwy.id:'TBD'}\n  METAR: ${p.am?.rawOb||'N/A'}\n\nWAYPOINTS (${STATE.waypoints.length} fixes):\n${STATE.waypoints.map(x=>'  '+x.id.padEnd(8)+x.desc).join('\n')}\n\nHAZARDS:\n${p.hazards.map(h=>'  △ '+h).join('\n')||'  ✓ None flagged'}\n\n${'─'.repeat(50)}\n⚠ FOR PLANNING USE ONLY — not approved flight-planning software.\nGenerated: ${new Date().toUTCString()}</body></html>`);
   w.document.close();w.print();
 }
 
@@ -2989,7 +2989,7 @@ async function ensureOurAirportsEnrichment(){
   _ourAirportsEnrichmentPromise=(async function(){
     var hostBase=(location&&location.origin&&location.origin!=='null')?location.origin:'';
     var freqUrls=[
-      './data/ourairports-airport-frequencies.csv',
+      '/data/ourairports-airport-frequencies.csv',
       '/data/ourairports-airport-frequencies.csv',
       hostBase?hostBase+'/data/ourairports-airport-frequencies.csv':'',
       'https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/airport-frequencies.csv'
