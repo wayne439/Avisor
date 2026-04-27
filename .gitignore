@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.local
+# Large copied planner — uncomment to keep repo small; then use npm run sync:avisor locally
+# public/avisor.html

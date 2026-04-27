@@ -1,0 +1,25 @@
+{
+  "name": "PilotAvisor — AI Flight Advisor",
+  "short_name": "PilotAvisor",
+  "description": "Flight planning aid — not for sole-source navigation.",
+  "start_url": "./avisor.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1829",
+  "theme_color": "#0d1829",
+  "icons": [
+    {
+      "src": "./pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

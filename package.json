@@ -1,0 +1,39 @@
+{
+  "name": "avisor-native-shell",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "PilotAvisor (AVISOR core) offline shell: IndexedDB flight state + service worker. Wrap with Tauri/Capacitor next.",
+  "scripts": {
+    "dev": "vite",
+    "dev:lan": "vite --host 0.0.0.0",
+    "tunnel": "npx --yes tunnelmole 5173",
+    "tunnel:lt": "npx --yes localtunnel --port 5173",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "sync:avisor": "node scripts/copy-avisor.cjs",
+    "build:navaids": "node scripts/build-navaids-bundle.cjs",
+    "build:faa": "node scripts/import-faa-workbook.cjs",
+    "mobile:prep": "npm run sync:avisor && npm run build:navaids && npm run build",
+    "cap:sync": "npm run mobile:prep && npx cap sync",
+    "cap:copy": "npm run mobile:prep && npx cap copy",
+    "cap:add:android": "npx cap add android",
+    "cap:add:ios": "npx cap add ios",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.3",
+    "xlsx": "^0.18.5"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
+    "@capacitor/ios": "^8.3.1"
+  }
+}
