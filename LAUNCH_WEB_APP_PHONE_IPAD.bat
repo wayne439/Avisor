@@ -34,7 +34,13 @@ if errorlevel 1 (
 )
 
 echo.
-set /p LAN_IP=Enter your PC Wi-Fi IP (example 192.168.1.44): 
+echo Your PC IPv4 addresses ^(use the one on the SAME subnet as your phone^):
+ipconfig | findstr /i /c:"IPv4"
+echo.
+echo If Chrome shows ERR_CONNECTION_REFUSED: Vite is not listening yet ^(wait for "ready"^),
+echo   this window was closed, or the IP above does not match the PC running the server.
+echo.
+set /p LAN_IP=Enter your PC Wi-Fi IP from the list ^(example 10.0.0.15^): 
 if "%LAN_IP%"=="" (
   echo No IP entered.
   pause
