@@ -26,9 +26,9 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0",
+    "read-excel-file": "^9.0.6",
     "typescript": "~5.7.2",
-    "vite": "^6.0.3",
-    "xlsx": "^0.18.5"
+    "vite": "^6.0.3"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",

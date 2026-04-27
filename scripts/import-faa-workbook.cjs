@@ -2,7 +2,7 @@
 /* Build app-ready FAA data JSON from faa_master.xlsx + faa_data_dictionary.xlsx */
 const fs = require("fs");
 const path = require("path");
-const XLSX = require("xlsx");
+const readXlsxFile = require("read-excel-file/node");
 
 const ROOT = process.cwd();
 const MASTER_XLSX = path.join(ROOT, "faa_master.xlsx");
@@ -19,10 +19,25 @@ if (!fs.existsSync(MASTER_XLSX)) fail("Missing faa_master.xlsx at project root."
 if (!fs.existsSync(DICT_XLSX)) fail("Missing faa_data_dictionary.xlsx at project root.");
 if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
 
-function readRows(file, sheet) {
-  const wb = XLSX.readFile(file);
-  if (!wb.SheetNames.includes(sheet)) fail(`Missing sheet "${sheet}" in ${path.basename(file)}.`);
-  return XLSX.utils.sheet_to_json(wb.Sheets[sheet], { defval: "", raw: false });
+function worksheetToRows(matrix) {
+  if (!matrix.length) return [];
+  const headers = matrix[0].map((h) => String(h == null ? "" : h).trim());
+  const rows = [];
+  for (let i = 1; i < matrix.length; i++) {
+    const src = matrix[i];
+    const out = {};
+    let hasAnyValue = false;
+    for (let c = 0; c < headers.length; c++) {
+      const header = headers[c];
+      if (!header) continue;
+      const raw = src[c];
+      const value = raw == null ? "" : String(raw);
+      if (value !== "") hasAnyValue = true;
+      out[header] = value;
+    }
+    if (hasAnyValue) rows.push(out);
+  }
+  return rows;
 }
 
 function up(v) {
@@ -75,34 +90,33 @@ function parseCsvLine(line) {
   return out;
 }
 
-const airportRows = readRows(MASTER_XLSX, "Airports");
-const runwayRows = readRows(MASTER_XLSX, "Runways");
-const remarkRows = readRows(MASTER_XLSX, "Airport Remarks");
-const scheduleRows = readRows(MASTER_XLSX, "Airport Schedules");
+async function main() {
+  const airportRows = worksheetToRows(await readXlsxFile(MASTER_XLSX, { sheet: "Airports" }));
+  const runwayRows = worksheetToRows(await readXlsxFile(MASTER_XLSX, { sheet: "Runways" }));
+  const remarkRows = worksheetToRows(await readXlsxFile(MASTER_XLSX, { sheet: "Airport Remarks" }));
+  const scheduleRows = worksheetToRows(await readXlsxFile(MASTER_XLSX, { sheet: "Airport Schedules" }));
 
-const dictWb = XLSX.readFile(DICT_XLSX);
-const dictSheets = ["Facilities", "Remarks", "Runways", "Schedules"];
-const dataDictionary = {};
-for (const name of dictSheets) {
-  if (!dictWb.SheetNames.includes(name)) continue;
-  const rows = XLSX.utils.sheet_to_json(dictWb.Sheets[name], { defval: "", raw: false });
-  const out = {};
-  for (const row of rows) {
-    const field = String(row.Field || "").trim();
-    if (!field) continue;
-    out[field] = {
-      number: String(row.Number || "").trim(),
-      description: String(row.Description || "").trim(),
-    };
+  const dictSheets = ["Facilities", "Remarks", "Runways", "Schedules"];
+  const dataDictionary = {};
+  for (const name of dictSheets) {
+    const rows = worksheetToRows(await readXlsxFile(DICT_XLSX, { sheet: name }));
+    const out = {};
+    for (const row of rows) {
+      const field = String(row.Field || "").trim();
+      if (!field) continue;
+      out[field] = {
+        number: String(row.Number || "").trim(),
+        description: String(row.Description || "").trim(),
+      };
+    }
+    dataDictionary[name.toLowerCase()] = out;
   }
-  dataDictionary[name.toLowerCase()] = out;
-}
 
-const siteToKeys = {};
-const airportsDb = {};
-const airportDetails = {};
+  const siteToKeys = {};
+  const airportsDb = {};
+  const airportDetails = {};
 
-for (const row of airportRows) {
+  for (const row of airportRows) {
   const siteId = up(row["Site Id"]);
   const locId = up(row["Loc Id"]);
   const icaoId = up(row["ICAO Id"]);
@@ -148,10 +162,10 @@ for (const row of airportRows) {
     addIdentIndex(airportDetails, k, detail);
   }
   if (siteId) siteToKeys[siteId] = Array.from(new Set(keys.map(up)));
-}
+  }
 
-const runwaysByIdent = {};
-for (const row of runwayRows) {
+  const runwaysByIdent = {};
+  for (const row of runwayRows) {
   const siteId = up(row["Site Id"]);
   const locId = up(row["Loc Id"]);
   const keys = new Set(siteToKeys[siteId] || []);
@@ -212,9 +226,9 @@ for (const row of runwayRows) {
     if (!runwaysByIdent[k]) runwaysByIdent[k] = [];
     for (const rw of ends) runwaysByIdent[k].push(rw);
   }
-}
+  }
 
-for (const k of Object.keys(runwaysByIdent)) {
+  for (const k of Object.keys(runwaysByIdent)) {
   const seen = {};
   runwaysByIdent[k] = runwaysByIdent[k].filter((rw) => {
     const kk = `${rw.id}@${rw.hdg}@${rw.len}`;
@@ -222,10 +236,10 @@ for (const k of Object.keys(runwaysByIdent)) {
     seen[kk] = 1;
     return true;
   });
-}
+  }
 
-const remarksByIdent = {};
-for (const row of remarkRows) {
+  const remarksByIdent = {};
+  for (const row of remarkRows) {
   const locId = up(row["Loc Id"]);
   const icaoId = up(row["ICAO Id"]);
   const txt = String(row["Remark"] || "").trim();
@@ -243,10 +257,10 @@ for (const row of remarkRows) {
       text: txt,
     });
   }
-}
+  }
 
-const schedulesByIdent = {};
-for (const row of scheduleRows) {
+  const schedulesByIdent = {};
+  for (const row of scheduleRows) {
   const locId = up(row["Loc Id"]);
   const icaoId = up(row["ICAO Id"]);
   const schedule = String(row["Schedule"] || "").trim();
@@ -262,13 +276,13 @@ for (const row of scheduleRows) {
     if (!schedulesByIdent[k]) schedulesByIdent[k] = [];
     schedulesByIdent[k].push({ sequence: seq, text: schedule });
   }
-}
-for (const k of Object.keys(schedulesByIdent)) {
+  }
+  for (const k of Object.keys(schedulesByIdent)) {
   schedulesByIdent[k].sort((a, b) => a.sequence - b.sequence);
-}
+  }
 
-const frequenciesByIdent = {};
-if (fs.existsSync(FREQ_CSV)) {
+  const frequenciesByIdent = {};
+  if (fs.existsSync(FREQ_CSV)) {
   const txt = fs.readFileSync(FREQ_CSV, "utf8");
   const lines = txt.split(/\r?\n/).filter(Boolean);
   if (lines.length > 1) {
@@ -306,37 +320,40 @@ if (fs.existsSync(FREQ_CSV)) {
       }
     }
   }
+  }
+
+  const meta = {
+    source: "faa_master.xlsx + faa_data_dictionary.xlsx",
+    generatedAtUtc: new Date().toISOString(),
+    counts: {
+      airportsRows: airportRows.length,
+      runwaysRows: runwayRows.length,
+      remarksRows: remarkRows.length,
+      schedulesRows: scheduleRows.length,
+      frequenciesRows: fs.existsSync(FREQ_CSV) ? Math.max(0, fs.readFileSync(FREQ_CSV, "utf8").split(/\r?\n/).length - 1) : 0,
+      airportKeys: Object.keys(airportsDb).length,
+      runwaysKeys: Object.keys(runwaysByIdent).length,
+      remarksKeys: Object.keys(remarksByIdent).length,
+      schedulesKeys: Object.keys(schedulesByIdent).length,
+      frequenciesKeys: Object.keys(frequenciesByIdent).length,
+    },
+  };
+
+  function writeJson(name, obj) {
+    fs.writeFileSync(path.join(OUT_DIR, name), JSON.stringify(obj));
+    console.log(`wrote public/data/${name}`);
+  }
+
+  writeJson("faa-airports-db.json", airportsDb);
+  writeJson("faa-airport-details.json", airportDetails);
+  writeJson("faa-runways-by-ident.json", runwaysByIdent);
+  writeJson("faa-remarks-by-ident.json", remarksByIdent);
+  writeJson("faa-schedules-by-ident.json", schedulesByIdent);
+  writeJson("faa-frequencies-by-ident.json", frequenciesByIdent);
+  writeJson("faa-data-dictionary.json", dataDictionary);
+  writeJson("faa-import-meta.json", meta);
+
+  console.log("FAA import complete:", JSON.stringify(meta.counts));
 }
 
-const meta = {
-  source: "faa_master.xlsx + faa_data_dictionary.xlsx",
-  generatedAtUtc: new Date().toISOString(),
-  counts: {
-    airportsRows: airportRows.length,
-    runwaysRows: runwayRows.length,
-    remarksRows: remarkRows.length,
-    schedulesRows: scheduleRows.length,
-    frequenciesRows: fs.existsSync(FREQ_CSV) ? Math.max(0, fs.readFileSync(FREQ_CSV, "utf8").split(/\r?\n/).length - 1) : 0,
-    airportKeys: Object.keys(airportsDb).length,
-    runwaysKeys: Object.keys(runwaysByIdent).length,
-    remarksKeys: Object.keys(remarksByIdent).length,
-    schedulesKeys: Object.keys(schedulesByIdent).length,
-    frequenciesKeys: Object.keys(frequenciesByIdent).length,
-  },
-};
-
-function writeJson(name, obj) {
-  fs.writeFileSync(path.join(OUT_DIR, name), JSON.stringify(obj));
-  console.log(`wrote public/data/${name}`);
-}
-
-writeJson("faa-airports-db.json", airportsDb);
-writeJson("faa-airport-details.json", airportDetails);
-writeJson("faa-runways-by-ident.json", runwaysByIdent);
-writeJson("faa-remarks-by-ident.json", remarksByIdent);
-writeJson("faa-schedules-by-ident.json", schedulesByIdent);
-writeJson("faa-frequencies-by-ident.json", frequenciesByIdent);
-writeJson("faa-data-dictionary.json", dataDictionary);
-writeJson("faa-import-meta.json", meta);
-
-console.log("FAA import complete:", JSON.stringify(meta.counts));
+main().catch((err) => fail(err && err.message ? err.message : String(err)));
