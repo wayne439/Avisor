@@ -2,7 +2,7 @@
 /* Build app-ready FAA data JSON from faa_master.xlsx + faa_data_dictionary.xlsx */
 const fs = require("fs");
 const path = require("path");
-const readXlsxFile = require("read-excel-file/node");
+const readXlsxFileModule = require("read-excel-file/node");
 
 const ROOT = process.cwd();
 const MASTER_XLSX = path.join(ROOT, "faa_master.xlsx");
@@ -38,6 +38,16 @@ function worksheetToRows(matrix) {
     if (hasAnyValue) rows.push(out);
   }
   return rows;
+}
+
+async function readSheetRows(file, wantedSheet) {
+  const readSheetFn = readXlsxFileModule.readSheet;
+  const raw = await readSheetFn(file, wantedSheet);
+  const matrix = Array.isArray(raw) ? raw : raw && Array.isArray(raw.data) ? raw.data : [];
+  if (!Array.isArray(matrix) || (matrix.length > 0 && !Array.isArray(matrix[0]))) {
+    fail(`Unexpected worksheet format for "${wantedSheet}" in ${path.basename(file)}.`);
+  }
+  return worksheetToRows(matrix);
 }
 
 function up(v) {
@@ -91,15 +101,15 @@ function parseCsvLine(line) {
 }
 
 async function main() {
-  const airportRows = worksheetToRows(await readXlsxFile(MASTER_XLSX, { sheet: "Airports" }));
-  const runwayRows = worksheetToRows(await readXlsxFile(MASTER_XLSX, { sheet: "Runways" }));
-  const remarkRows = worksheetToRows(await readXlsxFile(MASTER_XLSX, { sheet: "Airport Remarks" }));
-  const scheduleRows = worksheetToRows(await readXlsxFile(MASTER_XLSX, { sheet: "Airport Schedules" }));
+  const airportRows = await readSheetRows(MASTER_XLSX, "Airports");
+  const runwayRows = await readSheetRows(MASTER_XLSX, "Runways");
+  const remarkRows = await readSheetRows(MASTER_XLSX, "Airport Remarks");
+  const scheduleRows = await readSheetRows(MASTER_XLSX, "Airport Schedules");
 
   const dictSheets = ["Facilities", "Remarks", "Runways", "Schedules"];
   const dataDictionary = {};
   for (const name of dictSheets) {
-    const rows = worksheetToRows(await readXlsxFile(DICT_XLSX, { sheet: name }));
+    const rows = await readSheetRows(DICT_XLSX, name);
     const out = {};
     for (const row of rows) {
       const field = String(row.Field || "").trim();
