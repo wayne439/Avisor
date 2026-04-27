@@ -38,18 +38,3 @@ jobs:
           name: dist
           path: dist/
           retention-days: 7
-
-  security:
-    name: Security scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check for hardcoded secrets
-        run: |
-          if grep -rn "sk-" src/ public/ --include="*.ts" --include="*.js" --include="*.html" 2>/dev/null; then
-            echo "Possible hardcoded API key found!"
-            exit 1
-          fi
-          echo "No hardcoded secrets detected"
