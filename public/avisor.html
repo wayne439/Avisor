@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -317,7 +317,7 @@ canvas#cgc{display:block;width:100%;height:auto}
   .body{overflow:visible}
   .left{width:100%;max-height:56dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;border-right:none;border-bottom:1px solid var(--line)}
   .left-footer{position:sticky;bottom:0;z-index:5;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 18px rgba(0,0,0,.25)}
-  .right{min-height:44dvh;padding-bottom:calc(60px + env(safe-area-inset-bottom,0px))}
+  .right{min-height:44dvh}
   #p-map.panel.on{min-height:min(72dvh,640px)}
   #p-map.panel.on #d-map{min-height:min(52dvh,520px)}
   #p-map #map-container{min-height:min(240px,38dvh)}
@@ -331,29 +331,6 @@ canvas#cgc{display:block;width:100%;height:auto}
   .wb-grid{grid-template-columns:1fr}
   .quick-btns{grid-template-columns:repeat(2,1fr)}
   .vspeeds-grid{grid-template-columns:repeat(2,1fr)}
-  /* Mobile bottom nav bar */
-  .tabbar{display:none}
-  .mob-nav{
-    display:flex;position:fixed;bottom:0;left:0;right:0;
-    height:calc(56px + env(safe-area-inset-bottom,0px));
-    padding-bottom:env(safe-area-inset-bottom,0px);
-    background:var(--sky2);border-top:1px solid var(--line);
-    z-index:1000;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
-  }
-  .mob-nav::-webkit-scrollbar{display:none}
-  .mob-tab{
-    flex:0 0 auto;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;min-width:52px;padding:0 6px;
-    font-family:var(--mono);font-size:7px;letter-spacing:0.5px;
-    color:var(--txt3);cursor:pointer;border-top:2px solid transparent;
-    gap:3px;-webkit-tap-highlight-color:transparent;user-select:none;
-  }
-  .mob-tab svg{width:17px;height:17px;flex-shrink:0}
-  .mob-tab.on{color:var(--blu);border-top-color:var(--blu)}
-  .mob-tab.mob-plan{color:var(--amb)}
-  .mob-tab.mob-plan.active{color:var(--amb);border-top-color:var(--amb)}
-  .go-btn-mobile{display:none!important}
-  .left{padding-bottom:80px}
 }
 .date-input{width:100%;padding:8px;font-size:13px;font-family:monospace;border-radius:8px;background:var(--card,#131929);color:var(--tx,#dde5f5);border:1px solid var(--brd,#2a3350);}
 @media(max-width:420px){
@@ -483,7 +460,7 @@ canvas#cgc{display:block;width:100%;height:auto}
       </select>
     </div>
     <div class="row2">
-      <div class="field"><label>Rules</label><select id="rules"><option value="VFR" selected>VFR</option></select></div>
+      <div class="field"><label>Rules</label><select id="rules"><option value="IFR">IFR</option><option value="VFR">VFR</option></select></div>
       <div class="field"><label>Priority</label><select id="pri"><option value="fastest">Fastest</option><option value="fuel">Fuel Save</option><option value="smooth">Smoothest</option><option value="safe">Safest Wx</option></select></div>
     </div>
     <div class="row2">
@@ -562,7 +539,6 @@ canvas#cgc{display:block;width:100%;height:auto}
   <div class="tabbar">
     <div class="t on" onclick="tab('brief')" id="t-brief">BRIEF</div>
     <div class="t" onclick="tab('route')" id="t-route">WAYPOINTS</div>
-    <div class="t" onclick="tab('map')" id="t-map">🗺 SECTIONAL MAP</div>
     <div class="t" onclick="tab('wx')" id="t-wx">WEATHER</div>
     <div class="t" onclick="tab('notams')" id="t-notams">NOTAMs</div>
     <div class="t" onclick="tab('approach')" id="t-approach">APPROACH</div>
@@ -572,64 +548,8 @@ canvas#cgc{display:block;width:100%;height:auto}
     <div class="t t-atc" onclick="tab('atc')" id="t-atc">🎙 ATC LIVE</div>
     <div class="t" onclick="tab('chat')" id="t-chat">AI ADVISOR</div>
     <div class="t" onclick="tab('radio')" id="t-radio">📻 RADIO</div>
-    
+    <div class="t" onclick="tab('map')" id="t-map">🗺 SECTIONAL MAP</div>
   </div>
-
-  <!-- MOBILE BOTTOM NAV — hidden on desktop via CSS -->
-  <nav class="mob-nav" id="mob-nav">
-    <div class="mob-tab mob-plan" id="mob-plan-btn" onclick="toggleMobLeft()" title="Route / Settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-      PLAN
-    </div>
-    <div class="mob-tab on" id="mt-brief" onclick="tab('brief')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h7M7 16h5"/></svg>
-      BRIEF
-    </div>
-    <div class="mob-tab" id="mt-wx" onclick="tab('wx')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/></svg>
-      WX
-    </div>
-    <div class="mob-tab" id="mt-notams" onclick="tab('notams')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      NOTAMs
-    </div>
-    <div class="mob-tab" id="mt-approach" onclick="tab('approach')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-      APCH
-    </div>
-    <div class="mob-tab" id="mt-map" onclick="tab('map')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-      MAP
-    </div>
-    <div class="mob-tab" id="mt-route" onclick="tab('route')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="14"/><circle cx="12" cy="19" r="3"/></svg>
-      WPTS
-    </div>
-    <div class="mob-tab" id="mt-chat" onclick="tab('chat')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      AI
-    </div>
-    <div class="mob-tab" id="mt-wb" onclick="tab('wb')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3L2 20h20L12 3z"/><line x1="12" y1="9" x2="12" y2="15"/></svg>
-      W&amp;B
-    </div>
-    <div class="mob-tab" id="mt-atc" onclick="tab('atc')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg>
-      ATC
-    </div>
-    <div class="mob-tab" id="mt-poh" onclick="tab('poh')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-      POH
-    </div>
-    <div class="mob-tab" id="mt-fpl" onclick="tab('fpl')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      FPL
-    </div>
-    <div class="mob-tab" id="mt-radio" onclick="tab('radio')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
-      RADIO
-    </div>
-  </nav>
 
   <!-- BRIEF -->
   <div class="panel on" id="p-brief">
@@ -698,7 +618,7 @@ canvas#cgc{display:block;width:100%;height:auto}
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="bsm bsm-g" onclick="window.open('https://nfdc.faa.gov/xwiki/bin/view/NFDC/56DaySub/56DaySubscriptionFiles/','_blank','noopener')">📄 FAA Part 95 / Airways</button>
             <button class="bsm bsm-g" onclick="window.open('https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/vfr/','_blank','noopener')">🗺 FAA VFR Charts</button>
-            <button class="bsm bsm-g" onclick="window.open('https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/vfr/','_blank','noopener')">🗺 FAA VFR Charts</button>
+            <button class="bsm bsm-g" onclick="window.open('https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/ifr/','_blank','noopener')">🗺 FAA IFR Charts</button>
             <button class="bsm" onclick="window.open('https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/dtpp/','_blank','noopener')">📘 FAA Terminal Procedures</button>
             <button class="bsm" onclick="window.open('https://adds-faa.opendata.arcgis.com/','_blank','noopener')">🗂 FAA ArcGIS Open Data</button>
             <button class="bsm" onclick="window.open('https://adip.faa.gov/agis/public/#/public','_blank','noopener')">🛬 FAA ADIP / AGIS</button>
@@ -1495,39 +1415,20 @@ function normalizeAwMetarTaf(ob){
   return o;
 }
 async function fMetar(icao){
-  // Try direct first (works natively); fall back through CORS proxies for browser/LAN testing
-  var _urls=[
-    `https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(icao)}&format=json`,
-    `https://corsproxy.io/?url=${encodeURIComponent('https://aviationweather.gov/api/data/metar?ids='+icao+'&format=json')}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent('https://aviationweather.gov/api/data/metar?ids='+icao+'&format=json')}`
-  ];
-  for(var _i=0;_i<_urls.length;_i++){
-    try{
-      var r=await fetchJSONTimeout(_urls[_i],null,8000);
-      if(!r.ok)continue;
-      var data=await r.json();
-      var row=Array.isArray(data)?data[0]:data;
-      if(row&&(row.rawOb||row.temp!=null))return normalizeAwMetarTaf(row);
-    }catch(e){console.warn('METAR attempt',_i,icao,e&&e.message);}
-  }
-  return null;
+  try{
+    const r=await fetchJSONTimeout(`https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
+    if(!r.ok)return null;
+    var row=(await r.json())?.[0]||null;
+    return row?normalizeAwMetarTaf(row):null;
+  }catch(e){console.warn('METAR',icao,e&&e.message);return null;}
 }
 async function fTaf(icao){
-  var _urls=[
-    `https://aviationweather.gov/api/data/taf?ids=${encodeURIComponent(icao)}&format=json`,
-    `https://corsproxy.io/?url=${encodeURIComponent('https://aviationweather.gov/api/data/taf?ids='+icao+'&format=json')}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent('https://aviationweather.gov/api/data/taf?ids='+icao+'&format=json')}`
-  ];
-  for(var _i=0;_i<_urls.length;_i++){
-    try{
-      var r=await fetchJSONTimeout(_urls[_i],null,8000);
-      if(!r.ok)continue;
-      var data=await r.json();
-      var row=Array.isArray(data)?data[0]:data;
-      if(row&&(row.rawTAF||row.rawOb||row.fcst))return normalizeAwMetarTaf(row);
-    }catch(e){console.warn('TAF attempt',_i,icao,e&&e.message);}
-  }
-  return null;
+  try{
+    const r=await fetchJSONTimeout(`https://aviationweather.gov/api/data/taf?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
+    if(!r.ok)return null;
+    var row=(await r.json())?.[0]||null;
+    return row?normalizeAwMetarTaf(row):null;
+  }catch(e){console.warn('TAF',icao,e&&e.message);return null;}
 }
 function getFaaNotamApiKey(){
   var el=document.getElementById('faa-notam-key');
@@ -1696,7 +1597,7 @@ function readEnrouteWpSpacingProfile(){
   var el=document.getElementById('opt-wp-spacing');
   var v=(el&&el.value)||'auto';
   if(v==='auto')
-    return{corridorNm:55,targetNm:55,minlegNm: 60,maxlegNm:  60,minAlongPickSep:22};
+    return{corridorNm:55,targetNm:55,minLegNm:50,maxLegNm:62,minAlongPickSep:22};
   var n=parseInt(v,10);
   if(!isFinite(n)||n<25) n=55;
   var pad=Math.max(8,Math.round(n*0.14));
@@ -2193,7 +2094,7 @@ async function buildPlan(){
   const arrIcao=normalizeFormIcao(document.getElementById('arr').value);
   const acid=document.getElementById('aircraft').value;
   const pri=document.getElementById('pri').value;
-  const rules=document.getElementById('rules').value;// VFR only;
+  const rules=document.getElementById('rules').value;
   const res=parseInt(document.getElementById('reserve').value)||45;
   const icing=document.getElementById('opt-icing').checked;
   const nightmtn=document.getElementById('opt-night').checked;
@@ -2888,24 +2789,12 @@ async function sendChat(){
 // ══════════════════════════════════════════════════════════════════
 // TABS
 // ══════════════════════════════════════════════════════════════════
-function toggleMobLeft(){
-  var l=document.querySelector('.left');
-  var btn=document.getElementById('mob-plan-btn');
-  if(!l)return;
-  var isOpen=l.classList.toggle('mob-open');
-  if(btn)btn.classList.toggle('active',isOpen);
-}
-
 function tab(id){
   const ids=['brief','route','wx','notams','approach','wb','poh','fpl','atc','chat','radio','map'];
   ids.forEach(i=>{
     document.getElementById('t-'+i)?.classList.toggle('on',i===id);
     document.getElementById('p-'+i)?.classList.toggle('on',i===id);
-    document.getElementById('mt-'+i)?.classList.toggle('on',i===id);
   });
-  // Close the mobile sidebar drawer when switching tabs
-  var l=document.querySelector('.left');if(l)l.classList.remove('mob-open');
-  var btn=document.getElementById('mob-plan-btn');if(btn)btn.classList.remove('active');
 
   if(id==='map'){
     /* Show map chrome immediately so flex can assign height before any async init */
