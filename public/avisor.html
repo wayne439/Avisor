@@ -548,7 +548,6 @@ canvas#cgc{display:block;width:100%;height:auto}
     <div class="t t-fpl" onclick="tab('fpl')" id="t-fpl">📁 FPL FILE</div>
     <div class="t t-atc" onclick="tab('atc')" id="t-atc">🎙 ATC LIVE</div>
     <div class="t" onclick="tab('chat')" id="t-chat">AI ADVISOR</div>
-    <div class="t" onclick="tab('radio')" id="t-radio">📻 RADIO</div>
     
   </div>
 
@@ -848,7 +847,7 @@ canvas#cgc{display:block;width:100%;height:auto}
         <div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
           <button class="bsm" onclick="clearATC()">CLEAR TRANSCRIPT</button>
           <button class="bsm bsm-a" onclick="copyATC()">COPY TRANSCRIPT</button>
-          <button class="bsm bsm-g" onclick="analyzeATC()">🤖 ANALYZE WITH AI</button>
+          <button class="bsm bsm-g" id="atc-analyze-btn" onclick="analyzeATC()">🤖 ANALYZE WITH AI</button>
         </div>
       </div>
     </div>
@@ -870,6 +869,7 @@ canvas#cgc{display:block;width:100%;height:auto}
         <textarea class="chat-input" id="chat-input" rows="2" placeholder="Ask about your flight..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
         <button class="chat-send" id="chat-send" onclick="sendChat()">SEND</button>
       </div>
+      <div id="chat-gate-note" style="margin-top:6px;font-family:var(--mono);font-size:9px;color:var(--txt3)">Set Anthropic API key in the sidebar to enable live AI responses.</div>
     </div>
   </div>
 
@@ -878,7 +878,7 @@ canvas#cgc{display:block;width:100%;height:auto}
 </div><!-- /app -->
 
   <!-- RADIO FREQUENCIES -->
-  <div class="panel" id="p-radio">
+  <div class="panel" id="p-radio" style="display:none!important">
     <div id="e-radio" class="empty"><div class="ei">&#128250;</div><div class="et">BUILD PLAN</div></div>
     <div id="d-radio" style="display:none">
       <div class="card cg"><div class="ch"><span class="ct">Departure Frequencies</span><span class="badge bbg" id="dep-freq-badge">--</span></div><div class="cb" id="dep-freq-body"></div></div>
@@ -894,6 +894,7 @@ canvas#cgc{display:block;width:100%;height:auto}
     <div id="d-map" style="display:none;flex-direction:column;flex:1;min-height:0">
       <div class="map-subbar">
         <div style="font-family:monospace;font-size:11px;font-weight:bold;color:#ff00ff;flex-shrink:0" id="map-route-label">SECTIONAL PREVIEW</div>
+        <div id="map-net-badge" style="font-family:var(--mono);font-size:9px;color:var(--txt2);padding:2px 6px;border:1px solid var(--line);border-radius:3px;margin-left:6px">NETWORK: CHECKING…</div>
         <span style="flex:1;min-width:4px"></span>
         <div class="map-subbar-actions">
           <label style="font-family:monospace;font-size:9px;color:#7a9aaa;cursor:pointer"><input type="checkbox" id="map-show-vis" checked onchange="renderMap()"> VFR</label>
@@ -1241,6 +1242,7 @@ let STATE={
   atcActive:false, atcRecognition:null, atcLines:[],
   updates:[],
 };
+var _mapFallbackActive=false;
 
 // ══════════════════════════════════════════════════════════════════
 // UTILS
@@ -1381,6 +1383,42 @@ function wfmt(m){if(!m)return'Unavailable';const d=m.wdir==='VRB'?'VRB':String(m
 function skyFmt(m){if(!m)return'Unavailable';const s=m.clouds?.filter(c=>['BKN','OVC','OVX'].includes(c.cover)).map(c=>`${c.cover} ${(c.base||0)*100}`).join(', ')||'CLR';return`${m.visib!=null?m.visib+'SM':'?SM'}, ${s}`;}
 function dr(l,v,c=''){return`<div class="row"><span class="rl">${l}</span><span class="rv ${c}">${v}</span></div>`;}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2200);}
+function setMapNetworkBadge(msg,isWarn){
+  var el=document.getElementById('map-net-badge');
+  if(!el) return;
+  el.textContent=msg;
+  el.style.color=isWarn?'var(--amb)':'var(--txt2)';
+  el.style.borderColor=isWarn?'var(--amb2)':'var(--line)';
+}
+function updateActionabilityUI(){
+  var key=(document.getElementById('apikey')&&document.getElementById('apikey').value||'').trim();
+  var planReady=!!STATE.plan;
+  var chatSend=document.getElementById('chat-send');
+  var chatInp=document.getElementById('chat-input');
+  var chatNote=document.getElementById('chat-gate-note');
+  var aiReady=!!key&&planReady;
+  if(chatSend) chatSend.disabled=!aiReady;
+  if(chatInp) chatInp.disabled=!aiReady;
+  if(chatNote){
+    if(!planReady) chatNote.textContent='Build a flight plan to unlock AI Advisor context.';
+    else if(!key) chatNote.textContent='Set Anthropic API key in the sidebar to enable live AI responses.';
+    else chatNote.textContent='AI Advisor ready.';
+  }
+  var atcAnalyze=document.getElementById('atc-analyze-btn');
+  if(atcAnalyze){
+    atcAnalyze.disabled=!key;
+    atcAnalyze.title=key?'Analyze transcript with AI':'Set Anthropic API key to enable ATC analysis';
+  }
+  var atcBtn=document.getElementById('atc-btn');
+  var atcTxt=document.getElementById('atc-status-txt');
+  var speechOk=('webkitSpeechRecognition' in window||'SpeechRecognition' in window);
+  if(atcBtn) atcBtn.disabled=!speechOk;
+  if(atcTxt&&!speechOk) atcTxt.textContent='UNAVAILABLE — Web Speech API not supported in this browser';
+  var online=(typeof navigator!=='undefined'&&typeof navigator.onLine==='boolean')?navigator.onLine:true;
+  if(!online) setMapNetworkBadge('NETWORK: OFFLINE (cached map only)',true);
+  else if(_mapFallbackActive) setMapNetworkBadge('NETWORK: ONLINE (topo fallback active)',true);
+  else setMapNetworkBadge('NETWORK: ONLINE',false);
+}
 function setOv(on,m='COMPUTING'){
   var msg=document.getElementById('ov-msg');
   var ov=document.getElementById('ov');
@@ -1417,18 +1455,32 @@ function normalizeAwMetarTaf(ob){
 }
 async function fMetar(icao){
   try{
-    const r=await fetchJSONTimeout(`https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
-    if(!r.ok)return null;
-    var row=(await r.json())?.[0]||null;
-    return row?normalizeAwMetarTaf(row):null;
+    const urls=[
+      `https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(icao)}&format=json`,
+      `https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(icao)}&format=JSON`
+    ];
+    for(var i=0;i<urls.length;i++){
+      const r=await fetchJSONTimeout(urls[i],{cache:'no-store'},8000);
+      if(!r||!r.ok) continue;
+      var row=(await r.json())?.[0]||null;
+      if(row) return normalizeAwMetarTaf(row);
+    }
+    return null;
   }catch(e){console.warn('METAR',icao,e&&e.message);return null;}
 }
 async function fTaf(icao){
   try{
-    const r=await fetchJSONTimeout(`https://aviationweather.gov/api/data/taf?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
-    if(!r.ok)return null;
-    var row=(await r.json())?.[0]||null;
-    return row?normalizeAwMetarTaf(row):null;
+    const urls=[
+      `https://aviationweather.gov/api/data/taf?ids=${encodeURIComponent(icao)}&format=json`,
+      `https://aviationweather.gov/api/data/taf?ids=${encodeURIComponent(icao)}&format=JSON`
+    ];
+    for(var i=0;i<urls.length;i++){
+      const r=await fetchJSONTimeout(urls[i],{cache:'no-store'},8000);
+      if(!r||!r.ok) continue;
+      var row=(await r.json())?.[0]||null;
+      if(row) return normalizeAwMetarTaf(row);
+    }
+    return null;
   }catch(e){console.warn('TAF',icao,e&&e.message);return null;}
 }
 function getFaaNotamApiKey(){
@@ -1437,25 +1489,25 @@ function getFaaNotamApiKey(){
 }
 async function fNotam(icao){
   var key=getFaaNotamApiKey();
-  if(!key){
-    console.warn('NOTAM: add FAA API key in sidebar (api.faa.gov)');
-    return[];
-  }
+  if(!key) return localNotamFallback(icao,'Add FAA API key in sidebar to pull live NOTAM API feed.');
   try{
     var url='https://api.faa.gov/notamapi/v1/notams?icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key);
     const r=await fetchJSONTimeout(url,{headers:{accept:'application/json'}},12000);
     if(!r.ok){
       console.warn('NOTAM HTTP',icao,r.status);
-      return[];
+      return localNotamFallback(icao,'Live FAA NOTAM API unavailable ('+r.status+'). Showing local advisory remarks.');
     }
     var ct=r.headers.get('content-type')||'';
     if(ct.indexOf('json')<0){
       console.warn('NOTAM: non-JSON response (wrong API key or outage)');
-      return[];
+      return localNotamFallback(icao,'Live FAA NOTAM API returned non-JSON response. Showing local advisory remarks.');
     }
     const j=await r.json();
-    return j&&j.items?j.items:[];
-  }catch(e){console.warn('NOTAM',icao,e&&e.message);return[];}
+    return j&&j.items&&j.items.length?j.items:localNotamFallback(icao,'Live FAA NOTAM API returned no items. Showing local advisory remarks.');
+  }catch(e){
+    console.warn('NOTAM',icao,e&&e.message);
+    return localNotamFallback(icao,'Live FAA NOTAM API request failed. Showing local advisory remarks.');
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1466,7 +1518,7 @@ async function buildWaypoints(plan){
   const rkey=`${depIcao}-${arrIcao}`;
   const vfr=document.getElementById('opt-vfr')?.checked;
   const apchOn=document.getElementById('opt-apch')?.checked;
-  const allowApproachFixes=(rules==='IFR')&&!!apchOn;
+  const allowApproachFixes=!!apchOn;
   const optDirectRaw=document.getElementById('opt-direct')&&document.getElementById('opt-direct').checked===true;
   const vfrVisualWp=document.getElementById('opt-vfr')&&document.getElementById('opt-vfr').checked!==false;
   const useGpsDirect=optDirectRaw&&!(rules==='VFR'&&vfrVisualWp);
@@ -1598,7 +1650,7 @@ function readEnrouteWpSpacingProfile(){
   var el=document.getElementById('opt-wp-spacing');
   var v=(el&&el.value)||'auto';
   if(v==='auto')
-    return{corridorNm:55,targetNm:55,minlegNm: 60,maxlegNm:  60,minAlongPickSep:22};
+    return{corridorNm:45,targetNm:60,minLegNm:60,maxLegNm:60,minAlongPickSep:22};
   var n=parseInt(v,10);
   if(!isFinite(n)||n<25) n=55;
   var pad=Math.max(8,Math.round(n*0.14));
@@ -1911,6 +1963,18 @@ async function ensureOurAirportsRunways(){
   if(_ourAirportsLoadPromise) return _ourAirportsLoadPromise;
   _ourAirportsLoadPromise=(async function(){
     try{
+      try{
+        var local=await fetchJSONTimeout('./data/faa-runways-by-ident.json',{cache:'no-store'},12000);
+        if(local&&local.ok){
+          var localMap=await local.json();
+          if(localMap&&typeof localMap==='object'&&Object.keys(localMap).length){
+            FAA_ADIP_RWY_DB=localMap;
+            _ourAirportsRunwaysByIdent=localMap;
+            console.log('Loaded local FAA runways bundle:',Object.keys(localMap).length,'airports');
+            return localMap;
+          }
+        }
+      }catch(_e){}
       var url='https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/runways.csv';
       var r=await fetchJSONTimeout(url,null,18000);
       if(!r||!r.ok) throw new Error('OurAirports HTTP '+(r&&r.status));
@@ -2323,10 +2387,10 @@ function renderWx(p){
 function renderNotams(p){
   show('notams');
   rNotams(p.dn,'dep-notam-body','dep-nct');rNotams(p.an,'arr-notam-body','arr-nct');
-  const tfrs=[...p.dn,...p.an].filter(n=>{const t=n?.properties?.coreNOTAMData?.notam?.text||'';return t.includes('TFR')||t.includes('AIRSPACE');});
+  const tfrs=[...p.dn,...p.an].filter(n=>{const t=normalizeNotamText(n);return t.includes('TFR')||t.includes('AIRSPACE');});
   const tc=document.getElementById('tfr-card');
   if(!tc)return;
-  if(tfrs.length){tc.style.display='block';document.getElementById('tfr-ct').textContent=tfrs.length;var tnb=document.getElementById('tfr-notams-body');if(tnb)tnb.innerHTML=tfrs.map(n=>`<div class="notam-i"><span class="badge b-r" style="margin-right:4px">TFR</span>${(n?.properties?.coreNOTAMData?.notam?.text||'').slice(0,280)}</div>`).join('');}
+  if(tfrs.length){tc.style.display='block';document.getElementById('tfr-ct').textContent=tfrs.length;var tnb=document.getElementById('tfr-notams-body');if(tnb)tnb.innerHTML=tfrs.map(n=>`<div class="notam-i"><span class="badge b-r" style="margin-right:4px">TFR</span>${normalizeNotamText(n).slice(0,280)}</div>`).join('');}
   else{tc.style.display='none';var tnb2=document.getElementById('tfr-notams-body');if(tnb2)tnb2.innerHTML='';}
 }
 function rNotams(items,bid,cid){
@@ -2334,7 +2398,7 @@ function rNotams(items,bid,cid){
   if(!el)return;
   if(!items?.length){el.innerHTML='<div style="color:var(--txt3);font-size:10px;font-family:var(--mono)">None retrieved — verify at 1800wxbrief.com</div>';if(ct)ct.textContent='0';return;}
   if(ct)ct.textContent=items.length;
-  el.innerHTML=items.map(n=>{const txt=n?.properties?.coreNOTAMData?.notam?.text||JSON.stringify(n).slice(0,120);const isR=txt.includes('RWY')||txt.includes('RUNWAY');const isN=txt.includes('ILS')||txt.includes('VOR');return`<div class="notam-i"><span class="badge ${isR?'b-r':isN?'b-a':'b-b'}" style="margin-right:5px">${isR?'RWY':isN?'NAVAID':'INFO'}</span>${txt.slice(0,270)}</div>`;}).join('');
+  el.innerHTML=items.map(n=>{const txt=normalizeNotamText(n);const isR=txt.includes('RWY')||txt.includes('RUNWAY');const isN=txt.includes('ILS')||txt.includes('VOR');return`<div class="notam-i"><span class="badge ${isR?'b-r':isN?'b-a':'b-b'}" style="margin-right:5px">${isR?'RWY':isN?'NAVAID':'INFO'}</span>${txt.slice(0,270)}</div>`;}).join('');
 }
 
 function renderApproach(p){
@@ -2701,6 +2765,7 @@ function stopATC(){
   document.getElementById('atc-status-badge').textContent='STOPPED';
   document.getElementById('atc-indicator').classList.remove('rec');
   document.getElementById('atc-status-txt').textContent='NOT RECORDING — tap button to restart';
+  updateActionabilityUI();
 }
 function addATCLine(txt,isError=false){
   const ts=new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -2791,7 +2856,7 @@ async function sendChat(){
 // TABS
 // ══════════════════════════════════════════════════════════════════
 function tab(id){
-  const ids=['brief','route','wx','notams','approach','wb','poh','fpl','atc','chat','radio','map'];
+  const ids=['brief','route','wx','notams','approach','wb','poh','fpl','atc','chat','map'];
   ids.forEach(i=>{
     document.getElementById('t-'+i)?.classList.toggle('on',i===id);
     document.getElementById('p-'+i)?.classList.toggle('on',i===id);
@@ -2825,13 +2890,14 @@ function tab(id){
       }
     },30);
   }
-  if(id==='radio'&&S.plan){setTimeout(function(){if(typeof renderRadio==='function')renderRadio();},100);}
+  updateActionabilityUI();
 }
 
 // ══════════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════════
 loadWB();
+updateActionabilityUI();
 (function(){
   var d=document.getElementById('flt-date');
   if(d&&!d.value){
@@ -2851,6 +2917,18 @@ loadWB();
   bar.appendChild(btn);
   try{if(sessionStorage.getItem('avisor-file-warn'))return;}catch(e2){}
   document.body.insertBefore(bar,document.body.firstChild);
+})();
+(function(){
+  if(typeof window==='undefined') return;
+  window.addEventListener('online',function(){
+    _mapFallbackActive=false;
+    updateActionabilityUI();
+    if(typeof toast==='function') toast('NETWORK ONLINE');
+  });
+  window.addEventListener('offline',function(){
+    updateActionabilityUI();
+    if(typeof toast==='function') toast('NETWORK OFFLINE — USING CACHED/LOCAL DATA');
+  });
 })();
 
 // ══ AIRPORTS DATABASE ════════════════════════════════════════════
@@ -3053,6 +3131,8 @@ var FREQ_DB={
 };
 var OURAIRPORTS_FREQ_DB={};
 var OURAIRPORTS_COMMENTS_DB={};
+var FAA_FREQ_DB={};
+var FAA_REMARKS_DB={};
 var _ourAirportsEnrichmentPromise=null;
 async function fetchTextFromCandidates(urls){
   for(var i=0;i<urls.length;i++){
@@ -3084,6 +3164,18 @@ async function ensureOurAirportsEnrichment(){
       'https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/airport-comments.csv'
     ].filter(Boolean);
     var freqLoaded=0,commentLoaded=0;
+    try{
+      var faaFreqResp=await fetchJSONTimeout('./data/faa-frequencies-by-ident.json',{cache:'no-store'},12000);
+      if(faaFreqResp&&faaFreqResp.ok){
+        FAA_FREQ_DB=(await faaFreqResp.json())||{};
+      }
+    }catch(_e){}
+    try{
+      var faaRemarksResp=await fetchJSONTimeout('./data/faa-remarks-by-ident.json',{cache:'no-store'},12000);
+      if(faaRemarksResp&&faaRemarksResp.ok){
+        FAA_REMARKS_DB=(await faaRemarksResp.json())||{};
+      }
+    }catch(_e2){}
     try{
       var txt=await fetchTextFromCandidates(freqUrls);
       var lines=txt.split(/\r?\n/).filter(Boolean);
@@ -3131,6 +3223,31 @@ async function ensureOurAirportsEnrichment(){
     return true;
   })();
   return _ourAirportsEnrichmentPromise;
+}
+function normalizeNotamText(n){
+  if(!n) return '';
+  if(typeof n==='string') return n;
+  if(n.fallback&&n.text) return String(n.text);
+  return String(n?.properties?.coreNOTAMData?.notam?.text||n?.text||JSON.stringify(n).slice(0,120)).toUpperCase();
+}
+function localNotamFallback(icao,reason){
+  var key=String(icao||'').toUpperCase();
+  var rows=[];
+  var faa=(FAA_REMARKS_DB[key]||[]);
+  for(var i=0;i<faa.length&&rows.length<8;i++){
+    var it=faa[i];
+    var txt=String((it&&it.text)||'').trim();
+    if(!txt) continue;
+    rows.push({fallback:true,text:'[FAA REMARK] '+txt});
+  }
+  var oa=(OURAIRPORTS_COMMENTS_DB[key]||[]);
+  for(var j=0;j<oa.length&&rows.length<10;j++){
+    var txt2=String(oa[j]||'').trim();
+    if(!txt2) continue;
+    rows.push({fallback:true,text:'[COMMENT] '+txt2});
+  }
+  if(reason) rows.unshift({fallback:true,text:'[STATUS] '+reason});
+  return rows;
 }
 var VICTOR_AIRWAYS=[
   {id:'V105',fixes:['PHX','GUP','ABQ'],desc:'Phoenix to Albuquerque'},
@@ -3840,9 +3957,10 @@ function initMap(){
   var def=(isFileMode?topo:(faaSec||topo));
   def.addTo(_map);
   if(isFileMode&&typeof toast==='function') toast('FILE MODE: map limited. Use http://localhost for FAA sectionals.');
+  updateActionabilityUI();
   var skyOn=false;
-  skyVec.on('tileerror',function(){if(skyOn&&_map&&_map.hasLayer(skyVec)){_map.removeLayer(skyVec);topo.addTo(_map);if(typeof toast==='function')toast('SKYVECTOR TILES FAILED — USING TOPO');}});
-  if(faaSec) faaSec.on('tileerror',function(){if(_map&&_map.hasLayer(faaSec)){_map.removeLayer(faaSec);topo.addTo(_map);if(typeof toast==='function')toast('FAA SECTIONAL TILE ERROR — USING TOPO');}});
+  skyVec.on('tileerror',function(){if(skyOn&&_map&&_map.hasLayer(skyVec)){_map.removeLayer(skyVec);topo.addTo(_map);_mapFallbackActive=true;updateActionabilityUI();if(typeof toast==='function')toast('SKYVECTOR TILES FAILED — USING TOPO');}});
+  if(faaSec) faaSec.on('tileerror',function(){if(_map&&_map.hasLayer(faaSec)){_map.removeLayer(faaSec);topo.addTo(_map);_mapFallbackActive=true;updateActionabilityUI();if(typeof toast==='function')toast('FAA SECTIONAL TILE ERROR — USING TOPO');}});
   if(faaSec)_map._avisorFaaSectional=faaSec;
   if(ifrLow)_map._avisorIfrLow=ifrLow;
   L.control.layers(baseLayers,{'Airspace B/C/D':airspL},{position:'topright',collapsed:true}).addTo(_map);
