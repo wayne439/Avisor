@@ -1417,7 +1417,7 @@ function normalizeAwMetarTaf(ob){
 }
 async function fMetar(icao){
   try{
-    const r=await fetchJSONTimeout(`https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
+    const r=await fetchJSONTimeout(`${location.protocol==='http:'||location.protocol==='https:'?'':'https://aviationweather.gov'}/awc-api/data/metar?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
     if(!r.ok)return null;
     var row=(await r.json())?.[0]||null;
     return row?normalizeAwMetarTaf(row):null;
@@ -1425,7 +1425,7 @@ async function fMetar(icao){
 }
 async function fTaf(icao){
   try{
-    const r=await fetchJSONTimeout(`https://aviationweather.gov/api/data/taf?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
+    const r=await fetchJSONTimeout(`${location.protocol==='http:'||location.protocol==='https:'?'':'https://aviationweather.gov'}/awc-api/data/taf?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
     if(!r.ok)return null;
     var row=(await r.json())?.[0]||null;
     return row?normalizeAwMetarTaf(row):null;
@@ -1442,7 +1442,7 @@ async function fNotam(icao){
     return[];
   }
   try{
-    var url='https://api.faa.gov/notamapi/v1/notams?icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key);
+    var base=location.protocol==='http:'||location.protocol==='https:'?'':' https://api.faa.gov';var url=base+'/faa-api/v1/notams?icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key);
     const r=await fetchJSONTimeout(url,{headers:{accept:'application/json'}},12000);
     if(!r.ok){
       console.warn('NOTAM HTTP',icao,r.status);
