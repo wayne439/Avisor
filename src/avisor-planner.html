@@ -2132,7 +2132,7 @@ function syncAC(){const v=document.getElementById('aircraft').value;const w=docu
 // ══════════════════════════════════════════════════════════════════
 // RENDER ALL
 // ══════════════════════════════════════════════════════════════════
-function show(id){var e=document.getElementById('e-'+id),d=document.getElementById('d-'+id);if(e)e.style.display='none';if(d){if(id==='map'){d.style.display='flex';d.style.flex='1';}else d.style.display='block';}}
+function show(id){var e=document.getElementById('e-'+id),d=document.getElementById('d-'+id);if(e)e.style.display='none';if(d){if(id==='map'){d.style.display='flex';d.style.flex='1';}else d.style.display='block';}}setTimeout(function(){if(typeof _map!=='undefined'&&_map){_map.invalidateSize(true);}else if(typeof initMap==='function'&&id==='map'){initMap();}},150);
 function renderAll(p){
   function safeRender(name,fn){
     try{fn();}catch(err){console.error('Render error ['+name+']',err);}
