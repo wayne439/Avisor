@@ -3738,7 +3738,7 @@ function initMap(){
   var faaSec=null,ifrLow=null;
   try{
     if(!isFileMode&&L.esri&&L.esri.tiledMapLayer){
-      faaSec=L.esri.tiledMapLayer({url:'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/VFR_Sectional/MapServer',minZoom:8,maxZoom:12,maxNativeZoom:12});
+      faaSec=L.esri.tiledMapLayer({url:'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/VFR_Sectional/MapServer',minZoom:8,maxZoom:12,maxNativeZoom:12});faaSec.addTo(_map);faaSec.addTo(_map);
       ifrLow=L.esri.tiledMapLayer({url:'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/IFR_AreaLow/MapServer',minZoom:7,maxZoom:12,maxNativeZoom:12});
     }
   }catch(e){console.warn('Esri chart layers',e);}
