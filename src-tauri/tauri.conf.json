@@ -1,4 +1,4 @@
-{
+﻿{
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "PilotAvisor",
   "version": "0.1.0",
@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; connect-src 'self' https:; img-src 'self' data: https:;"
     }
   },
   "bundle": {
@@ -37,3 +37,4 @@
     ]
   }
 }
+
