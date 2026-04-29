@@ -2565,7 +2565,23 @@ function rebuildCustomRouteLine(){
   if(_routeLine)_map.removeLayer(_routeLine);
   if(!STATE||!STATE.waypoints)return;
   var pts=STATE.waypoints.filter(function(w){return w.lat&&w.lon;}).map(function(w){return[w.lat,w.lon];});
-  _customWpMarkers.forEach(function(m){pts.push([m._customLat,m._customLon]);});
+  // Insert custom waypoints at correct position along route
+  if(_customWpMarkers.length){
+    var allPts=basePts.slice();
+    _customWpMarkers.forEach(function(m){
+      var best=1,bestD=9999;
+      for(var k=1;k<allPts.length;k++){
+        var da=gcDist(allPts[k-1].lat||0,allPts[k-1].lon||0,m._customLat,m._customLon);
+        var db=gcDist(m._customLat,m._customLon,allPts[k].lat||0,allPts[k].lon||0);
+        var seg=gcDist(allPts[k-1].lat||0,allPts[k-1].lon||0,allPts[k].lat||0,allPts[k].lon||0);
+        var d=da+db-seg;
+        if(d<bestD){bestD=d;best=k;}
+      }
+      allPts.splice(best,0,{id:m._wpId,lat:m._customLat,lon:m._customLon,type:'gps',desc:'Custom waypoint'});
+    });
+    STATE.waypoints=allPts;
+    pts=allPts.filter(function(w){return w.lat&&w.lon;}).map(function(w){return[w.lat,w.lon];});
+  }
   if(pts.length>1)_routeLine=L.polyline(pts,{color:'#b87aff',weight:2,dashArray:'5,3',opacity:0.8}).addTo(_map);
   if(typeof renderAll==='function'&&STATE.plan)try{renderAll(STATE.plan);}catch(e){}
   if(typeof buildFPL==='function'&&STATE.plan&&STATE.waypoints){try{STATE.fplXML=buildFPL(STATE.plan,STATE.waypoints);}catch(e){}}
@@ -2657,7 +2673,8 @@ function enhanceWaypointsWithNavaids(wpts,fromLat,fromLon,toLat,toLon){
     var segFrom=wpts[i],segTo=wpts[i+1];
     var segDist=gcDist(segFrom.lat,segFrom.lon,segTo.lat,segTo.lon);
     if(segDist>60){
-      var fills=findVFRWaypointsAlongRoute(segFrom.lat,segFrom.lon,segTo.lat,segTo.lon,5,60);
+      var fills=findVFRWaypointsAlongRoute(segFrom.lat,segFrom.lon,segTo.lat,segTo.lon,4,60);
+      fills=fills.filter(function(nav){var dDep=gcDist(fromLat,fromLon,nav.lat,nav.lon);var dArr=gcDist(toLat,toLon,nav.lat,nav.lon);return dDep>25&&dArr>25;});
       fills.forEach(function(nav){
         result.push({id:nav.id,lat:nav.lat,lon:nav.lon,type:nav.type.toLowerCase(),desc:nav.name+' ('+nav.type+')'});
       });
