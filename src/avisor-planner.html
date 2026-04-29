@@ -104,7 +104,8 @@ body{color:var(--txt);font-family:var(--sans);font-size:13px;user-select:none}
 
 /* ═══ PANELS ════════════════════════════════════════════════════ */
 .panel{display:none;flex:1;overflow-y:auto;padding:14px}
-.panel.on{display:block}
+.panel.on{display:flex;flex-direction:column;flex:1;min-height:0}
+.panel.on:not(#p-map){overflow-y:auto;padding:14px}
 /* Map tab: flex column + explicit min-height so desktop layout never collapses to 0×0 (blank map) */
 #p-map.panel.on{display:flex;flex-direction:column;flex:1 1 auto;align-self:stretch;width:100%;min-height:min(520px,calc(100vh - 120px));max-height:100%;padding:0;overflow:hidden}
 #p-map.panel.on #d-map{flex:1 1 auto;display:flex!important;flex-direction:column;min-height:min(480px,calc(100vh - 150px));overflow:hidden}
