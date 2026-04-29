@@ -2530,8 +2530,9 @@ function initMapInteraction(){
     if(!_mapEditMode)return;
     var lat=Math.round(e.latlng.lat*10000)/10000;
     var lon=Math.round(e.latlng.lng*10000)/10000;
-    var id='WPT'+(_customWpMarkers.length+1);
-    addCustomMapWaypoint(id,lat,lon);
+    var wn=_customWpMarkers.length+1;
+    var latId=Math.abs(lat).toFixed(2)+(lat>=0?'N':'S')+'-'+Math.abs(lon).toFixed(2)+(lon>=0?'E':'W');
+    addCustomMapWaypoint(latId,lat,lon);
   });
 }
 
@@ -2566,6 +2567,7 @@ function rebuildCustomRouteLine(){
   var pts=STATE.waypoints.filter(function(w){return w.lat&&w.lon;}).map(function(w){return[w.lat,w.lon];});
   _customWpMarkers.forEach(function(m){pts.push([m._customLat,m._customLon]);});
   if(pts.length>1)_routeLine=L.polyline(pts,{color:'#b87aff',weight:2,dashArray:'5,3',opacity:0.8}).addTo(_map);
+  if(typeof renderAll==='function'&&STATE.plan)try{renderAll(STATE.plan);}catch(e){}
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2629,7 +2631,7 @@ function findVFRWaypointsAlongRoute(fromLat,fromLon,toLat,toLon,maxCorridorNm,ta
     var xt=crossTrackDist(nav.lat,nav.lon,fromLat,fromLon,toLat,toLon);
     if(xt>maxCorridorNm)return false;
     var at=alongTrackDist(nav.lat,nav.lon,fromLat,fromLon,toLat,toLon);
-    if(at<5||at>totalDist-5)return false;
+    if(at<15||at>totalDist-15)return false;
     nav._along=at;
     nav._cross=xt;
     return true;
