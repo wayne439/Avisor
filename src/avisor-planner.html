@@ -2485,6 +2485,7 @@ function rebuildCustomRouteLine(){
   _customWpMarkers.forEach(function(m){pts.push([m._customLat,m._customLon]);});
   if(pts.length>1)_routeLine=L.polyline(pts,{color:'#b87aff',weight:2,dashArray:'5,3',opacity:0.8}).addTo(_map);
   if(typeof renderAll==='function'&&STATE.plan)try{renderAll(STATE.plan);}catch(e){}
+  if(typeof buildFPL==='function'&&STATE.plan&&STATE.waypoints){try{STATE.fplXML=buildFPL(STATE.plan,STATE.waypoints);}catch(e){}}
 }
 
 // ═══════════════════════════════════════════════════════════════════════
