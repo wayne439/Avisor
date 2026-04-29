@@ -2479,29 +2479,51 @@ function addCustomMapWaypoint(id,lat,lon){
 }
 
 function rebuildCustomRouteLine(){
-  if(_routeLine)_map.removeLayer(_routeLine);
-  if(!STATE||!STATE.waypoints)return;
-  var pts=STATE.waypoints.filter(function(w){return w.lat&&w.lon;}).map(function(w){return[w.lat,w.lon];});
-  // Insert custom waypoints at correct position along route
-  if(_customWpMarkers.length){
-    var allPts=basePts.slice();
+  if(_routeLine){try{_map.removeLayer(_routeLine);}catch(e){}}
+  _routeLine=null;
+  if(!STATE||!STATE.waypoints||!STATE.waypoints.length)return;
+
+  // Start with existing route waypoints that have coordinates
+  var basePts=STATE.waypoints.filter(function(w){return w.lat&&w.lon;});
+  if(!basePts.length)return;
+
+  // Insert custom map waypoints at the correct position along the route
+  if(_customWpMarkers&&_customWpMarkers.length){
     _customWpMarkers.forEach(function(m){
-      var best=1,bestD=9999;
-      for(var k=1;k<allPts.length;k++){
-        var da=gcDist(allPts[k-1].lat||0,allPts[k-1].lon||0,m._customLat,m._customLon);
-        var db=gcDist(m._customLat,m._customLon,allPts[k].lat||0,allPts[k].lon||0);
-        var seg=gcDist(allPts[k-1].lat||0,allPts[k-1].lon||0,allPts[k].lat||0,allPts[k].lon||0);
-        var d=da+db-seg;
-        if(d<bestD){bestD=d;best=k;}
+      var clat=m._customLat, clon=m._customLon;
+      // Find best insertion point: minimize detour distance
+      var best=1, bestScore=9999;
+      for(var k=1;k<basePts.length;k++){
+        var prev=basePts[k-1], next=basePts[k];
+        if(!prev.lat||!next.lat)continue;
+        var dPrev=gcDist(prev.lat,prev.lon,clat,clon);
+        var dNext=gcDist(clat,clon,next.lat,next.lon);
+        var dSeg=gcDist(prev.lat,prev.lon,next.lat,next.lon);
+        var score=dPrev+dNext-dSeg; // extra distance added by this insertion
+        if(score<bestScore){bestScore=score;best=k;}
       }
-      allPts.splice(best,0,{id:m._wpId,lat:m._customLat,lon:m._customLon,type:'gps',desc:'Custom waypoint'});
+      var wpObj={id:m._wpId,lat:clat,lon:clon,type:'gps',desc:'Custom waypoint '+m._wpId};
+      basePts.splice(best,0,wpObj);
     });
-    STATE.waypoints=allPts;
-    pts=allPts.filter(function(w){return w.lat&&w.lon;}).map(function(w){return[w.lat,w.lon];});
+    // Update STATE.waypoints with merged result
+    STATE.waypoints=basePts;
   }
-  if(pts.length>1)_routeLine=L.polyline(pts,{color:'#b87aff',weight:2,dashArray:'5,3',opacity:0.8}).addTo(_map);
-  if(typeof renderAll==='function'&&STATE.plan)try{renderAll(STATE.plan);}catch(e){}
-  if(typeof buildFPL==='function'&&STATE.plan&&STATE.waypoints){try{STATE.fplXML=buildFPL(STATE.plan,STATE.waypoints);}catch(e){}}
+
+  // Draw route line on map
+  var pts=basePts.map(function(w){return[w.lat,w.lon];});
+  if(pts.length>1){
+    try{_routeLine=L.polyline(pts,{color:'#b87aff',weight:2,dashArray:'5,3',opacity:0.9}).addTo(_map);}catch(e){}
+  }
+
+  // Rebuild FPL XML for ForeFlight export
+  if(typeof buildFPL==='function'&&STATE.plan){
+    try{STATE.fplXML=buildFPL(STATE.plan,STATE.waypoints);}catch(e){console.warn('buildFPL error',e);}
+  }
+
+  // Refresh the waypoints display tab
+  if(typeof renderAll==='function'&&STATE.plan){
+    try{renderAll(STATE.plan);}catch(e){}
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
