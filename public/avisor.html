@@ -351,7 +351,7 @@ canvas#cgc{display:block;width:100%;height:auto}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://unpkg.com/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
 </head>
-<body>
+<body><div id="safety-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center"><div style="background:#0d1829;border:1px solid #38beff;border-radius:12px;padding:32px;max-width:480px;margin:20px;font-family:monospace"><div style="color:#38beff;font-size:13px;font-weight:bold;letter-spacing:2px;margin-bottom:16px">⚠ SAFETY NOTICE</div><div style="color:#d8e8ff;font-size:12px;line-height:1.8;margin-bottom:20px">PilotAvisor is a <strong style="color:#ffaa00">flight planning aid only</strong>.<br><br>It is <strong style="color:#ff5555">NOT approved</strong> for navigation and does not replace:<br>• Official FAA charts and publications<br>• A proper preflight weather briefing<br>• ATC clearances and NOTAMs<br>• Your pilot-in-command judgment<br><br>Always file a flight plan and brief via <strong style="color:#38beff">1800wxbrief.com</strong> before flight.</div><label style="display:flex;align-items:center;gap:10px;color:#a0b8cc;font-size:11px;margin-bottom:20px;cursor:pointer"><input type="checkbox" id="disclaimer-check" style="width:16px;height:16px"> I understand this is a planning aid only and not certified navigation software.</label><button onclick="acknowledgeSafety()" id="disclaimer-btn" style="width:100%;padding:12px;background:#003d1a;border:1px solid #00e57a;border-radius:6px;color:#00e57a;font-family:monospace;font-size:12px;letter-spacing:1px;cursor:pointer;opacity:0.5" disabled>ACKNOWLEDGE &amp; CONTINUE</button></div></div>
 
 <!-- LOADING -->
 <div id="ov"><div class="ov-txt" id="ov-msg">COMPUTING</div><div class="ov-bar"></div></div>
@@ -2375,6 +2375,14 @@ function renderFPLPanel(){
 // ══════════════════════════════════════════════════════════════════
 // FPL EXPORT ACTIONS
 // ══════════════════════════════════════════════════════════════════
+
+function openInMaps(){
+  if(!STATE.plan||!STATE.plan.arr){alert("Build a plan first");return;}
+  var lat=STATE.plan.arr.lat,lon=STATE.plan.arr.lon,name=STATE.plan.arrIcao;
+  var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(/Mac/.test(navigator.platform)&&navigator.maxTouchPoints>0);
+  if(isIOS){window.open("maps://?daddr="+lat+","+lon+"&q="+encodeURIComponent(name),"_blank");}
+  else{window.open("https://www.google.com/maps/dir/?api=1&destination="+lat+","+lon,"_blank");}
+}
 function downloadFPL(){
   if(!STATE.fplXML){alert('Build a flight plan first.');return;}
   const p=STATE.plan;
@@ -2419,7 +2427,22 @@ function openFFApp(){ openFF(); }
 function printBrief(){
   if(!STATE.plan)return;const p=STATE.plan;
   const w=window.open('','_blank');
-  w.document.write(`<html><head><title>Flight Brief</title><style>body{font-family:monospace;font-size:12px;padding:22px;white-space:pre-wrap;line-height:1.8}<\/style><\/head><body>PilotAvisor FLIGHT PLAN BRIEF\n${'='.repeat(50)}\nRoute:      ${p.primary}\nAircraft:   ${p.ac.name}\nRules:      ${p.rules}\nAlt:        ${p.alt.toLocaleString()} ft MSL\nDistance:   ${p.dist} NM\nETE:        ${p.eteMin} min\nGroundspeed:${p.gs} KTAS\nFuel:       ${p.totalFuel} gal (trip ${p.tripFuel} + reserve ${p.resFuel})\n\nDEPARTURE: ${p.depIcao} — ${p.dep.name}\n  Wind: ${p.depWind}\n  METAR: ${p.dm?.rawOb||'N/A'}\n\nDESTINATION: ${p.arrIcao} — ${p.arr.name}\n  Wind: ${p.arrWind}\n  Runway: ${p.favRwy?'RWY '+p.favRwy.id:'TBD'}\n  METAR: ${p.am?.rawOb||'N/A'}\n\nWAYPOINTS (${STATE.waypoints.length} fixes):\n${STATE.waypoints.map(x=>'  '+x.id.padEnd(8)+x.desc).join('\n')}\n\nHAZARDS:\n${p.hazards.map(h=>'  △ '+h).join('\n')||'  ✓ None flagged'}\n\n${'─'.repeat(50)}\n⚠ FOR PLANNING USE ONLY — not approved flight-planning software.\nGenerated: ${new Date().toUTCString()}</body></html>`);
+  w.document.write(`<html><head><title>Flight Brief</title><style>body{font-family:monospace;font-size:12px;padding:22px;white-space:pre-wrap;line-height:1.8}<\/style><\/head><body><div id="safety-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center"><div style="background:#0d1829;border:1px solid #38beff;border-radius:12px;padding:32px;max-width:480px;margin:20px;font-family:monospace"><div style="color:#38beff;font-size:13px;font-weight:bold;letter-spacing:2px;margin-bottom:16px">⚠ SAFETY NOTICE</div><div style="color:#d8e8ff;font-size:12px;line-height:1.8;margin-bottom:20px">PilotAvisor is a <strong style="color:#ffaa00">flight planning aid only</strong>.<br><br>It is <strong style="color:#ff5555">NOT approved</strong> for navigation and does not replace:<br>• Official FAA charts and publications<br>• A proper preflight weather briefing<br>• ATC clearances and NOTAMs<br>• Your pilot-in-command judgment<br><br>Always file a flight plan and brief via <strong style="color:#38beff">1800wxbrief.com</strong> before flight.</div><label style="display:flex;align-items:center;gap:10px;color:#a0b8cc;font-size:11px;margin-bottom:20px;cursor:pointer"><input type="checkbox" id="disclaimer-check" style="width:16px;height:16px"> I understand this is a planning aid only and not certified navigation software.</label><button onclick="acknowledgeSafety()" id="disclaimer-btn" style="width:100%;padding:12px;background:#003d1a;border:1px solid #00e57a;border-radius:6px;color:#00e57a;font-family:monospace;font-size:12px;letter-spacing:1px;cursor:pointer;opacity:0.5" disabled>ACKNOWLEDGE &amp; CONTINUE</button></div></div>PilotAvisor FLIGHT PLAN BRIEF\n${'='.repeat(50)}\nRoute:      ${p.primary}\nAircraft:   ${p.ac.name}\nRules:      ${p.rules}\nAlt:        ${p.alt.toLocaleString()} ft MSL\nDistance:   ${p.dist} NM\nETE:        ${p.eteMin} min\nGroundspeed:${p.gs} KTAS\nFuel:       ${p.totalFuel} gal (trip ${p.tripFuel} + reserve ${p.resFuel})\n\nDEPARTURE: ${p.depIcao} — ${p.dep.name}\n  Wind: ${p.depWind}\n  METAR: ${p.dm?.rawOb||'N/A'}\n\nDESTINATION: ${p.arrIcao} — ${p.arr.name}\n  Wind: ${p.arrWind}\n  Runway: ${p.favRwy?'RWY '+p.favRwy.id:'TBD'}\n  METAR: ${p.am?.rawOb||'N/A'}\n\nWAYPOINTS (${STATE.waypoints.length} fixes):\n${STATE.waypoints.map(x=>'  '+x.id.padEnd(8)+x.desc).join('\n')}\n\nHAZARDS:\n${p.hazards.map(h=>'  △ '+h).join('\n')||'  ✓ None flagged'}\n\n${'─'.repeat(50)}\n⚠ FOR PLANNING USE ONLY — not approved flight-planning software.\nGenerated: ${new Date().toUTCString()}<script>
+function acknowledgeSafety(){
+  localStorage.setItem("avisor_safety_ack","1");
+  document.getElementById("safety-modal").style.display="none";
+}
+function initSafetyCheck(){
+  var el=document.getElementById("disclaimer-check");
+  var btn=document.getElementById("disclaimer-btn");
+  if(el&&btn){el.addEventListener("change",function(){btn.style.opacity=this.checked?"1":"0.5";btn.disabled=!this.checked;});}
+  if(!localStorage.getItem("avisor_safety_ack")){
+    var m=document.getElementById("safety-modal");
+    if(m)m.style.display="flex";
+  }
+}
+window.addEventListener("load",initSafetyCheck);
+</script></body></html>`);
   w.document.close();w.print();
 }
 
@@ -3944,5 +3967,20 @@ function drawKnownAirspace(layer){
 
 
 </script>
-</body>
+<script>
+function acknowledgeSafety(){
+  localStorage.setItem("avisor_safety_ack","1");
+  document.getElementById("safety-modal").style.display="none";
+}
+function initSafetyCheck(){
+  var el=document.getElementById("disclaimer-check");
+  var btn=document.getElementById("disclaimer-btn");
+  if(el&&btn){el.addEventListener("change",function(){btn.style.opacity=this.checked?"1":"0.5";btn.disabled=!this.checked;});}
+  if(!localStorage.getItem("avisor_safety_ack")){
+    var m=document.getElementById("safety-modal");
+    if(m)m.style.display="flex";
+  }
+}
+window.addEventListener("load",initSafetyCheck);
+</script></body>
 </html>
