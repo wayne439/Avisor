@@ -2183,6 +2183,11 @@ async function buildPlan(){
     }
     // Fuel-stop flow calls buildWaypoints twice; persist merged route as final state.
     STATE.waypoints=wpts;
+    // Enhance with real VOR/NDB waypoints from corridor search
+    if(_navaidDB&&_navaidDB.length&&plan.dep&&plan.arr){
+      STATE.waypoints=enhanceWaypointsWithNavaids(STATE.waypoints,plan.dep.lat,plan.dep.lon,plan.arr.lat,plan.arr.lon);
+      wpts=STATE.waypoints;
+    }
     STATE.fplXML=buildFPL(plan,wpts);
     // Chat context
     STATE.hist=[{role:'user',content:`[FLIGHT PLAN]: Route: ${primary} | Aircraft: ${ac.name} | Alt: ${alt.toLocaleString()} ft | ${dist} NM | ${eteMin} min | GS: ${gs} KTAS | Headwind: ${hw} kt | Fuel: ${totalFuel} gal | Rules: ${rules} | Terrain floor: ${tfloor||'none'} ft | Dep METAR: ${dm?.rawOb||'N/A'} | Arr METAR: ${am?.rawOb||'N/A'} | Dep wind: ${wfmt(dm)} | Arr wind: ${wfmt(am)} | Runway: ${favRwy?'RWY '+favRwy.id:'TBD'} | Hazards: ${hazards.join('; ')||'none'} | Dep NOTAMs: ${dn.length} | Arr NOTAMs: ${an.length} | Waypoints: ${wpts.length} fixes`}];
