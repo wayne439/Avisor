@@ -2425,8 +2425,11 @@ var _origDrawPattern=typeof drawPattern==='function'?drawPattern:null;
 // ═══════════════════════════════════════════════════════════════════════
 var _mapEditMode=false,_customWpMarkers=[],_routeLine=null;
 
+var _mapEditCooldown=false;
 function toggleMapEditMode(){
   _mapEditMode=!_mapEditMode;
+  _mapEditCooldown=true;
+  setTimeout(function(){_mapEditCooldown=false;},300);
   var btn=document.getElementById('map-edit-btn');
   if(btn){
     btn.style.background=_mapEditMode?'#1a0050':'';
@@ -2444,7 +2447,7 @@ function toggleMapEditMode(){
 function initMapInteraction(){
   if(!window._map)return;
   _map.on('click',function(e){
-    if(!_mapEditMode)return;
+    if(!_mapEditMode||_mapEditCooldown)return;
     var lat=Math.round(e.latlng.lat*10000)/10000;
     var lon=Math.round(e.latlng.lng*10000)/10000;
     var wn=_customWpMarkers.length+1;
