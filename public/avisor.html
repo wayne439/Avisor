@@ -2509,8 +2509,8 @@ var _origDrawPattern=typeof drawPattern==='function'?drawPattern:null;
 var _mapEditMode=false,_customWpMarkers=[],_routeLine=null;
 
 var _mapEditCooldown=false;
-function toggleMapEditMode(){
-  _mapEditMode=!_mapEditMode;
+var _editCooldown=false;function toggleMapEditMode(){
+  _mapEditMode=!_mapEditMode;_editCooldown=true;setTimeout(function(){_editCooldown=false;},400);
   _mapEditCooldown=true;
   setTimeout(function(){_mapEditCooldown=false;},300);
   var btn=document.getElementById('map-edit-btn');
