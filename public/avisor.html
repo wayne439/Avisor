@@ -2376,7 +2376,327 @@ function renderFPLPanel(){
 // FPL EXPORT ACTIONS
 // ══════════════════════════════════════════════════════════════════
 
-function openInMaps(){
+// ═══════════════════════════════════════════════════════════════════════
+// FEATURE 1: GPS PLANE TRACKER
+// ═══════════════════════════════════════════════════════════════════════
+var _planeMarker=null,_trackLine=null,_trackPts=[],_planeWatchId=null,_mapFollow=false,_lastHeading=0;
+var _planeIcon=L&&L.divIcon?L.divIcon({className:'',html:'<div style="width:0;height:0"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="-16 -16 32 32" id="plane-svg" style="transform-origin:center;filter:drop-shadow(0 0 3px #000)"><polygon points="0,-14 4,-4 14,0 4,2 2,14 0,8 -2,14 -4,2 -14,0 -4,-4" fill="#00e57a" stroke="#003d1a" stroke-width="1.5"/></svg></div>',iconSize:[32,32],iconAnchor:[16,16]}):null;
+
+function startPlaneTracker(){
+  if(!window._map){setTimeout(startPlaneTracker,500);return;}
+  if(_planeWatchId!=null)return;
+  if(!navigator.geolocation){if(typeof toast==='function')toast('GPS not available');return;}
+  _trackLine=L.polyline([],{color:'#38beff',weight:2,opacity:0.7,dashArray:'4,4'}).addTo(_map);
+  _planeWatchId=navigator.geolocation.watchPosition(function(pos){
+    var lat=pos.coords.latitude,lon=pos.coords.longitude,hdg=pos.coords.heading||_lastHeading;
+    if(pos.coords.heading!=null)_lastHeading=hdg;
+    var ll=L.latLng(lat,lon);
+    if(!_planeMarker){
+      _planeMarker=L.marker(ll,{icon:_planeIcon,zIndexOffset:1000}).addTo(_map);
+    } else {
+      _planeMarker.setLatLng(ll);
+    }
+    var svg=document.getElementById('plane-svg');
+    if(svg)svg.style.transform='rotate('+hdg+'deg)';
+    _trackPts.push(ll);
+    if(_trackLine)_trackLine.setLatLngs(_trackPts);
+    if(_mapFollow)_map.setView(ll,_map.getZoom());
+    updateNextWaypointInfo(lat,lon);
+  },function(err){
+    if(typeof toast==='function')toast('GPS: '+err.message);
+  },{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
+  if(typeof toast==='function')toast('GPS tracking started');
+}
+
+function stopPlaneTracker(){
+  if(_planeWatchId!=null&&navigator.geolocation)navigator.geolocation.clearWatch(_planeWatchId);
+  _planeWatchId=null;
+  if(typeof toast==='function')toast('GPS tracking stopped');
+}
+
+function toggleMapFollow(){
+  _mapFollow=!_mapFollow;
+  var btn=document.getElementById('map-follow-btn');
+  if(btn){btn.style.background=_mapFollow?'#003d1a':'';btn.style.borderColor=_mapFollow?'#00e57a':'';}
+  if(_mapFollow&&_planeMarker)_map.setView(_planeMarker.getLatLng(),_map.getZoom());
+}
+
+function updateNextWaypointInfo(lat,lon){
+  if(!STATE||!STATE.waypoints||!STATE.waypoints.length)return;
+  var R=3440.065,r=Math.PI/180;
+  var nearest=null,nearDist=9999,nearIdx=0;
+  STATE.waypoints.forEach(function(wp,i){
+    if(!wp.lat||!wp.lon)return;
+    var dlat=(wp.lat-lat)*r,dlon=(wp.lon-lon)*r;
+    var a=Math.sin(dlat/2)*Math.sin(dlat/2)+Math.cos(lat*r)*Math.cos(wp.lat*r)*Math.sin(dlon/2)*Math.sin(dlon/2);
+    var d=2*R*Math.asin(Math.sqrt(a));
+    if(d<nearDist){nearDist=d;nearest=wp;nearIdx=i;}
+  });
+  var next=STATE.waypoints[nearIdx+1]||nearest;
+  if(!next||!_map)return;
+  if(window._nextWpLine)_map.removeLayer(window._nextWpLine);
+  window._nextWpLine=L.polyline([[lat,lon],[next.lat,next.lon]],{color:'#ffaa00',weight:2,dashArray:'6,4',opacity:0.9}).addTo(_map);
+  var mid=[(lat+next.lat)/2,(lon+next.lon)/2];
+  var eteMin=Math.round(nearDist/(STATE.plan&&STATE.plan.gs?STATE.plan.gs:120)*60);
+  if(window._nextWpLabel)_map.removeLayer(window._nextWpLabel);
+  window._nextWpLabel=L.marker(mid,{icon:L.divIcon({className:'',html:'<div style="background:rgba(0,0,0,0.75);color:#ffaa00;font-size:10px;font-family:monospace;padding:2px 5px;border-radius:3px;white-space:nowrap">'+next.id+' '+Math.round(nearDist)+'nm '+eteMin+'min</div>',iconAnchor:[40,10]})}).addTo(_map);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FEATURE 2: TRAFFIC PATTERN ON MAP
+// ═══════════════════════════════════════════════════════════════════════
+var _patternLayer=null,_patternMarkers=[];
+function drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,altFt){
+  if(!window._map)return;
+  clearPatternFromMap();
+  var R=3440.065,nm=1/R,leg=0.8,dep=1.0;
+  var hdg=rwyHdg*Math.PI/180,turn=leftTraffic?-1:1;
+  function pt(fromLat,fromLon,bearingDeg,distNm){
+    var b=bearingDeg*Math.PI/180,d=distNm/R;
+    var lat1=fromLat*Math.PI/180,lon1=fromLon*Math.PI/180;
+    var lat2=Math.asin(Math.sin(lat1)*Math.cos(d)+Math.cos(lat1)*Math.sin(d)*Math.cos(b));
+    var lon2=lon1+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(lat1),Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
+    return [lat2*180/Math.PI,lon2*180/Math.PI];
+  }
+  var hdgDeg=rwyHdg;
+  var crosswindHdg=(hdgDeg+turn*90+360)%360;
+  var downwindHdg=(hdgDeg+turn*180+360)%360;
+  var baseHdg=(hdgDeg+turn*270+360)%360;
+  var depEnd=pt(rwyLat,rwyLon,hdgDeg,dep);
+  var crossStart=pt(depEnd[0],depEnd[1],crosswindHdg,leg);
+  var downwindStart=pt(crossStart[0],crossStart[1],downwindHdg,dep*2);
+  var baseStart=pt(downwindStart[0],downwindStart[1],baseHdg,leg);
+  var finalStart=pt(baseStart[0],baseStart[1],hdgDeg+180,dep*0.5);
+  var patternPts=[
+    [rwyLat,rwyLon],depEnd,crossStart,downwindStart,baseStart,finalStart,[rwyLat,rwyLon]
+  ];
+  _patternLayer=L.polyline(patternPts,{color:'#ff9900',weight:2.5,opacity:0.9}).addTo(_map);
+  var labels=[
+    {pt:depEnd,txt:'DEPARTURE'},
+    {pt:crossStart,txt:'CROSSWIND'},
+    {pt:[(downwindStart[0]+crossStart[0])/2,(downwindStart[1]+crossStart[1])/2],txt:'DOWNWIND'},
+    {pt:baseStart,txt:'BASE'},
+    {pt:[(finalStart[0]+baseStart[0])/2,(finalStart[1]+baseStart[1])/2],txt:'FINAL'}
+  ];
+  labels.forEach(function(l){
+    var m=L.marker(l.pt,{icon:L.divIcon({className:'',html:'<div style="background:rgba(180,80,0,0.85);color:#fff;font-size:9px;font-family:monospace;padding:1px 4px;border-radius:2px;white-space:nowrap">'+l.txt+'</div>',iconAnchor:[20,8]})});
+    m.addTo(_map);
+    _patternMarkers.push(m);
+  });
+  var altLabel=L.marker([rwyLat,rwyLon],{icon:L.divIcon({className:'',html:'<div style="background:rgba(0,0,0,0.8);color:#ff9900;font-size:10px;font-family:monospace;padding:2px 6px;border-radius:3px;white-space:nowrap">TPA '+(altFt+1000)+'ft MSL</div>',iconAnchor:[-5,8]})});
+  altLabel.addTo(_map);
+  _patternMarkers.push(altLabel);
+  _map.fitBounds(L.polyline(patternPts).getBounds().pad(0.3));
+}
+
+function clearPatternFromMap(){
+  if(_patternLayer){_map.removeLayer(_patternLayer);_patternLayer=null;}
+  _patternMarkers.forEach(function(m){_map.removeLayer(m);});
+  _patternMarkers=[];
+}
+
+// Hook into existing drawPattern to also draw on map
+var _origDrawPattern=typeof drawPattern==='function'?drawPattern:null;
+
+// ═══════════════════════════════════════════════════════════════════════
+// FEATURE 3: INTERACTIVE CLICK-TO-ADD WAYPOINTS
+// ═══════════════════════════════════════════════════════════════════════
+var _mapEditMode=false,_customWpMarkers=[],_routeLine=null;
+
+function toggleMapEditMode(){
+  _mapEditMode=!_mapEditMode;
+  var btn=document.getElementById('map-edit-btn');
+  if(btn){
+    btn.style.background=_mapEditMode?'#1a0050':'';
+    btn.style.borderColor=_mapEditMode?'#b87aff':'';
+    btn.textContent=_mapEditMode?'✏ EDITING':'✏ ADD WPT';
+  }
+  if(_mapEditMode){
+    _map.getContainer().style.cursor='crosshair';
+    if(typeof toast==='function')toast('Click map to add waypoint. Right-click marker to remove.');
+  } else {
+    _map.getContainer().style.cursor='';
+  }
+}
+
+function initMapInteraction(){
+  if(!window._map)return;
+  _map.on('click',function(e){
+    if(!_mapEditMode)return;
+    var lat=Math.round(e.latlng.lat*10000)/10000;
+    var lon=Math.round(e.latlng.lng*10000)/10000;
+    var id='WPT'+(_customWpMarkers.length+1);
+    addCustomMapWaypoint(id,lat,lon);
+  });
+}
+
+function addCustomMapWaypoint(id,lat,lon){
+  var icon=L.divIcon({className:'',html:'<div style="width:10px;height:10px;background:#b87aff;border:2px solid #fff;border-radius:50%;cursor:move"></div>',iconSize:[10,10],iconAnchor:[5,5]});
+  var marker=L.marker([lat,lon],{icon:icon,draggable:true,title:id});
+  marker._wpId=id;
+  marker.bindTooltip(id,{permanent:true,direction:'top',offset:[0,-8],className:'wp-tip'});
+  marker.on('dragend',function(e){
+    var ll=e.target.getLatLng();
+    marker._customLat=Math.round(ll.lat*10000)/10000;
+    marker._customLon=Math.round(ll.lng*10000)/10000;
+    rebuildCustomRouteLine();
+  });
+  marker.on('contextmenu',function(){
+    _map.removeLayer(marker);
+    _customWpMarkers=_customWpMarkers.filter(function(m){return m!==marker;});
+    rebuildCustomRouteLine();
+    if(typeof toast==='function')toast(id+' removed');
+  });
+  marker._customLat=lat;
+  marker._customLon=lon;
+  marker.addTo(_map);
+  _customWpMarkers.push(marker);
+  rebuildCustomRouteLine();
+  if(typeof toast==='function')toast('Added '+id+' at '+lat+','+lon);
+}
+
+function rebuildCustomRouteLine(){
+  if(_routeLine)_map.removeLayer(_routeLine);
+  if(!STATE||!STATE.waypoints)return;
+  var pts=STATE.waypoints.filter(function(w){return w.lat&&w.lon;}).map(function(w){return[w.lat,w.lon];});
+  _customWpMarkers.forEach(function(m){pts.push([m._customLat,m._customLon]);});
+  if(pts.length>1)_routeLine=L.polyline(pts,{color:'#b87aff',weight:2,dashArray:'5,3',opacity:0.8}).addTo(_map);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FEATURE 4: VFR WAYPOINTS - CORRIDOR SEARCH FROM NAVAIDS
+// ═══════════════════════════════════════════════════════════════════════
+var _navaidDB=null;
+
+function loadNavaidDB(){
+  if(_navaidDB)return Promise.resolve(_navaidDB);
+  var urls=['./data/ourairports-navaids.csv','/data/ourairports-navaids.csv'];
+  return fetch(urls[0]).then(function(r){return r.ok?r:fetch(urls[1]);}).then(function(r){return r.text();}).then(function(csv){
+    var lines=csv.trim().split('\n');
+    var hdrs=lines[0].replace(/"/g,'').split(',');
+    var iType=hdrs.indexOf('type'),iLat=hdrs.indexOf('latitude_deg'),iLon=hdrs.indexOf('longitude_deg'),iIdent=hdrs.indexOf('ident'),iName=hdrs.indexOf('name'),iCtry=hdrs.indexOf('iso_country');
+    var db=[];
+    for(var i=1;i<lines.length;i++){
+      var cols=lines[i].replace(/"/g,'').split(',');
+      if(cols[iCtry]!=='US')continue;
+      var t=cols[iType];
+      if(t!=='VOR'&&t!=='VORDME'&&t!=='VORTAC'&&t!=='NDB'&&t!=='NDB-DME')continue;
+      var lat=parseFloat(cols[iLat]),lon=parseFloat(cols[iLon]);
+      if(isNaN(lat)||isNaN(lon))continue;
+      db.push({id:cols[iIdent],name:cols[iName],type:t,lat:lat,lon:lon});
+    }
+    _navaidDB=db;
+    console.log('[Avisor] Navaid DB loaded:',db.length,'US navaids');
+    return db;
+  });
+}
+
+function gcDist(lat1,lon1,lat2,lon2){
+  var R=3440.065,r=Math.PI/180;
+  var dlat=(lat2-lat1)*r,dlon=(lon2-lon1)*r;
+  var a=Math.sin(dlat/2)*Math.sin(dlat/2)+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dlon/2)*Math.sin(dlon/2);
+  return 2*R*Math.asin(Math.sqrt(Math.min(1,a)));
+}
+
+function crossTrackDist(ptLat,ptLon,fromLat,fromLon,toLat,toLon){
+  var R=3440.065,r=Math.PI/180;
+  var d13=gcDist(fromLat,fromLon,ptLat,ptLon)/R;
+  var brng13=Math.atan2(Math.sin((ptLon-fromLon)*r)*Math.cos(ptLat*r),Math.cos(fromLat*r)*Math.sin(ptLat*r)-Math.sin(fromLat*r)*Math.cos(ptLat*r)*Math.cos((ptLon-fromLon)*r));
+  var brng12=Math.atan2(Math.sin((toLon-fromLon)*r)*Math.cos(toLat*r),Math.cos(fromLat*r)*Math.sin(toLat*r)-Math.sin(fromLat*r)*Math.cos(toLat*r)*Math.cos((toLon-fromLon)*r));
+  return Math.abs(Math.asin(Math.sin(d13)*Math.sin(brng13-brng12)))*R;
+}
+
+function alongTrackDist(ptLat,ptLon,fromLat,fromLon,toLat,toLon){
+  var R=3440.065,r=Math.PI/180;
+  var d13=gcDist(fromLat,fromLon,ptLat,ptLon)/R;
+  var brng13=Math.atan2(Math.sin((ptLon-fromLon)*r)*Math.cos(ptLat*r),Math.cos(fromLat*r)*Math.sin(ptLat*r)-Math.sin(fromLat*r)*Math.cos(ptLat*r)*Math.cos((ptLon-fromLon)*r));
+  var brng12=Math.atan2(Math.sin((toLon-fromLon)*r)*Math.cos(toLat*r),Math.cos(fromLat*r)*Math.sin(toLat*r)-Math.sin(fromLat*r)*Math.cos(toLat*r)*Math.cos((toLon-fromLon)*r));
+  var xtd=Math.asin(Math.sin(d13)*Math.sin(brng13-brng12));
+  return Math.acos(Math.cos(d13)/Math.cos(xtd))*R;
+}
+
+function findVFRWaypointsAlongRoute(fromLat,fromLon,toLat,toLon,maxCorridorNm,targetSpacingNm){
+  maxCorridorNm=maxCorridorNm||5;
+  targetSpacingNm=targetSpacingNm||60;
+  if(!_navaidDB||!_navaidDB.length)return [];
+  var totalDist=gcDist(fromLat,fromLon,toLat,toLon);
+  var candidates=_navaidDB.filter(function(nav){
+    var xt=crossTrackDist(nav.lat,nav.lon,fromLat,fromLon,toLat,toLon);
+    if(xt>maxCorridorNm)return false;
+    var at=alongTrackDist(nav.lat,nav.lon,fromLat,fromLon,toLat,toLon);
+    if(at<5||at>totalDist-5)return false;
+    nav._along=at;
+    nav._cross=xt;
+    return true;
+  });
+  candidates.sort(function(a,b){return a._along-b._along;});
+  // Filter to roughly targetSpacingNm spacing
+  var selected=[];
+  var lastDist=0;
+  candidates.forEach(function(nav){
+    if(nav._along-lastDist>=targetSpacingNm*0.5){
+      selected.push(nav);
+      lastDist=nav._along;
+    }
+  });
+  return selected;
+}
+
+function enhanceWaypointsWithNavaids(wpts,fromLat,fromLon,toLat,toLon){
+  if(!wpts||wpts.length<2)return wpts;
+  var result=[wpts[0]];
+  for(var i=0;i<wpts.length-1;i++){
+    var segFrom=wpts[i],segTo=wpts[i+1];
+    var segDist=gcDist(segFrom.lat,segFrom.lon,segTo.lat,segTo.lon);
+    if(segDist>60){
+      var fills=findVFRWaypointsAlongRoute(segFrom.lat,segFrom.lon,segTo.lat,segTo.lon,5,60);
+      fills.forEach(function(nav){
+        result.push({id:nav.id,lat:nav.lat,lon:nav.lon,type:nav.type.toLowerCase(),desc:nav.name+' ('+nav.type+')'});
+      });
+    }
+    result.push(wpts[i+1]);
+  }
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MAP UI BUTTONS + INIT
+// ═══════════════════════════════════════════════════════════════════════
+function addMapControlButtons(){
+  if(!window._map||document.getElementById('map-gps-btn'))return;
+  var ctrl=document.createElement('div');
+  ctrl.style.cssText='position:absolute;top:8px;left:8px;z-index:1000;display:flex;flex-direction:column;gap:5px';
+  ctrl.innerHTML='<button id="map-gps-btn" onclick="startPlaneTracker()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#001a0d;border:1px solid #00e57a;color:#00e57a;border-radius:4px;cursor:pointer;white-space:nowrap">✈ GPS ON</button>'
+    +'<button id="map-follow-btn" onclick="toggleMapFollow()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#001a2a;border:1px solid #38beff;color:#38beff;border-radius:4px;cursor:pointer;white-space:nowrap">⊙ FOLLOW</button>'
+    +'<button id="map-edit-btn" onclick="toggleMapEditMode()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#1a0050;border:1px solid #b87aff;color:#b87aff;border-radius:4px;cursor:pointer;white-space:nowrap">✏ ADD WPT</button>'
+    +'<button id="map-pattern-btn" onclick="showPatternOnMap()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#2a1500;border:1px solid #ff9900;color:#ff9900;border-radius:4px;cursor:pointer;white-space:nowrap">⬡ PATTERN</button>'
+    +'<button onclick="clearPatternFromMap()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#1a0000;border:1px solid #ff5555;color:#ff5555;border-radius:4px;cursor:pointer;white-space:nowrap">✕ CLR PTN</button>';
+  var mapContainer=document.getElementById('map-container');
+  if(mapContainer)mapContainer.appendChild(ctrl);
+}
+
+function showPatternOnMap(){
+  if(!STATE||!STATE.plan){if(typeof toast==='function')toast('Build a plan first');return;}
+  var p=STATE.plan;
+  if(!p.arr||!p.arr.lat){if(typeof toast==='function')toast('No destination data');return;}
+  var rwyHdg=p.favRwy?parseInt(p.favRwy.id)*10:360;
+  var leftTraffic=p.favRwy?p.favRwy.traffic!=='R':true;
+  drawPatternOnMap(rwyHdg,p.arr.lat,p.arr.lon,leftTraffic,p.arr.elev||0);
+  if(typeof tab==='function')tab('map');
+  if(typeof toast==='function')toast('Traffic pattern drawn for RWY '+(p.favRwy?p.favRwy.id:'??'));
+}
+
+window.addEventListener('load',function(){
+  setTimeout(function(){
+    loadNavaidDB();
+    if(window._map){addMapControlButtons();initMapInteraction();}
+    else{
+      var t=setInterval(function(){
+        if(window._map){clearInterval(t);addMapControlButtons();initMapInteraction();}
+      },500);
+    }
+  },1000);
+});function openInMaps(){
   if(!STATE.plan||!STATE.plan.arr){alert("Build a plan first");return;}
   var lat=STATE.plan.arr.lat,lon=STATE.plan.arr.lon,name=STATE.plan.arrIcao;
   var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(/Mac/.test(navigator.platform)&&navigator.maxTouchPoints>0);
