@@ -106,7 +106,7 @@ body{color:var(--txt);font-family:var(--sans);font-size:13px;user-select:none}
 .panel{display:none;flex:1;overflow-y:auto;padding:14px}
 .panel.on{display:block}
 /* Map tab: flex column + explicit min-height so desktop layout never collapses to 0×0 (blank map) */
-#p-map.panel.on{display:flex;flex-direction:column;position:absolute;top:80px;left:260px;right:0;bottom:0;z-index:10;padding:0;overflow:hidden}
+#p-map.panel.on{display:flex;flex-direction:column;position:absolute;top:80px;left:260px;right:0;bottom:0;z-index:10;padding:0;overflow:hidden}@media(max-width:600px){#p-map.panel.on{left:0;top:60px}.map-container{height:calc(100vh - 60px)}}
 #p-map.panel.on #d-map{flex:1 1 auto;display:flex!important;flex-direction:column;min-height:min(480px,calc(100vh - 150px));overflow:hidden}
 #p-map #map-container{flex:1 1 auto;width:100%;height:calc(100vh - 120px);min-height:min(360px,calc(100vh - 220px));position:relative;background:#0a0e1a;z-index:0}
 .map-subbar{display:flex;gap:6px;align-items:center;padding:5px 10px;background:#060810;border-bottom:2px solid #1e2a3a;flex-shrink:0;flex-wrap:wrap}
@@ -4116,7 +4116,7 @@ function initMap(){
   var faaSec=null,ifrLow=null;
   try{
     if(!isFileMode&&L.esri&&L.esri.tiledMapLayer){
-      faaSec=L.esri.tiledMapLayer({url:'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/VFR_Sectional/MapServer',minZoom:8,maxZoom:12,maxNativeZoom:12});faaSec.addTo(_map);
+      faaSec=L.esri.tiledMapLayer({url:'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/VFR_Sectional/MapServer',minZoom:6,maxZoom:14,maxNativeZoom:12});faaSec.addTo(_map);
       ifrLow=L.esri.tiledMapLayer({url:'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/IFR_AreaLow/MapServer',minZoom:7,maxZoom:12,maxNativeZoom:12});
     }
   }catch(e){console.warn('Esri chart layers',e);}
