@@ -318,9 +318,9 @@ canvas#cgc{display:block;width:100%;height:auto}
   .left{width:100%;max-height:56dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;border-right:none;border-bottom:1px solid var(--line)}
   .left-footer{position:sticky;bottom:0;z-index:5;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 18px rgba(0,0,0,.25)}
   .right{min-height:44dvh}
-  #p-map.panel.on{min-height:min(72dvh,640px)}
-  #p-map.panel.on #d-map{min-height:min(52dvh,520px)}
-  #p-map #map-container{min-height:min(240px,38dvh)}
+  #p-map.panel.on{left:0!important;top:60px!important;right:0!important;bottom:0!important;position:fixed!important;min-height:unset}
+  #p-map.panel.on #d-map{min-height:unset;height:100%}
+  #p-map #map-container{min-height:unset;height:calc(100dvh - 60px)}
   .map-subbar{padding:8px 10px!important;gap:8px!important}
   .map-subbar label{font-size:8px!important;white-space:nowrap}
   .map-subbar .map-subbar-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-end}
@@ -1417,7 +1417,7 @@ function normalizeAwMetarTaf(ob){
 }
 async function fMetar(icao){
   try{
-    const r=await fetchJSONTimeout(`${location.protocol==='http:'||location.protocol==='https:'?'':'https://aviationweather.gov'}/awc-api/data/metar?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
+    const r=await fetchJSONTimeout(`https://aviationweather.gov/awc-api/data/metar?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
     if(!r.ok)return null;
     var row=(await r.json())?.[0]||null;
     return row?normalizeAwMetarTaf(row):null;
@@ -1425,7 +1425,7 @@ async function fMetar(icao){
 }
 async function fTaf(icao){
   try{
-    const r=await fetchJSONTimeout(`${location.protocol==='http:'||location.protocol==='https:'?'':'https://aviationweather.gov'}/awc-api/data/taf?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
+    const r=await fetchJSONTimeout(`https://aviationweather.gov/awc-api/data/taf?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
     if(!r.ok)return null;
     var row=(await r.json())?.[0]||null;
     return row?normalizeAwMetarTaf(row):null;
@@ -1442,7 +1442,7 @@ async function fNotam(icao){
     return[];
   }
   try{
-    var base=location.protocol==='http:'||location.protocol==='https:'?'':' https://api.faa.gov';var url=base+'/faa-api/v1/notams?icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key);
+    var url='https://api.faa.gov/faa-api/v1/notams?icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key);
     const r=await fetchJSONTimeout(url,{headers:{accept:'application/json'}},12000);
     if(!r.ok){
       console.warn('NOTAM HTTP',icao,r.status);
@@ -2606,9 +2606,14 @@ function rebuildCustomRouteLine(){
     try{STATE.fplXML=buildFPL(STATE.plan,STATE.waypoints);}catch(e){console.warn('buildFPL error',e);}
   }
 
-  // Refresh the waypoints display tab
-  if(typeof renderAll==='function'&&STATE.plan){
-    try{renderAll(STATE.plan);}catch(e){}
+  // Refresh WAYPOINTS tab immediately so custom waypoints appear
+  if(typeof renderWaypoints==='function'&&STATE.waypoints&&STATE.waypoints.length){
+    try{renderWaypoints();}catch(e){console.warn('renderWaypoints error',e);}
+  }
+
+  // Refresh FPL export panel so the updated route is reflected
+  if(typeof renderFPLPanel==='function'&&STATE.plan){
+    try{renderFPLPanel();}catch(e){console.warn('renderFPLPanel error',e);}
   }
 }
 
@@ -2729,13 +2734,25 @@ function showPatternOnMap(){
   if(!STATE||!STATE.plan){if(typeof toast==='function')toast('Build a plan first');return;}
   var p=STATE.plan;
   if(!p.arr||!p.arr.lat){if(typeof toast==='function')toast('No destination data');return;}
-  var rwyHdg=p.favRwy?parseInt(p.favRwy.id)*10:360;
-  var leftTraffic=p.favRwy?p.favRwy.traffic!=='R':true;
+  var rwyHdg=p.favRwy?rwyLabelToHeading(p.favRwy.id):360;
+  var leftTraffic=p.favRwy?p.favRwy.pat!=='R':true;
   var elev=p.arr.elev||p.arr.elevation||0;
-  // Use runway threshold if available, otherwise airport center
+  // Anchor pattern at runway threshold (computed from airport center + heading + half-length)
   var rwyLat=p.arr.lat, rwyLon=p.arr.lon;
-  if(p.favRwy&&p.favRwy.lat){rwyLat=p.favRwy.lat;rwyLon=p.favRwy.lon;}
-  else if(p.favRwy&&p.favRwy.leLatitude){rwyLat=parseFloat(p.favRwy.leLatitude);rwyLon=parseFloat(p.favRwy.leLongitude);}
+  if(p.favRwy&&p.favRwy.lat&&p.favRwy.lon){
+    rwyLat=p.favRwy.lat; rwyLon=p.favRwy.lon;
+  } else if(p.favRwy&&p.favRwy.leLatitude){
+    rwyLat=parseFloat(p.favRwy.leLatitude); rwyLon=parseFloat(p.favRwy.leLongitude);
+  } else if(p.favRwy&&p.favRwy.hdg!=null&&p.favRwy.len){
+    // Derive threshold: move from airport center opposite to runway heading by half length
+    var halfNm=(p.favRwy.len/2)/6076.12;
+    var oppHdg=(rwyHdg+180)%360;
+    var _R=3440.065,_d=halfNm/_R,_b=oppHdg*Math.PI/180;
+    var _lat1=p.arr.lat*Math.PI/180,_lon1=p.arr.lon*Math.PI/180;
+    var _lat2=Math.asin(Math.sin(_lat1)*Math.cos(_d)+Math.cos(_lat1)*Math.sin(_d)*Math.cos(_b));
+    var _lon2=_lon1+Math.atan2(Math.sin(_b)*Math.sin(_d)*Math.cos(_lat1),Math.cos(_d)-Math.sin(_lat1)*Math.sin(_lat2));
+    rwyLat=_lat2*180/Math.PI; rwyLon=_lon2*180/Math.PI;
+  }
   drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,elev);
   if(typeof tab==='function')tab('map');
   if(typeof toast==='function')toast('Traffic pattern drawn for RWY '+(p.favRwy?p.favRwy.id:'??'));
@@ -4202,32 +4219,63 @@ function initMap(){
   _map=L.map('map-container',{zoomControl:false,attributionControl:false,preferCanvas:false});
   var isFileMode=(location&&location.protocol==='file:');
   var faaSec=null,ifrLow=null;
-  try{
-    if(!isFileMode&&L.esri&&L.esri.tiledMapLayer){
-      faaSec=L.esri.tiledMapLayer({url:'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/VFR_Sectional/MapServer',minZoom:6,maxZoom:14,maxNativeZoom:12});faaSec.addTo(_map);
-      ifrLow=L.esri.tiledMapLayer({url:'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/IFR_AreaLow/MapServer',minZoom:7,maxZoom:12,maxNativeZoom:12});
-    }
-  }catch(e){console.warn('Esri chart layers',e);}
-  var skyVec=L.tileLayer('https://t.skyvector.com/api/Charts/VFR/{z}/{x}/{y}',{maxZoom:11,tileSize:512,errorTileUrl:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',subdomains:'abc'});
+  // ArcGIS VFR Sectional: direct XYZ tile URL (no ESRI plugin metadata fetch needed)
+  // Tile scheme: /MapServer/tile/{z}/{y}/{x}  Min LOD:8 Max LOD:12
+  // minNativeZoom:8 → Leaflet upsamples at zoom 5-7 instead of 404ing
+  var _arcgisBase='https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services';
+  if(!isFileMode){
+    try{
+      faaSec=L.tileLayer(_arcgisBase+'/VFR_Sectional/MapServer/tile/{z}/{y}/{x}',{
+        minZoom:5,maxZoom:14,minNativeZoom:8,maxNativeZoom:12,
+        attribution:'FAA/AIS Sectional',crossOrigin:true
+      });
+      faaSec.addTo(_map);
+      ifrLow=L.tileLayer(_arcgisBase+'/IFR_AreaLow/MapServer/tile/{z}/{y}/{x}',{
+        minZoom:5,maxZoom:12,minNativeZoom:7,maxNativeZoom:12,
+        attribution:'FAA/AIS IFR Low',crossOrigin:true
+      });
+      // TAC - Terminal Area Charts (denser coverage around busy airports)
+      var faaVfrTac=L.tileLayer(_arcgisBase+'/VFR_Terminal/MapServer/tile/{z}/{y}/{x}',{
+        minZoom:9,maxZoom:14,minNativeZoom:10,maxNativeZoom:12,
+        attribution:'FAA/AIS TAC',crossOrigin:true,opacity:0.95
+      });
+      // Store refs for layer control
+      _map._avisorFaaSectional=faaSec;
+      _map._avisorIfrLow=ifrLow;
+      _map._avisorFaaTac=faaVfrTac;
+    }catch(e){console.warn('FAA chart layers',e);}
+  }
+  // OpenStreetMap as reliable base (replaces blocked SkyVector)
+  var skyVec=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',attribution:'© OSM contributors'});
   var topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17,subdomains:'abc'});
   var sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
   var night=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19});
   var airspL=L.layerGroup();
   var baseLayers={};
-  if(faaSec) baseLayers['FAA Sectional (AIS)']=faaSec;
-  if(ifrLow) baseLayers['IFR Enroute Low (AIS)']=ifrLow;
-  baseLayers['Sectional (SkyVector preview)']=skyVec;
+  if(faaSec) baseLayers['✈ FAA Sectional (AIS)']=faaSec;
+  if(ifrLow) baseLayers['✈ IFR Enroute Low (AIS)']=ifrLow;
+  if(typeof faaVfrTac!=='undefined'&&faaVfrTac) baseLayers['✈ VFR Terminal Area (TAC)']=faaVfrTac;
+  baseLayers['Street Map (OSM)']=skyVec;
   baseLayers['Topo / relief']=topo;
   baseLayers['Satellite']=sat;
   baseLayers['Night']=night;
   var def=(isFileMode?topo:(faaSec||topo));
   def.addTo(_map);
   if(isFileMode&&typeof toast==='function') toast('FILE MODE: map limited. Use http://localhost for FAA sectionals.');
-  var skyOn=false;
-  skyVec.on('tileerror',function(){if(skyOn&&_map&&_map.hasLayer(skyVec)){_map.removeLayer(skyVec);topo.addTo(_map);if(typeof toast==='function')toast('SKYVECTOR TILES FAILED — USING TOPO');}});
-  if(faaSec) faaSec.on('tileerror',function(){if(_map&&_map.hasLayer(faaSec)){_map.removeLayer(faaSec);topo.addTo(_map);if(typeof toast==='function')toast('FAA SECTIONAL TILE ERROR — USING TOPO');}});
-  if(faaSec)_map._avisorFaaSectional=faaSec;
-  if(ifrLow)_map._avisorIfrLow=ifrLow;
+  var skyOn=false; // skyVec is now OSM - no error handler needed
+  if(faaSec) faaSec.on('tileerror',function(){
+    if(!faaSec._errCount)faaSec._errCount=0;
+    faaSec._errCount++;
+    clearTimeout(faaSec._errTimer);
+    faaSec._errTimer=setTimeout(function(){
+      if(faaSec._errCount>5&&_map&&_map.hasLayer(faaSec)){
+        _map.removeLayer(faaSec);topo.addTo(_map);
+        if(typeof toast==='function')toast('FAA SECTIONAL UNAVAILABLE — USING TOPO');
+      }
+      faaSec._errCount=0;
+    },3000);
+  });
+  // (faaSec/ifrLow refs already stored on _map inside init block above)
   L.control.layers(baseLayers,{'Airspace B/C/D':airspL},{position:'topright',collapsed:true}).addTo(_map);
   _map.on('baselayerchange',function(ev){
     if(ev&&ev.name&&ev.name.indexOf('SkyVector')>=0)skyOn=true;
@@ -4235,6 +4283,7 @@ function initMap(){
     if(ev&&ev.layer){
       if(ev.layer===faaSec||(ev.name&&ev.name.indexOf('FAA Sectional')>=0))need=8;
       else if(ev.layer===ifrLow||(ev.name&&ev.name.indexOf('IFR Enroute Low')>=0))need=7;
+      else if(ev.name&&ev.name.indexOf('TAC')>=0)need=10;
     }
     if(need&&_map.getZoom()<need)_map.setZoom(need);
   });
