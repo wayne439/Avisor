@@ -2731,7 +2731,12 @@ function showPatternOnMap(){
   if(!p.arr||!p.arr.lat){if(typeof toast==='function')toast('No destination data');return;}
   var rwyHdg=p.favRwy?parseInt(p.favRwy.id)*10:360;
   var leftTraffic=p.favRwy?p.favRwy.traffic!=='R':true;
-  drawPatternOnMap(rwyHdg,p.arr.lat,p.arr.lon,leftTraffic,p.arr.elev||0);
+  var elev=p.arr.elev||p.arr.elevation||0;
+  // Use runway threshold if available, otherwise airport center
+  var rwyLat=p.arr.lat, rwyLon=p.arr.lon;
+  if(p.favRwy&&p.favRwy.lat){rwyLat=p.favRwy.lat;rwyLon=p.favRwy.lon;}
+  else if(p.favRwy&&p.favRwy.leLatitude){rwyLat=parseFloat(p.favRwy.leLatitude);rwyLon=parseFloat(p.favRwy.leLongitude);}
+  drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,elev);
   if(typeof tab==='function')tab('map');
   if(typeof toast==='function')toast('Traffic pattern drawn for RWY '+(p.favRwy?p.favRwy.id:'??'));
 }
