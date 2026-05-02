@@ -1,0 +1,5 @@
+# PilotAvisor PWA — Option B static hosting (HTTPS)
+# Build: npm ci && npm run plane   ·   Publish folder: dist
+[build]
+  command = "npm run plane"
+  publish = "dist"

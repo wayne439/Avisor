@@ -4,7 +4,8 @@ export default defineConfig({
   base: "./",
   publicDir: "public",
   server: {
-    host: true,
+    // Explicit IPv4 bind — on some Windows/LAN setups `true` is flaky for 10.x access from other devices.
+    host: "0.0.0.0",
     // tunnelmole / localtunnel / ngrok send a different Host header than localhost
     allowedHosts: true,
     // AWC JSON API does not send Access-Control-Allow-Origin; browser fetch must be same-origin.
@@ -22,7 +23,7 @@ export default defineConfig({
     },
   },
   preview: {
-    host: true,
+    host: "0.0.0.0",
     allowedHosts: true,
     proxy: {
       "/awc-api": {

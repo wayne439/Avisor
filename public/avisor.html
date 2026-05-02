@@ -11,9 +11,10 @@
 <link rel="apple-touch-icon" href="./pwa-192.png">
 <title>PilotAvisor — AI Flight Advisor</title>
 <script>
-if('serviceWorker'in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(function(){});});}
+/* Skip SW on Vite dev (5173): avoids cache/intercept quirks; LAN http://10.x is not a secure SW context anyway. */
+window.addEventListener('load',function(){var p=location.port;if(p==='5173')return;if(!('serviceWorker'in navigator))return;navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(function(){});});
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="./vendor/pdf.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -176,6 +177,11 @@ body{color:var(--txt);font-family:var(--sans);font-size:13px;user-select:none}
 .wpt-desc{font-size:10px;color:var(--txt2);margin-top:1px}
 .wpt-sub{font-family:var(--mono);font-size:8px;color:var(--txt3);margin-top:1px}
 .wpt-meta{font-family:var(--mono);font-size:8px;color:var(--txt3);text-align:right;flex-shrink:0;line-height:1.7}
+.wpt-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;align-items:center}
+.wpt-act{padding:2px 7px;font-family:var(--mono);font-size:8px;letter-spacing:0.5px;border-radius:3px;cursor:pointer;border:1px solid var(--line2);background:var(--sky3);color:var(--txt2)}
+.wpt-act:hover{border-color:var(--blu);color:var(--blu)}
+.wpt-act-del{border-color:var(--red2);color:var(--red)}
+.wpt-act-del:hover{background:rgba(255,61,61,.12);color:var(--red)}
 
 /* ═══ FPL EXPORT ════════════════════════════════════════════════ */
 .fpl-box{background:var(--sky);border:2px solid var(--amb2);padding:13px;margin-bottom:10px}
@@ -347,9 +353,9 @@ canvas#cgc{display:block;width:100%;height:auto}
 .tog-lbl{font-family:var(--mono);font-size:9px;color:var(--txt2);flex:1;min-width:0;line-height:1.3;white-space:normal;padding-right:2px}
 
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://unpkg.com/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
+<link rel="stylesheet" href="./vendor/leaflet/leaflet.min.css">
+<script src="./vendor/leaflet/leaflet.min.js"></script>
+<script src="./vendor/esri-leaflet.js"></script>
 </head>
 <body><div id="safety-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center"><div style="background:#0d1829;border:1px solid #38beff;border-radius:12px;padding:32px;max-width:480px;margin:20px;font-family:monospace"><div style="color:#38beff;font-size:13px;font-weight:bold;letter-spacing:2px;margin-bottom:16px">⚠ SAFETY NOTICE</div><div style="color:#d8e8ff;font-size:12px;line-height:1.8;margin-bottom:20px">PilotAvisor is a <strong style="color:#ffaa00">flight planning aid only</strong>.<br><br>It is <strong style="color:#ff5555">NOT approved</strong> for navigation and does not replace:<br>• Official FAA charts and publications<br>• A proper preflight weather briefing<br>• ATC clearances and NOTAMs<br>• Your pilot-in-command judgment<br><br>Always file a flight plan and brief via <strong style="color:#38beff">1800wxbrief.com</strong> before flight.</div><label style="display:flex;align-items:center;gap:10px;color:#a0b8cc;font-size:11px;margin-bottom:20px;cursor:pointer"><input type="checkbox" id="disclaimer-check" style="width:16px;height:16px"> I understand this is a planning aid only and not certified navigation software.</label><button onclick="acknowledgeSafety()" id="disclaimer-btn" style="width:100%;padding:12px;background:#003d1a;border:1px solid #00e57a;border-radius:6px;color:#00e57a;font-family:monospace;font-size:12px;letter-spacing:1px;cursor:pointer;opacity:0.5" disabled>ACKNOWLEDGE &amp; CONTINUE</button></div></div>
 
@@ -481,7 +487,7 @@ canvas#cgc{display:block;width:100%;height:auto}
     <div class="field" style="margin-top:2px"><label>Within (NM) of destination</label>
       <input type="number" id="opt-prox-nm" value="25" min="5" max="80" step="1" style="max-width:88px" title="Requires Location permission; tab must stay in foreground on many devices" onchange="proximityApproachResetPhase()">
     </div>
-    <div id="gps-prox-help" style="font-size:8px;color:var(--txt2);line-height:1.45;margin:4px 0 2px">1) Build a flight plan. 2) Turn this on. 3) Set NM. 4) Allow Location in the browser. Uses GPS; waits until you are <b>outside</b> NM+15 from the airport, then opens <b>Approach</b> once when you enter the ring.</div>
+    <div id="gps-prox-help" style="font-size:8px;color:var(--txt2);line-height:1.45;margin:4px 0 2px">1) Build a flight plan. 2) Turn this on. 3) Set NM. 4) Allow Location. Uses GNSS/WAAS via the tablet—<b>Wi‑Fi and cellular data are not required</b> for fixes (may be slower cold-start without assisted GPS). Good sky view helps. Waits until you are <b>outside</b> NM+15 from the airport, then opens <b>Approach</b> once when you enter the ring.</div>
 
     <div class="row2">
       <div class="field"><label>Enroute waypoint spacing</label>
@@ -1040,7 +1046,7 @@ var S={
 // PDF.JS
 // ══════════════════════════════════════════════════════════════════
 if(typeof pdfjsLib!=='undefined')
-  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc='./vendor/pdf.worker.min.js';
 
 // ══════════════════════════════════════════════════════════════════
 // AIRCRAFT PERFORMANCE
@@ -1277,10 +1283,11 @@ function syncProximityApproachWatch(){
     return;
   }
   STATE._proxPhase=0;
+  /* enableHighAccuracy: prefer GNSS (works without Wi‑Fi/data; colder/slower TTFF vs assisted GPS). */
   _proxWatchId=navigator.geolocation.watchPosition(proximityApproachOnPosition,function(err){
     console.warn('Geolocation',err&&err.code,err&&err.message);
     if(err&&err.code===1&&typeof toast==='function')toast('Location blocked — allow for proximity Approach');
-  },{enableHighAccuracy:false,maximumAge:30000,timeout:25000});
+  },{enableHighAccuracy:true,maximumAge:10000,timeout:45000});
 }
 function proximityApproachOnPosition(pos){
   if(!STATE.plan||!STATE.plan.arr)return;
@@ -1495,14 +1502,20 @@ async function buildWaypoints(plan){
   if(!useGpsDirect&&wpts.length>=2){
     var wpProf=readEnrouteWpSpacingProfile();
     wpts=densifyWaypointsByDistance(wpts,depRef,arrRef,wpProf);
+    wpts=splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,wpProf);
     wpts=pruneWaypointProgressToArr(depRef,arrRef,wpts);
+    wpts=pruneBearingReversals(depRef,arrRef,wpts);
     wpts=enforceDirectnessAndRebuild(depRef,arrRef,wpts,rules,wpProf);
+    wpts=splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,wpProf);
     wpts=mergeCloseRouteWaypoints(wpts,wpProf.minLegNm);
     wpts=simplifyRouteByDetourRemoval(depRef,arrRef,wpts);
+    wpts=pruneBearingReversals(depRef,arrRef,wpts);
     wpts=pruneCorridorZigzags(depRef,arrRef,wpts);
     wpts=simplifyRouteByDetourRemoval(depRef,arrRef,wpts);
+    wpts=pruneBearingReversals(depRef,arrRef,wpts);
     wpts=pruneNotClosingOnDest(depRef,arrRef,wpts);
     wpts=simplifyRouteByDetourRemoval(depRef,arrRef,wpts);
+    wpts=pruneBearingReversals(depRef,arrRef,wpts);
   }
   // Approach fixes
   let apchFixes=[];
@@ -1568,6 +1581,15 @@ async function buildWaypoints(plan){
     if(!withinAlong||!withinXtk){ dropped++; return false; }
     return true;
   });
+  // Final anti-backtrack pass: remove waypoints that regress toward departure.
+  // This runs late (after all inserts/filters) to prevent "up, back, then up again" routes.
+  if(wpts.length>=3){
+    wpts=pruneWaypointProgressToArr(depRef,arrRef,wpts);
+    wpts=pruneNotClosingOnDest(depRef,arrRef,wpts);
+    wpts=simplifyRouteByDetourRemoval(depRef,arrRef,wpts);
+    wpts=pruneBearingReversals(depRef,arrRef,wpts);
+    wpts=splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,readEnrouteWpSpacingProfile());
+  }
   if(wpts.length===0||String(wpts[0].id).toUpperCase()!==String(depRef.ident||depIcao).toUpperCase()){
     wpts.unshift({id:String(depRef.ident||depIcao).toUpperCase(),lat:depRef.lat,lon:depRef.lon,type:'apt',desc:depRef.name||depIcao});
   }
@@ -1588,6 +1610,98 @@ function resolveNavNode(id){
   if(key.length===3&&AIRPORTS_DB['K'+key]) return {ident:'K'+key,lat:AIRPORTS_DB['K'+key][1],lon:AIRPORTS_DB['K'+key][2],name:AIRPORTS_DB['K'+key][0]||('K'+key)};
   return null;
 }
+function waypointFromUserIdent(raw){
+  var key=String(raw||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(!key) return null;
+  var nc=NAVCOORDS[key];
+  if(nc&&isFinite(Number(nc.lat))&&isFinite(Number(nc.lon)))
+    return{id:key,lat:Number(nc.lat),lon:Number(nc.lon),type:nc.type||'fix',freq:nc.freq||'',desc:nc.desc||key};
+  var apt=APTS[key];
+  if(apt&&isFinite(Number(apt.lat))&&isFinite(Number(apt.lon)))
+    return{id:key,lat:Number(apt.lat),lon:Number(apt.lon),type:'apt',desc:apt.name||key};
+  if(AIRPORTS_DB[key]&&isFinite(AIRPORTS_DB[key][1])&&isFinite(AIRPORTS_DB[key][2])){
+    var row=AIRPORTS_DB[key];
+    return{id:key,lat:Number(row[1]),lon:Number(row[2]),type:'apt',desc:row[0]||key};
+  }
+  if(key.length===3&&AIRPORTS_DB['K'+key]){
+    var r=AIRPORTS_DB['K'+key];
+    return{id:'K'+key,lat:Number(r[1]),lon:Number(r[2]),type:'apt',desc:r[0]||key};
+  }
+  return null;
+}
+function syncWaypointsAfterManualEdit(opts){
+  opts=opts||{};
+  if(!STATE.plan||(STATE.waypoints||[]).length<2){
+    if(typeof toast==='function') toast('Build a flight plan first.');
+    return;
+  }
+  try{STATE.fplXML=buildFPL(STATE.plan,STATE.waypoints);}catch(e){console.warn('buildFPL',e);}
+  if(typeof renderFPLPanel==='function'){try{renderFPLPanel();}catch(e){}}
+  if(typeof renderMap==='function'&&typeof _map!=='undefined'&&_map){try{renderMap();}catch(e){}}
+  if(!opts.skipToast&&typeof toast==='function') toast('Route updated — re-download .fpl if needed');
+}
+/** Snap dragged map position to nearest VOR/FIX within maxNm (chart coordinates). */
+function nearestChartFixNear(lat,lon,maxNm){
+  maxNm=Math.max(8,Number(maxNm)||18);
+  var best=null,bd=maxNm;
+  Object.keys(NAVCOORDS||{}).forEach(function(id){
+    var n=NAVCOORDS[id];
+    if(!n||!isFinite(Number(n.lat))||!isFinite(Number(n.lon))) return;
+    if(!(n.type==='vor'||n.type==='fix')) return;
+    if(BLOCKED_ROUTE_IDS[String(id).toUpperCase()]) return;
+    var d=gcDist(lat,lon,n.lat,n.lon);
+    if(d<bd){bd=d;best={id:String(id).toUpperCase(),lat:n.lat,lon:n.lon,type:n.type||'fix',freq:n.freq||'',desc:n.desc||id};}
+  });
+  return best;
+}
+function applyWaypointDragEnd(stateIdx,lat,lon){
+  var sw=STATE.waypoints||[];
+  var i=parseInt(stateIdx,10);
+  if(!isFinite(i)||i<1||i>=sw.length-1) return;
+  var tgt=sw[i];
+  if(!tgt) return;
+  var fs=!!tgt.fuelStop;
+  var snap=nearestChartFixNear(lat,lon,14);
+  if(snap){
+    tgt.id=snap.id;tgt.lat=snap.lat;tgt.lon=snap.lon;tgt.type=snap.type;tgt.freq=snap.freq||'';tgt.desc=snap.desc||snap.id;
+    if(typeof toast==='function') toast('Snapped to '+snap.id+' ('+Math.round(gcDist(lat,lon,snap.lat,snap.lon))+' nm)');
+  }else{
+    tgt.lat=lat;tgt.lon=lon;tgt.type='vis';
+    tgt.id='U'+Date.now().toString().slice(-6);
+    tgt.freq='';
+    tgt.desc='Map drag — verify position';
+    if(typeof toast==='function') toast('Custom map position — verify');
+  }
+  if(fs) tgt.fuelStop=true;
+  syncWaypointsAfterManualEdit({skipToast:true});
+  if(typeof renderWaypoints==='function'){try{renderWaypoints();}catch(_e){}}
+}
+function deleteWaypointAtIndex(idx){
+  var wpts=STATE.waypoints||[];
+  var i=parseInt(idx,10);
+  if(!isFinite(i)||i<1||i>=wpts.length-1) return;
+  wpts.splice(i,1);
+  STATE.waypoints=wpts;
+  syncWaypointsAfterManualEdit();
+  renderWaypoints();
+}
+function replaceWaypointAtIndex(idx){
+  var wpts=STATE.waypoints||[];
+  var i=parseInt(idx,10);
+  if(!isFinite(i)||i<1||i>=wpts.length-1) return;
+  var cur=wpts[i];
+  var hint=cur&&cur.id?String(cur.id):'';
+  var raw=typeof prompt==='function'?prompt('Replace with VOR, FIX, or airport ICAO (e.g. DRK, KSLC):',hint):'';
+  if(raw==null||String(raw).trim()==='') return;
+  var wp=waypointFromUserIdent(raw);
+  if(!wp){alert('Unknown fix or airport: '+String(raw).trim().toUpperCase());return;}
+  var prev=wpts[i];
+  if(prev&&prev.fuelStop) wp.fuelStop=true;
+  wpts[i]=wp;
+  STATE.waypoints=wpts;
+  syncWaypointsAfterManualEdit();
+  renderWaypoints();
+}
 function getApchKey(icao,rwyId,pref){
   if(icao==='KASE'){if(pref==='LOC'||pref==='ILS')return'KASE-LOC15';if((rwyId||'').startsWith('33'))return'KASE-VIS33';return'KASE-RNP15';}
   if(icao==='KSDL')return'KSDL-RNAV21';
@@ -1598,11 +1712,13 @@ function readEnrouteWpSpacingProfile(){
   var el=document.getElementById('opt-wp-spacing');
   var v=(el&&el.value)||'auto';
   if(v==='auto')
-    return{corridorNm:55,targetNm:55,minlegNm: 60,maxlegNm:  60,minAlongPickSep:22};
+    // Prefer fewer enroute waypoints by default; only add extras when legs exceed ~100 NM.
+    return{corridorNm:80,targetNm:80,minLegNm:60,maxLegNm:100,minAlongPickSep:32};
   var n=parseInt(v,10);
   if(!isFinite(n)||n<25) n=55;
-  var pad=Math.max(8,Math.round(n*0.14));
-  return{corridorNm:n,targetNm:n,minLegNm:Math.max(25,n-pad),maxLegNm:n+pad+4,minAlongPickSep:Math.max(16,Math.round(n*0.38))};
+  var minLeg=Math.max(45,Math.min(90,n));
+  var maxLeg=Math.max(minLeg+18,Math.min(120,n+28));
+  return{corridorNm:n,targetNm:n,minLegNm:minLeg,maxLegNm:maxLeg,minAlongPickSep:Math.max(20,Math.round(minLeg*0.5))};
 }
 
 function mergeCloseRouteWaypoints(wpts,minLegNm){
@@ -1690,6 +1806,28 @@ function pruneNotClosingOnDest(depRef,arrRef,wpts){
   out.push(wpts[wpts.length-1]);
   return out.length>=2?out:wpts;
 }
+function pruneBearingReversals(depRef,arrRef,wpts){
+  if(!Array.isArray(wpts)||wpts.length<4) return wpts||[];
+  var dl=Number(depRef.lat),dLo=Number(depRef.lon),al=Number(arrRef.lat),aLo=Number(arrRef.lon);
+  if(!isFinite(dl)||!isFinite(dLo)||!isFinite(al)||!isFinite(aLo)) return wpts;
+  var out=[wpts[0]];
+  for(var i=1;i<wpts.length-1;i++){
+    var prev=out[out.length-1],cur=wpts[i],nxt=wpts[i+1];
+    if(!prev||!cur||!nxt||!isFinite(Number(prev.lat))||!isFinite(Number(cur.lat))||!isFinite(Number(nxt.lat))) continue;
+    var h1=crsB(prev.lat,prev.lon,cur.lat,cur.lon);
+    var h2=crsB(cur.lat,cur.lon,nxt.lat,nxt.lon);
+    var turn=Math.abs(((h2-h1+540)%360)-180); // 0..180
+    var dPrev=gcDist(prev.lat,prev.lon,al,aLo);
+    var dCur=gcDist(cur.lat,cur.lon,al,aLo);
+    var dNxt=gcDist(nxt.lat,nxt.lon,al,aLo);
+    var regresses=(dCur>dPrev-1&&dCur>dNxt-1);
+    // If this point creates a major reversal/backtrack and does not help closure, drop it.
+    if(turn>122&&regresses) continue;
+    out.push(cur);
+  }
+  out.push(wpts[wpts.length-1]);
+  return out;
+}
 
 function densifyWaypointsByDistance(wpts,depRef,arrRef,profile){
   if(!Array.isArray(wpts)||wpts.length<2) return wpts||[];
@@ -1761,6 +1899,52 @@ function densifyWaypointsByDistance(wpts,depRef,arrRef,profile){
     }
     out.push(b);
     used[String((b&&b.id)||'').toUpperCase()]=1;
+  }
+  return out;
+}
+function splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,profile){
+  if(!Array.isArray(wpts)||wpts.length<2) return wpts||[];
+  profile=profile||readEnrouteWpSpacingProfile();
+  var maxLeg=Math.max(95,Number(profile.maxLegNm)||100);
+  var hardCap=maxLeg+8;
+  var out=(wpts||[]).slice();
+  var guard=0;
+  function hasId(id){id=String(id||'').toUpperCase();return out.some(function(x){return String((x&&x.id)||'').toUpperCase()===id;});}
+  while(guard<14){
+    guard++;
+    var inserted=false;
+    for(var i=0;i<out.length-1;i++){
+      var a=out[i],b=out[i+1];
+      if(!a||!b||!isFinite(Number(a.lat))||!isFinite(Number(a.lon))||!isFinite(Number(b.lat))||!isFinite(Number(b.lon))) continue;
+      var leg=gcDist(a.lat,a.lon,b.lat,b.lon);
+      if(leg<=hardCap) continue;
+      var best=null,bs=1e9;
+      Object.keys(NAVCOORDS||{}).forEach(function(id){
+        var n=NAVCOORDS[id];
+        if(!n||!isFinite(Number(n.lat))||!isFinite(Number(n.lon))) return;
+        if(!(n.type==='vor'||n.type==='fix')) return;
+        var uid=String(id).toUpperCase();
+        if(BLOCKED_ROUTE_IDS[uid]||hasId(uid)) return;
+        var along=alongTrackNmDepArr(a.lat,a.lon,b.lat,b.lon,n.lat,n.lon);
+        if(along<12||along>leg-12) return;
+        var xtk=crossTrackDist(a.lat,a.lon,b.lat,b.lon,n.lat,n.lon);
+        if(xtk>46) return;
+        var dA=gcDist(a.lat,a.lon,n.lat,n.lon),dB=gcDist(n.lat,n.lon,b.lat,b.lon);
+        if(dA>=leg-8||dB>=leg-8) return;
+        var sc=Math.abs(along-(leg/2))+(xtk*3.5)+Math.abs(dA-dB)*0.22;
+        if(depRef&&arrRef&&isFinite(Number(depRef.lat))&&isFinite(Number(arrRef.lat))){
+          var al=alongTrackNmDepArr(depRef.lat,depRef.lon,arrRef.lat,arrRef.lon,n.lat,n.lon);
+          if(al<-20) sc+=180;
+        }
+        if(sc<bs){bs=sc;best={id:uid,lat:n.lat,lon:n.lon,type:n.type||'fix',freq:n.freq||'',desc:n.desc||uid};}
+      });
+      if(best){
+        out.splice(i+1,0,best);
+        inserted=true;
+        break;
+      }
+    }
+    if(!inserted) break;
   }
   return out;
 }
@@ -2286,11 +2470,29 @@ function renderWaypoints(){
   const wpts=STATE.waypoints;
   document.getElementById('wpt-count').textContent=wpts.length+' fixes';
   const tmap={apt:{cls:'w-apt',lbl:'APT'},vor:{cls:'w-vor',lbl:'VOR'},fix:{cls:'w-fix',lbl:'FIX'},vis:{cls:'w-vis',lbl:'VFR'}};
-  document.getElementById('wpt-list').innerHTML=wpts.map((w,i)=>{
+  var legRows=[],over100=0,maxLeg=0;
+  for(var li=1;li<wpts.length;li++){
+    var a=wpts[li-1],b=wpts[li];
+    if(!a||!b||!isFinite(Number(a.lat))||!isFinite(Number(a.lon))||!isFinite(Number(b.lat))||!isFinite(Number(b.lon))) continue;
+    var dnm=Math.round(gcDist(a.lat,a.lon,b.lat,b.lon));
+    if(dnm>maxLeg) maxLeg=dnm;
+    if(dnm>100) over100++;
+    legRows.push('<span style="display:inline-block;margin-right:7px">'+a.id+'→'+b.id+': <b style="color:'+(dnm>100?'var(--red)':'var(--grn)')+'">'+dnm+'nm</b></span>');
+  }
+  var legSummary='';
+  if(legRows.length){
+    legSummary='<div style="margin:0 0 8px 0;padding:7px 9px;border:1px solid '+(over100?'var(--red2)':'#1f4f2f')+';background:'+(over100?'rgba(255,80,80,.08)':'rgba(0,140,60,.08)')+';font-family:var(--mono);font-size:9px;line-height:1.6">'
+      +'<div style="margin-bottom:4px;color:'+(over100?'var(--red)':'var(--grn)')+'">LEG DISTANCES — target 60-100nm | longest '+maxLeg+'nm'+(over100?' | '+over100+' leg(s) >100nm':' | all legs <=100nm')+'</div>'
+      +legRows.join('')
+      +'</div>';
+  }
+  document.getElementById('wpt-list').innerHTML=legSummary+wpts.map((w,i)=>{
     const fuelBadge = w.fuelStop ? '<span style="margin-left:6px;padding:1px 6px;background:rgba(255,170,0,.15);border:1px solid var(--amb);color:var(--amb);font-size:8px;border-radius:3px;font-family:monospace">&#9981; FUEL STOP</span>' : '';
     const tm=tmap[w.type]||tmap.fix;
     const isLast=i===wpts.length-1;
-    return`<div class="wpt">${!isLast?'<div class="wpt-line"></div>':''}<div class="wpt-dot ${tm.cls}">${tm.lbl.slice(0,1)}</div><div class="wpt-body"><div class="wpt-id">${w.id}</div><div class="wpt-desc">${w.desc||''}</div>${w.alt?`<div class="wpt-sub">Alt: ${w.alt}</div>`:''} ${w.freq?`<div class="wpt-sub">Freq: ${w.freq} MHz</div>`:''}</div><div class="wpt-meta">${tm.lbl}<br>${w.lat.toFixed(4)}N<br>${Math.abs(w.lon).toFixed(4)}W</div></div>`;
+    const canEdit=i>0&&i<wpts.length-1;
+    const actions=canEdit?'<div class="wpt-actions"><button type="button" class="wpt-act" onclick="replaceWaypointAtIndex('+i+')">Replace…</button><button type="button" class="wpt-act wpt-act-del" onclick="deleteWaypointAtIndex('+i+')">Delete</button></div>':'';
+    return`<div class="wpt">${!isLast?'<div class="wpt-line"></div>':''}<div class="wpt-dot ${tm.cls}">${tm.lbl.slice(0,1)}</div><div class="wpt-body"><div class="wpt-id">${w.id}${fuelBadge}</div><div class="wpt-desc">${w.desc||''}</div>${w.alt?`<div class="wpt-sub">Alt: ${w.alt}</div>`:''} ${w.freq?`<div class="wpt-sub">Freq: ${w.freq} MHz</div>`:''}${actions}</div><div class="wpt-meta">${tm.lbl}<br>${w.lat.toFixed(4)}N<br>${Math.abs(w.lon).toFixed(4)}W</div></div>`;
   }).join('');
 }
 
@@ -2819,7 +3021,7 @@ function openFFApp(){ openFF(); }
 function printBrief(){
   if(!STATE.plan)return;const p=STATE.plan;
   const w=window.open('','_blank');
-  w.document.write(`<html><head><title>Flight Brief</title><style>body{font-family:monospace;font-size:12px;padding:22px;white-space:pre-wrap;line-height:1.8}<\/style><\/head><body><div id="safety-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center"><div style="background:#0d1829;border:1px solid #38beff;border-radius:12px;padding:32px;max-width:480px;margin:20px;font-family:monospace"><div style="color:#38beff;font-size:13px;font-weight:bold;letter-spacing:2px;margin-bottom:16px">⚠ SAFETY NOTICE</div><div style="color:#d8e8ff;font-size:12px;line-height:1.8;margin-bottom:20px">PilotAvisor is a <strong style="color:#ffaa00">flight planning aid only</strong>.<br><br>It is <strong style="color:#ff5555">NOT approved</strong> for navigation and does not replace:<br>• Official FAA charts and publications<br>• A proper preflight weather briefing<br>• ATC clearances and NOTAMs<br>• Your pilot-in-command judgment<br><br>Always file a flight plan and brief via <strong style="color:#38beff">1800wxbrief.com</strong> before flight.</div><label style="display:flex;align-items:center;gap:10px;color:#a0b8cc;font-size:11px;margin-bottom:20px;cursor:pointer"><input type="checkbox" id="disclaimer-check" style="width:16px;height:16px"> I understand this is a planning aid only and not certified navigation software.</label><button onclick="acknowledgeSafety()" id="disclaimer-btn" style="width:100%;padding:12px;background:#003d1a;border:1px solid #00e57a;border-radius:6px;color:#00e57a;font-family:monospace;font-size:12px;letter-spacing:1px;cursor:pointer;opacity:0.5" disabled>ACKNOWLEDGE &amp; CONTINUE</button></div></div>PilotAvisor FLIGHT PLAN BRIEF\n${'='.repeat(50)}\nRoute:      ${p.primary}\nAircraft:   ${p.ac.name}\nRules:      ${p.rules}\nAlt:        ${p.alt.toLocaleString()} ft MSL\nDistance:   ${p.dist} NM\nETE:        ${p.eteMin} min\nGroundspeed:${p.gs} KTAS\nFuel:       ${p.totalFuel} gal (trip ${p.tripFuel} + reserve ${p.resFuel})\n\nDEPARTURE: ${p.depIcao} — ${p.dep.name}\n  Wind: ${p.depWind}\n  METAR: ${p.dm?.rawOb||'N/A'}\n\nDESTINATION: ${p.arrIcao} — ${p.arr.name}\n  Wind: ${p.arrWind}\n  Runway: ${p.favRwy?'RWY '+p.favRwy.id:'TBD'}\n  METAR: ${p.am?.rawOb||'N/A'}\n\nWAYPOINTS (${STATE.waypoints.length} fixes):\n${STATE.waypoints.map(x=>'  '+x.id.padEnd(8)+x.desc).join('\n')}\n\nHAZARDS:\n${p.hazards.map(h=>'  △ '+h).join('\n')||'  ✓ None flagged'}\n\n${'─'.repeat(50)}\n⚠ FOR PLANNING USE ONLY — not approved flight-planning software.\nGenerated: ${new Date().toUTCString()}<\/body><\/html>`);
+  w.document.write(`<html><head><title>Flight Brief</title><style>body{font-family:monospace;font-size:12px;padding:22px;white-space:pre-wrap;line-height:1.8}<\/style><\/head><body>PilotAvisor FLIGHT PLAN BRIEF\n${'='.repeat(50)}\nRoute:      ${p.primary}\nAircraft:   ${p.ac.name}\nRules:      ${p.rules}\nAlt:        ${p.alt.toLocaleString()} ft MSL\nDistance:   ${p.dist} NM\nETE:        ${p.eteMin} min\nGroundspeed:${p.gs} KTAS\nFuel:       ${p.totalFuel} gal (trip ${p.tripFuel} + reserve ${p.resFuel})\n\nDEPARTURE: ${p.depIcao} — ${p.dep.name}\n  Wind: ${p.depWind}\n  METAR: ${p.dm?.rawOb||'N/A'}\n\nDESTINATION: ${p.arrIcao} — ${p.arr.name}\n  Wind: ${p.arrWind}\n  Runway: ${p.favRwy?'RWY '+p.favRwy.id:'TBD'}\n  METAR: ${p.am?.rawOb||'N/A'}\n\nWAYPOINTS (${STATE.waypoints.length} fixes):\n${STATE.waypoints.map(x=>'  '+x.id.padEnd(8)+x.desc).join('\n')}\n\nHAZARDS:\n${p.hazards.map(h=>'  △ '+h).join('\n')||'  ✓ None flagged'}\n\n${'─'.repeat(50)}\n⚠ FOR PLANNING USE ONLY — not approved flight-planning software.\nGenerated: ${new Date().toUTCString()}<\/body><\/html>`);
   w.document.close();w.print();
 }
 
@@ -3686,7 +3888,10 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
   if(direct<95) return [dep.ident,arr.ident];
   var tn=Number(targetNm);
   var target=(isFinite(tn)&&tn>=25&&tn<=140)?tn:55;
-  var need=Math.max(1,Math.round(direct/(target*1.38))-1);
+  var needBase=Math.max(1,Math.round(direct/(target*1.38))-1);
+  // Keep meaningful enroute references on longer flights (user preference: 3-4+ mids by distance).
+  var minNeedByDistance=direct>=520?4:direct>=260?3:1;
+  var need=Math.max(needBase,minNeedByDistance);
   var conus=isConusCoord(dep.lat,dep.lon)&&isConusCoord(arr.lat,arr.lon);
   var xtkMax=(rules==='VFR')?28:48;
   var vfrVisualOn=!!(document.getElementById('opt-vfr')&&document.getElementById('opt-vfr').checked);
@@ -3784,18 +3989,25 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
   }
   var route=[dep.ident].concat(mids).concat([arr.ident]);
   // Directness guard: if too circuitous, reduce density and retry once.
+  function nodeForRoute(id){
+    if(id===dep.ident) return dep;
+    if(id===arr.ident) return arr;
+    var n=NAVCOORDS[id]||APTS[id]||null;
+    if(n) return n;
+    if(AIRPORTS_DB&&AIRPORTS_DB[id]) return {lat:AIRPORTS_DB[id][1],lon:AIRPORTS_DB[id][2]};
+    if(AIRPORTS_DB&&String(id).length===3&&AIRPORTS_DB['K'+id]) return {lat:AIRPORTS_DB['K'+id][1],lon:AIRPORTS_DB['K'+id][2]};
+    return null;
+  }
   function routeLen(ids){
     var pts=ids.map(function(id){
-      if(id===dep.ident) return dep;
-      if(id===arr.ident) return arr;
-      return NAVCOORDS[id]||null;
+      return nodeForRoute(id);
     }).filter(Boolean);
     var t=0;for(var i=1;i<pts.length;i++)t+=gcDist(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon);
     return t;
   }
   var maxRatio=(rules==='VFR')?1.09:1.18;
   if(routeLen(route)>direct*maxRatio&&need>1){
-    var sparseNeed=Math.max(1,Math.floor(need*0.6));
+    var sparseNeed=Math.max(minNeedByDistance,Math.floor(need*0.78));
     var sparse=[dep.ident];
     for(var s=1;s<=sparseNeed;s++){
       var st=(direct*s)/(sparseNeed+1),pick=null,pb=1e9;
@@ -3808,6 +4020,38 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
     sparse.push(arr.ident);
     route=sparse;
   }
+  // Hard guard: split any extreme long legs with best corridor candidate.
+  // Prevents single absurd jumps (e.g. >180 NM) when sparse picks survive directness pruning.
+  var maxLegGuard=Math.max(130,Math.min(190,target*2.0));
+  for(var sg=0;sg<8;sg++){
+    var changed=false;
+    for(var ri=0;ri<route.length-1;ri++){
+      var ra=nodeForRoute(route[ri]),rb=nodeForRoute(route[ri+1]);
+      if(!ra||!rb) continue;
+      var leg=gcDist(ra.lat,ra.lon,rb.lat,rb.lon);
+      if(leg<=maxLegGuard) continue;
+      var aAlong=alongTrackNmDepArr(dep.lat,dep.lon,arr.lat,arr.lon,ra.lat,ra.lon);
+      var bAlong=alongTrackNmDepArr(dep.lat,dep.lon,arr.lat,arr.lon,rb.lat,rb.lon);
+      var lo=Math.min(aAlong,bAlong),hi=Math.max(aAlong,bAlong),mid=(lo+hi)/2;
+      var best=null,bs=1e9;
+      for(var ci=0;ci<cands.length;ci++){
+        var cc=cands[ci],cid=String(cc.id||'').toUpperCase();
+        if(route.indexOf(cid)>=0) continue;
+        if(cc.along<=lo+8||cc.along>=hi-8) continue;
+        var dA=gcDist(ra.lat,ra.lon,cc.lat,cc.lon);
+        var dB=gcDist(cc.lat,cc.lon,rb.lat,rb.lon);
+        if(dA>=leg-10||dB>=leg-10) continue;
+        var sc=Math.abs(cc.along-mid)+(cc.xtk*3.6)+Math.abs(dA-dB)*0.22;
+        if(sc<bs){bs=sc;best=cid;}
+      }
+      if(best){
+        route.splice(ri+1,0,best);
+        changed=true;
+        break;
+      }
+    }
+    if(!changed) break;
+  }
   return refineRouteIdsMonotonic(dep,arr,route,rules);
 }
 function refineRouteIdsMonotonic(dep,arr,ids,rules){
@@ -3815,7 +4059,11 @@ function refineRouteIdsMonotonic(dep,arr,ids,rules){
   function node(id){
     if(id===dep.ident) return dep;
     if(id===arr.ident) return arr;
-    return NAVCOORDS[id]||APTS[id]||null;
+    var n=NAVCOORDS[id]||APTS[id]||null;
+    if(n) return n;
+    if(AIRPORTS_DB&&AIRPORTS_DB[id]) return {lat:AIRPORTS_DB[id][1],lon:AIRPORTS_DB[id][2]};
+    if(AIRPORTS_DB&&String(id).length===3&&AIRPORTS_DB['K'+id]) return {lat:AIRPORTS_DB['K'+id][1],lon:AIRPORTS_DB['K'+id][2]};
+    return null;
   }
   var keep=[ids[0]],prevAlong=-999;
   for(var i=1;i<ids.length-1;i++){
@@ -4203,6 +4451,49 @@ function avisorClampZoomForAisCharts(z){
   var mz=avisorActiveAisChartMinZ();
   return(!mz||z==null)?z:Math.max(z,mz);
 }
+function refreshMapContextLayers(){
+  if(!_map) return;
+  var aptLayer=_map._ctxAirportsLayer,navLayer=_map._ctxNavLayer;
+  if(!aptLayer||!navLayer||!_map.getBounds) return;
+  var b=_map.getBounds();
+  if(!b) return;
+  var z=_map.getZoom?_map.getZoom():8;
+  var pad=b.pad(0.22);
+  aptLayer.clearLayers();
+  navLayer.clearLayers();
+  if(z>=6&&AIRPORTS_DB){
+    var aptCount=0,aptMax=220;
+    Object.keys(AIRPORTS_DB).forEach(function(id){
+      if(aptCount>=aptMax) return;
+      var row=AIRPORTS_DB[id];
+      if(!row||!isFinite(Number(row[1]))||!isFinite(Number(row[2]))) return;
+      var lat=Number(row[1]),lon=Number(row[2]);
+      if(!pad.contains([lat,lon])) return;
+      aptCount++;
+      var name=row[0]||id;
+      var ident=/^K[A-Z0-9]{3}$/.test(id)?id:((id.length===3)?('K'+id):id);
+      L.circleMarker([lat,lon],{radius:z>=9?3.5:2.5,color:'#4bd6ff',weight:1,fillColor:'#00384a',fillOpacity:0.8,opacity:0.95})
+        .bindTooltip(ident+' — '+name,{direction:'top',offset:[0,-2],sticky:true})
+        .addTo(aptLayer);
+    });
+  }
+  if(z>=7&&NAVCOORDS){
+    var navCount=0,navMax=260;
+    Object.keys(NAVCOORDS).forEach(function(id){
+      if(navCount>=navMax) return;
+      var n=NAVCOORDS[id];
+      if(!n||!isFinite(Number(n.lat))||!isFinite(Number(n.lon))) return;
+      if(!(n.type==='vor'||n.type==='fix'||n.type==='vis')) return;
+      var lat=Number(n.lat),lon=Number(n.lon);
+      if(!pad.contains([lat,lon])) return;
+      navCount++;
+      var col=(n.type==='vor')?'#ffb347':(n.type==='fix'?'#bb9cff':'#67f2a9');
+      L.circleMarker([lat,lon],{radius:z>=9?2.8:2.1,color:col,weight:1,fillColor:'#131722',fillOpacity:0.85,opacity:0.9})
+        .bindTooltip(String(id).toUpperCase()+(n.freq?(' '+n.freq):''),{direction:'top',offset:[0,-2],sticky:true})
+        .addTo(navLayer);
+    });
+  }
+}
 function initMap(){
   if(typeof L==='undefined'){if(typeof toast==='function')toast('MAP LIBRARY FAILED TO LOAD');return;}
   if(_map)return;
@@ -4229,7 +4520,6 @@ function initMap(){
         minZoom:5,maxZoom:14,minNativeZoom:8,maxNativeZoom:12,
         attribution:'FAA/AIS Sectional',crossOrigin:true
       });
-      faaSec.addTo(_map);
       ifrLow=L.tileLayer(_arcgisBase+'/IFR_AreaLow/MapServer/tile/{z}/{y}/{x}',{
         minZoom:5,maxZoom:12,minNativeZoom:7,maxNativeZoom:12,
         attribution:'FAA/AIS IFR Low',crossOrigin:true
@@ -4251,6 +4541,10 @@ function initMap(){
   var sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
   var night=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19});
   var airspL=L.layerGroup();
+  var ctxAirportsL=L.layerGroup();
+  var ctxNavL=L.layerGroup();
+  _map._ctxAirportsLayer=ctxAirportsL;
+  _map._ctxNavLayer=ctxNavL;
   var baseLayers={};
   if(faaSec) baseLayers['✈ FAA Sectional (AIS)']=faaSec;
   if(ifrLow) baseLayers['✈ IFR Enroute Low (AIS)']=ifrLow;
@@ -4262,7 +4556,6 @@ function initMap(){
   var def=(isFileMode?topo:(faaSec||topo));
   def.addTo(_map);
   if(isFileMode&&typeof toast==='function') toast('FILE MODE: map limited. Use http://localhost for FAA sectionals.');
-  var skyOn=false; // skyVec is now OSM - no error handler needed
   if(faaSec) faaSec.on('tileerror',function(){
     if(!faaSec._errCount)faaSec._errCount=0;
     faaSec._errCount++;
@@ -4276,9 +4569,12 @@ function initMap(){
     },3000);
   });
   // (faaSec/ifrLow refs already stored on _map inside init block above)
-  L.control.layers(baseLayers,{'Airspace B/C/D':airspL},{position:'topright',collapsed:true}).addTo(_map);
+  L.control.layers(baseLayers,{
+    'Airspace B/C/D':airspL,
+    'Nearby airports':ctxAirportsL,
+    'Nearby VOR/FIX':ctxNavL
+  },{position:'topright',collapsed:true}).addTo(_map);
   _map.on('baselayerchange',function(ev){
-    if(ev&&ev.name&&ev.name.indexOf('SkyVector')>=0)skyOn=true;
     var need=0;
     if(ev&&ev.layer){
       if(ev.layer===faaSec||(ev.name&&ev.name.indexOf('FAA Sectional')>=0))need=8;
@@ -4289,6 +4585,9 @@ function initMap(){
   });
   L.control.zoom({position:'bottomright'}).addTo(_map);
   drawKnownAirspace(airspL);
+  ctxAirportsL.addTo(_map);
+  ctxNavL.addTo(_map);
+  _map.on('moveend zoomend',function(){refreshMapContextLayers();});
   var s=document.createElement('style');s.textContent='.avisor-popup .leaflet-popup-content-wrapper{background:#0a0c12;border:1px solid #33aacc;color:#e8f4ff;border-radius:3px;font-family:monospace}.avisor-popup .leaflet-popup-tip{background:#0a0c12}.leaflet-control-layers{background:#0a0c12!important;border:1px solid #1e2535!important;color:#dde5f5!important}.leaflet-control-layers label{color:#dde5f5!important;font-family:monospace;font-size:11px}.leaflet-control-zoom a{background:#0a0c12!important;color:#00c8f0!important;border-color:#1e2535!important}';document.head.appendChild(s);
   _map.setView([35.5,-98],faaSec?8:5);
   setTimeout(function(){
@@ -4299,6 +4598,7 @@ function initMap(){
   },80);
   setTimeout(function(){if(_map)_map.invalidateSize(true);},320);
   setTimeout(function(){if(_map)_map.invalidateSize(true);},700);
+  setTimeout(function(){refreshMapContextLayers();},180);
 }
 function mapFitRoute(){
   if(!_map)return;
@@ -4309,6 +4609,7 @@ function mapFitRoute(){
   var c=S.wpts.map(function(w){return[w.lat,w.lon];});
   if(c.length===1)_map.setView(c[0],avisorClampZoomForAisCharts(10));
   else{_map.fitBounds(L.latLngBounds(c).pad(0.18));var mz=avisorActiveAisChartMinZ();if(mz&&_map.getZoom()<mz)_map.setZoom(mz);}
+  refreshMapContextLayers();
 }
 function renderMap(){
   var sw=STATE.waypoints||[];
@@ -4326,19 +4627,21 @@ function renderMap(){
   }
   var showVis=document.getElementById('map-show-vis')&&document.getElementById('map-show-vis').checked;
   var showRings=document.getElementById('map-show-circle')&&document.getElementById('map-show-circle').checked;
-  var wpts=sw.filter(function(w){return showVis||w.type!=='vis';});
-  if(!wpts.length){
+  var wptsDisplay=[];
+  sw.forEach(function(w,wi){if(showVis||w.type!=='vis') wptsDisplay.push({w:w,wi:wi});});
+  if(!wptsDisplay.length){
     if(STATE.plan&&STATE.plan.arr&&STATE.plan.arr.lat!=null)_map.setView([STATE.plan.arr.lat,STATE.plan.arr.lon],avisorClampZoomForAisCharts(8));
     return;
   }
-  var coords=wpts.map(function(w){return[w.lat,w.lon];});
+  var coords=wptsDisplay.map(function(o){return[o.w.lat,o.w.lon];});
   _mapLayers.push(L.polyline(coords,{color:'#660033',weight:7,opacity:0.35}).addTo(_map));
   _mapLayers.push(L.polyline(coords,{color:'#ff00ff',weight:2.5,opacity:0.9}).addTo(_map));
-  wpts.forEach(function(w,i){
-    var iF=(i===0),iL=(i===wpts.length-1);
+  wptsDisplay.forEach(function(o,i){
+    var w=o.w,wi=o.wi;
+    var iF=(i===0),iL=(i===wptsDisplay.length-1);
+    var editable=wi>0&&wi<sw.length-1;
     var svg,sz=28,an=14;
     if(w.fuelStop){
-      // Fuel stop — amber with fuel pump icon
       svg='<svg width="30" height="30"><circle cx="15" cy="15" r="11" fill="none" stroke="#ffaa00" stroke-width="2.5"/>'
         +'<text x="15" y="19" text-anchor="middle" font-size="12" fill="#ffaa00">&#9981;</text></svg>';
       sz=30;an=15;
@@ -4346,18 +4649,29 @@ function renderMap(){
     else if(w.type==='vor'){svg='<svg width="28" height="28"><polygon points="14,4 22,9 22,19 14,24 6,19 6,9" fill="none" stroke="#ffaa00" stroke-width="1.5"/><circle cx="14" cy="14" r="3" fill="#ffaa00"/></svg>';}
     else if(w.type==='fix'){svg='<svg width="20" height="20"><polygon points="10,2 18,18 2,18" fill="none" stroke="#b388ff" stroke-width="1.5"/></svg>';sz=20;an=10;}
     else{svg='<svg width="14" height="14"><polygon points="7,1 13,7 7,13 1,7" fill="rgba(0,232,120,0.7)" stroke="#00e878" stroke-width="1"/></svg>';sz=14;an=7;}
-    var d2=i>0?Math.round(gcDist(wpts[i-1].lat,wpts[i-1].lon,w.lat,w.lon))+'nm':'Depart';
-    var popup='<div style="font-family:monospace;font-size:11px;line-height:1.6"><b>'+w.id+'</b><br><span style="color:#888;font-size:10px">'+({apt:'Airport',vor:'VOR/DME',fix:'Fix',vis:'VFR'}[w.type]||'Fix')+'</span><br>'+(w.desc||'')+'<br>'+(w.freq?'<span style=color:#ffaa00>'+w.freq+' MHz</span><br>':'')+'<span style="color:#666;font-size:9px">'+w.lat.toFixed(4)+'N '+Math.abs(w.lon).toFixed(4)+'W &nbsp; '+d2+'</span></div>';
-    _mapLayers.push(L.marker([w.lat,w.lon],{icon:L.divIcon({html:svg,iconSize:[sz,sz],iconAnchor:[an,an],className:''}),title:w.id}).bindPopup(popup,{maxWidth:240,className:'avisor-popup'}).addTo(_map));
+    var d2=i>0?Math.round(gcDist(wptsDisplay[i-1].w.lat,wptsDisplay[i-1].w.lon,w.lat,w.lon))+'nm':'Depart';
+    var popup='<div style="font-family:monospace;font-size:11px;line-height:1.6"><b>'+w.id+'</b><br><span style="color:#888;font-size:10px">'+({apt:'Airport',vor:'VOR/DME',fix:'Fix',vis:'VFR'}[w.type]||'Fix')+'</span><br>'+(w.desc||'')+'<br>'+(w.freq?'<span style=color:#ffaa00>'+w.freq+' MHz</span><br>':'')+'<span style="color:#666;font-size:9px">'+w.lat.toFixed(4)+'N '+Math.abs(w.lon).toFixed(4)+'W &nbsp; '+d2+'</span>';
+    if(editable){popup+='<div style="margin-top:7px;color:#8aa;font-size:9px">Drag marker to move — snaps to nearby chart fix when close.</div>'+
+      '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'+
+      '<button type="button" style="padding:4px 10px;font-size:11px;cursor:pointer;background:#1a2840;color:#dde5f5;border:1px solid #3a5068;border-radius:4px" onclick="replaceWaypointAtIndex('+wi+');try{if(window._map)_map.closePopup();}catch(_e){}">Replace…</button>'+
+      '<button type="button" style="padding:4px 10px;font-size:11px;cursor:pointer;background:#301818;color:#ffb0b0;border:1px solid #663030;border-radius:4px" onclick="deleteWaypointAtIndex('+wi+');try{if(window._map)_map.closePopup();}catch(_e){}">Delete</button>'+
+      '</div>';}
+    popup+='</div>';
+    var mk=L.marker([w.lat,w.lon],{icon:L.divIcon({html:svg,iconSize:[sz,sz],iconAnchor:[an,an],className:''}),title:(editable?'Drag to move — ':'')+w.id,draggable:editable}).bindPopup(popup,{maxWidth:260,className:'avisor-popup'});
+    if(editable){
+      mk.on('dragstart',function(){try{mk.closePopup();}catch(_e){}});
+      mk.on('dragend',function(ev){var ll=ev.target.getLatLng();applyWaypointDragEnd(wi,ll.lat,ll.lng);});
+    }
+    _mapLayers.push(mk.addTo(_map));
     if(w.type!=='vis'){var col2=w.type==='apt'?(iF?'#00e878':iL?'#ff6060':'#00c8f0'):w.type==='vor'?'#ffaa00':'#b388ff';_mapLayers.push(L.marker([w.lat,w.lon],{icon:L.divIcon({html:'<div style="font-family:monospace;font-size:10px;font-weight:700;color:'+col2+';text-shadow:1px 1px 0 #000,-1px -1px 0 #000;white-space:nowrap;padding-left:8px">'+w.id+(w.freq?'<br><span style=font-size:8px;opacity:.7>'+w.freq+'</span>':'')+'</div>',iconSize:[110,32],iconAnchor:[0,sz/2],className:''}),interactive:false}).addTo(_map));}
     if(w.type==='vor'&&showRings){_mapLayers.push(L.circle([w.lat,w.lon],{radius:37040,color:'#ffaa00',weight:0.7,opacity:0.3,fill:false,dashArray:'3 6'}).addTo(_map));}
   });
-  for(var i=0;i<wpts.length-1;i++){var a=wpts[i],b=wpts[i+1];var ld=Math.round(gcDist(a.lat,a.lon,b.lat,b.lon));var lb=Math.round(crsB(a.lat,a.lon,b.lat,b.lon));if(ld>8){_mapLayers.push(L.marker([(a.lat+b.lat)/2,(a.lon+b.lon)/2],{icon:L.divIcon({html:'<div style="font-family:monospace;font-size:9px;background:rgba(0,0,0,0.7);color:#fff;padding:2px 5px;border-radius:2px;border-left:2px solid #ff00ff;white-space:nowrap">'+ld+'nm '+String(lb).padStart(3,'0')+'M</div>',iconSize:[80,16],iconAnchor:[40,7],className:''}),interactive:false}).addTo(_map));}}
+  for(var ii=0;ii<wptsDisplay.length-1;ii++){var a=wptsDisplay[ii].w,b=wptsDisplay[ii+1].w;var ld=Math.round(gcDist(a.lat,a.lon,b.lat,b.lon));var lb=Math.round(crsB(a.lat,a.lon,b.lat,b.lon));if(ld>8){_mapLayers.push(L.marker([(a.lat+b.lat)/2,(a.lon+b.lon)/2],{icon:L.divIcon({html:'<div style="font-family:monospace;font-size:9px;background:rgba(0,0,0,0.7);color:#fff;padding:2px 5px;border-radius:2px;border-left:2px solid #ff00ff;white-space:nowrap">'+ld+'nm '+String(lb).padStart(3,'0')+'M</div>',iconSize:[80,16],iconAnchor:[40,7],className:''}),interactive:false}).addTo(_map));}}
   // Pattern entry
   var dest=STATE.plan&&STATE.plan.arr,rwy=STATE.plan&&STATE.plan.favRwy;
-  if(dest&&dest.lat&&rwy){var hdg=rwy.hdg||180,isLeft=(rwy.pat||'L')==='L';var ea=(hdg+180+(isLeft?45:-45))*Math.PI/180;var d=2.5/3440.065;var eLat=dest.lat+Math.cos(ea)*d*(180/Math.PI);var eLon=dest.lon+Math.sin(ea)*d*(180/Math.PI)/Math.cos(dest.lat*Math.PI/180);var lf=wpts[wpts.length-2]||wpts[0];_mapLayers.push(L.polyline([[lf.lat,lf.lon],[eLat,eLon]],{color:'#00e878',weight:1.5,dashArray:'6 5',opacity:0.7}).addTo(_map));_mapLayers.push(L.marker([eLat,eLon],{icon:L.divIcon({html:'<svg width="18" height="18"><polygon points="9,1 17,17 1,17" fill="none" stroke="#00e878" stroke-width="2"/></svg>',iconSize:[18,18],iconAnchor:[9,9],className:''}),title:'Pattern Entry'}).bindPopup('45deg entry to '+(isLeft?'left':'right')+' downwind',{className:'avisor-popup'}).addTo(_map));}
+  if(dest&&dest.lat&&rwy){var hdg=rwy.hdg||180,isLeft=(rwy.pat||'L')==='L';var ea=(hdg+180+(isLeft?45:-45))*Math.PI/180;var d=2.5/3440.065;var eLat=dest.lat+Math.cos(ea)*d*(180/Math.PI);var eLon=dest.lon+Math.sin(ea)*d*(180/Math.PI)/Math.cos(dest.lat*Math.PI/180);var lfSeg=wptsDisplay[wptsDisplay.length-2],lf=(lfSeg&&lfSeg.w)||wptsDisplay[0].w;_mapLayers.push(L.polyline([[lf.lat,lf.lon],[eLat,eLon]],{color:'#00e878',weight:1.5,dashArray:'6 5',opacity:0.7}).addTo(_map));_mapLayers.push(L.marker([eLat,eLon],{icon:L.divIcon({html:'<svg width="18" height="18"><polygon points="9,1 17,17 1,17" fill="none" stroke="#00e878" stroke-width="2"/></svg>',iconSize:[18,18],iconAnchor:[9,9],className:''}),title:'Pattern Entry'}).bindPopup('45deg entry to '+(isLeft?'left':'right')+' downwind',{className:'avisor-popup'}).addTo(_map));}
   // Navlog
-  var ne=document.getElementById('map-navlog');if(ne&&STATE.plan){var gs=S.plan.gs||S.plan.ac.tas,gph=S.plan.ac.gph;var nh='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:10px"><tr style="background:#0a0f1a;color:#7a9aaa"><th style="padding:3px 7px;text-align:left">WYPT</th><th style="padding:3px 7px">TYPE</th><th style="padding:3px 7px">DTK</th><th style="padding:3px 7px">DIST</th><th style="padding:3px 7px">ETE</th><th style="padding:3px 7px">FUEL</th></tr>';wpts.forEach(function(w,i){var bg=i%2===0?'#0a0c12':'#0d1018';var col=i===0?'#00e878':i===wpts.length-1?'#ff6060':'#dde5f5';var dtk='---',dist='---',ete='---',fuel='---';if(i>0){var prev=wpts[i-1];var d=gcDist(prev.lat,prev.lon,w.lat,w.lon);dtk=String(Math.round(crsB(prev.lat,prev.lon,w.lat,w.lon))).padStart(3,'0')+'M';dist=Math.round(d)+'nm';var em=d/gs*60;ete=em<60?Math.round(em)+'m':(Math.floor(em/60)+'h'+Math.round(em%60)+'m');fuel=(d/gs*gph).toFixed(1)+'g';}nh+='<tr style="background:'+bg+';color:'+col+'"><td style="padding:3px 7px;font-weight:bold">'+w.id+'</td><td style="padding:3px 7px;opacity:0.7">'+({apt:'APT',vor:'VOR',fix:'FIX',vis:'VFR'}[w.type]||'FIX')+'</td><td style="padding:3px 7px">'+dtk+'</td><td style="padding:3px 7px">'+dist+'</td><td style="padding:3px 7px">'+ete+'</td><td style="padding:3px 7px">'+fuel+'</td></tr>';});nh+='</table></div>';ne.innerHTML=nh;}
+  var ne=document.getElementById('map-navlog');if(ne&&STATE.plan){var gs=S.plan.gs||S.plan.ac.tas,gph=S.plan.ac.gph;var nh='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:10px"><tr style="background:#0a0f1a;color:#7a9aaa"><th style="padding:3px 7px;text-align:left">WYPT</th><th style="padding:3px 7px">TYPE</th><th style="padding:3px 7px">DTK</th><th style="padding:3px 7px">DIST</th><th style="padding:3px 7px">ETE</th><th style="padding:3px 7px">FUEL</th></tr>';wptsDisplay.forEach(function(o,i){var w=o.w;var bg=i%2===0?'#0a0c12':'#0d1018';var col=i===0?'#00e878':i===wptsDisplay.length-1?'#ff6060':'#dde5f5';var dtk='---',dist='---',ete='---',fuel='---';if(i>0){var prev=wptsDisplay[i-1].w;var dd=gcDist(prev.lat,prev.lon,w.lat,w.lon);dtk=String(Math.round(crsB(prev.lat,prev.lon,w.lat,w.lon))).padStart(3,'0')+'M';dist=Math.round(dd)+'nm';var em=dd/gs*60;ete=em<60?Math.round(em)+'m':(Math.floor(em/60)+'h'+Math.round(em%60)+'m');fuel=(dd/gs*gph).toFixed(1)+'g';}nh+='<tr style="background:'+bg+';color:'+col+'"><td style="padding:3px 7px;font-weight:bold">'+w.id+'</td><td style="padding:3px 7px;opacity:0.7">'+({apt:'APT',vor:'VOR',fix:'FIX',vis:'VFR'}[w.type]||'FIX')+'</td><td style="padding:3px 7px">'+dtk+'</td><td style="padding:3px 7px">'+dist+'</td><td style="padding:3px 7px">'+ete+'</td><td style="padding:3px 7px">'+fuel+'</td></tr>';});nh+='</table></div>';ne.innerHTML=nh;}
   // Label
   var named=(STATE.waypoints||[]).filter(function(w){return w.type!=='vis';}).map(function(w){return w.id;}).join(' → ');
   var lbl=document.getElementById('map-route-label');
@@ -4366,6 +4680,7 @@ function renderMap(){
     else lbl.textContent=named||'SECTIONAL PREVIEW';
   }
   mapFitRoute();
+  refreshMapContextLayers();
 }
 function drawKnownAirspace(layer){
   if(!layer)return;
@@ -4384,17 +4699,17 @@ function acknowledgeSafety(){
 function initSafetyCheck(){
   var el=document.getElementById("disclaimer-check");
   var btn=document.getElementById("disclaimer-btn");
-  if(el&&btn){el.addEventListener("change",function(){btn.style.opacity=this.checked?"1":"0.5";btn.disabled=!this.checked;});}
+  if(el&&btn){
+    el.addEventListener("change",function(){
+      btn.style.opacity=this.checked?"1":"0.5";
+      btn.disabled=!this.checked;
+    });
+  }
   if(!localStorage.getItem("avisor_safety_ack")){
     var m=document.getElementById("safety-modal");
     if(m)m.style.display="flex";
   }
 }
-window.addEventListener("load",initSafetyCheck);
-</script>
-<script>
-function acknowledgeSafety(){localStorage.setItem("avisor_safety_ack","1");document.getElementById("safety-modal").style.display="none";}
-function initSafetyCheck(){var el=document.getElementById("disclaimer-check");var btn=document.getElementById("disclaimer-btn");if(el&&btn){el.addEventListener("change",function(){btn.style.opacity=this.checked?"1":"0.5";btn.disabled=!this.checked;});}if(!localStorage.getItem("avisor_safety_ack")){var m=document.getElementById("safety-modal");if(m)m.style.display="flex";}}
 window.addEventListener("load",initSafetyCheck);
 </script></body>
 </html>
