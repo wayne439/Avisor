@@ -351,6 +351,8 @@ canvas#cgc{display:block;width:100%;height:auto}
 .left{min-height:0}
 .tog-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:7px}
 .tog-lbl{font-family:var(--mono);font-size:9px;color:var(--txt2);flex:1;min-width:0;line-height:1.3;white-space:normal;padding-right:2px}
+.tog-row.tog-disabled .tog-lbl{opacity:0.58}
+.tog-row.tog-disabled label.tog{opacity:0.48}
 
 </style>
 <link rel="stylesheet" href="./vendor/leaflet/leaflet.min.css">
@@ -374,11 +376,14 @@ canvas#cgc{display:block;width:100%;height:auto}
       <div class="modal-sec">
         <div class="modal-sec-title">ATC / Runway Change</div>
         <div class="modal-r2">
-          <div class="modal-f"><label>New Active Runway</label><input id="if-rwy" placeholder="e.g. 33" oninput="this.value=this.value.toUpperCase()"></div>
+          <div class="modal-f"><label>Arrival active runway <span id="if-rwy-hint" style="display:block;font-size:8px;color:var(--txt3);font-weight:400;margin-top:2px"></span></label>
+            <select id="if-rwy-sel" style="width:100%;background:var(--sky3);border:1px solid var(--line);color:var(--txt);font-family:var(--mono);font-size:12px;padding:6px 8px"></select>
+            <input id="if-rwy" placeholder="Other runway ID (e.g. 21 or 04R)" style="display:none;margin-top:6px;width:100%;background:var(--sky3);border:1px solid var(--line);color:var(--txt);font-family:var(--mono);font-size:12px;padding:6px 8px" oninput="this.value=this.value.toUpperCase()">
+          </div>
           <div class="modal-f"><label>ATIS Code</label><input id="if-atis" placeholder="e.g. ROMEO" oninput="this.value=this.value.toUpperCase()"></div>
         </div>
-        <div class="modal-f"><label>Approach Change</label>
-          <select id="if-apch"><option value="">Unchanged</option><option value="RNP15">RNAV (RNP) Z RWY 15</option><option value="RNAV33">RNAV (GPS) RWY 33</option><option value="LOC">LOC/DME-E</option><option value="VIS15">Visual RWY 15</option><option value="VIS33">Visual RWY 33</option></select>
+        <div class="modal-f"><label>Approach preference <span style="font-size:8px;color:var(--txt3)">(destination-specific procedures stay on Approach tab)</span></label>
+          <select id="if-apch"><option value="">Unchanged</option><option value="auto">Auto (wind-favored)</option><option value="RNAV">RNAV / GPS</option><option value="ILS">ILS / LOC</option><option value="VIS">Visual</option></select>
         </div>
       </div>
       <div class="modal-sec">
@@ -439,6 +444,11 @@ canvas#cgc{display:block;width:100%;height:auto}
         <div id="arr-icao-msg" class="icao-msg" aria-live="polite"></div>
       </div>
     </div>
+    <div class="field">
+      <label>Planned cruise altitude (ft MSL)</label>
+      <input type="number" id="plan-alt" min="500" max="51000" step="100" placeholder="e.g. 9500 — blank = auto">
+      <div style="font-size:8px;color:var(--txt2);margin-top:4px;line-height:1.45">Enter before <b>BUILD</b> for terrain/icing/brief. Uses aircraft band + corridor if blank.</div>
+    </div>
     <div class="field" style="position:relative">
       <label style="display:flex;align-items:center;gap:8px">
         &#9981; Optional Fuel Stop
@@ -452,6 +462,10 @@ canvas#cgc{display:block;width:100%;height:auto}
           style="display:none;padding:6px 10px;background:transparent;border:1px solid var(--red,#e05);color:var(--red,#e05);font-family:monospace;font-size:10px;cursor:pointer;border-radius:6px">✕ CLEAR</button>
       </div>
       <div id="fuel-stop-info" style="margin-top:5px;font-family:monospace;font-size:9px;color:var(--sky);min-height:16px"></div>
+    </div>
+    <div class="field" style="margin-bottom:6px">
+      <button type="button" onclick="previewBriefWx()" style="width:100%;padding:8px;background:var(--sky4);border:1px solid var(--blu3);color:var(--blu);font-family:var(--mono);font-size:10px;letter-spacing:1px;cursor:pointer;border-radius:4px">CHECK DEP/ARR WEATHER</button>
+      <div id="pre-wx-snap" style="margin-top:8px;font-size:10px;color:var(--txt2);line-height:1.55;max-height:220px;overflow-y:auto"></div>
     </div>
     <div class="field">
       <label>Aircraft</label>
@@ -477,12 +491,14 @@ canvas#cgc{display:block;width:100%;height:auto}
 
   <div class="section">
     <div class="section-title">Options</div>
+    <div style="font-size:8px;color:var(--txt3);margin:-2px 0 10px;line-height:1.45">Preferences below are <b>saved in this browser</b> — set once per device; change anytime.</div>
     <div class="tog-row"><span class="tog-lbl">Avoid Icing</span><label class="tog"><input type="checkbox" id="opt-icing"><div class="tog-tr"></div><div class="tog-th"></div></label></div>
     <div class="tog-row"><span class="tog-lbl">Avoid Night Mountain</span><label class="tog"><input type="checkbox" id="opt-night" checked><div class="tog-tr"></div><div class="tog-th"></div></label></div>
     <div class="tog-row"><span class="tog-lbl">Terrain-Aware Altitude</span><label class="tog"><input type="checkbox" id="opt-terrain" checked><div class="tog-tr"></div><div class="tog-th"></div></label></div>
-    <div class="tog-row"><span class="tog-lbl">VFR Visual Waypoints</span><label class="tog"><input type="checkbox" id="opt-vfr" checked><div class="tog-tr"></div><div class="tog-th"></div></label></div>
+    <div class="tog-row"><span class="tog-lbl" title="Adds chartable airports, VORs, and fixes along the corridor for VFR planning and ForeFlight-style exports.">VFR Visual Waypoints</span><label class="tog"><input type="checkbox" id="opt-vfr" checked><div class="tog-tr"></div><div class="tog-th"></div></label></div>
     <div class="tog-row"><span class="tog-lbl">Include IFR Approach Fixes</span><label class="tog"><input type="checkbox" id="opt-apch"><div class="tog-tr"></div><div class="tog-th"></div></label></div>
-    <div class="tog-row"><span class="tog-lbl">GPS direct (dep→arr only)</span><label class="tog"><input type="checkbox" id="opt-direct"><div class="tog-tr"></div><div class="tog-th"></div></label></div>
+    <div class="tog-row" id="opt-direct-row"><span class="tog-lbl" title="Straight line departure→destination only (no enroute fixes). Unavailable while VFR Visual Waypoints is on.">GPS direct <span style="color:var(--txt3);font-weight:normal">(dep→arr only)</span></span><label class="tog"><input type="checkbox" id="opt-direct"><div class="tog-tr"></div><div class="tog-th"></div></label></div>
+    <div id="opt-direct-hint" style="display:none;font-size:8px;color:var(--txt3);margin:-4px 0 10px;line-height:1.45;padding-left:2px">Unavailable while <b>VFR Visual Waypoints</b> is on — the route uses chartable airports/VORs/fixes instead (better for ForeFlight). Turn VFR visuals off to enable GPS direct.</div>
     <div class="tog-row"><span class="tog-lbl" title="When enabled, switches to the Approach tab once GPS shows you inside the chosen distance of the destination airport (after you have been farther out first).">Open Approach tab near destination <span style="color:var(--txt3)">(GPS)</span></span><label class="tog"><input type="checkbox" id="opt-prox-approach" onchange="onProxApproachToggle()"><div class="tog-tr"></div><div class="tog-th"></div></label></div>
     <div class="field" style="margin-top:2px"><label>Within (NM) of destination</label>
       <input type="number" id="opt-prox-nm" value="25" min="5" max="80" step="1" style="max-width:88px" title="Requires Location permission; tab must stay in foreground on many devices" onchange="proximityApproachResetPhase()">
@@ -1225,7 +1241,7 @@ const APTS={
   KSEA:{ident:'KSEA',name:'Seattle-Tacoma Intl',elev:433,lat:47.4502,lon:-122.3088,rwys:[{id:'16L',hdg:160,len:11901,pat:'L'},{id:'34R',hdg:340,len:11901,pat:'L'},{id:'16R',hdg:160,len:9425,pat:'L'},{id:'34L',hdg:340,len:9425,pat:'L'}],pagl:1500},
 };
 const TERRAIN_FLOORS={'KSDL-KASE':16000,'KASE-KSDL':16000,'KPHX-KASE':16000,'KASE-KPHX':16000,'KDEN-KASE':9000,'KASE-KDEN':9000,'KSDL-KSAF':11000,'KSAF-KSDL':11000,'KPHX-KDEN':14000,'KDEN-KPHX':14000,'KPHX-KFLG':9000,'KFLG-KPHX':9000};
-const PROCS={KASE:['RNAV (RNP) Z RWY 15 — aircraft authorization required','LOC/DME-E','Visual RWY 15','Visual RWY 33 (right traffic)'],KSDL:['RNAV (GPS) RWY 21','Visual RWY 21','Visual RWY 03'],KCHD:['RNAV (GPS) RWY 22L','Visual RWY 22L'],KSAF:['ILS or LOC RWY 20','RNAV (GPS) RWY 20','RNAV (GPS) RWY 02'],KPHX:['ILS RWY 08','ILS RWY 26','RNAV (GPS) RWY 08','RNAV (GPS) RWY 26'],KDEN:['ILS RWY 17R','ILS RWY 35L','RNAV (GPS) RWY 17R'],KTUS:['ILS RWY 11L','RNAV (GPS) RWY 11L'],KSEA:['ILS RWY 16R','ILS RWY 16L','RNAV (GPS) RWY 16R','RNAV (GPS) RWY 34L','RNAV (GPS) RWY 34R','Visual RWY 16','Visual RWY 34']};
+const PROCS={KASE:['RNAV (RNP) Z RWY 15 — aircraft authorization required','LOC/DME-E','Visual RWY 15','Visual RWY 33 (right traffic)'],KSDL:['RNAV (GPS) RWY 21','Visual RWY 21','Visual RWY 03'],KCHD:['RNAV (GPS) RWY 22L','Visual RWY 22L'],KSAF:['ILS or LOC RWY 20','RNAV (GPS) RWY 20','RNAV (GPS) RWY 02'],KPHX:['ILS RWY 08','ILS RWY 26','RNAV (GPS) RWY 08','RNAV (GPS) RWY 26'],KDEN:['ILS RWY 17R','ILS RWY 35L','RNAV (GPS) RWY 17R'],KTUS:['ILS RWY 11L','RNAV (GPS) RWY 11L'],KSEA:['ILS RWY 16R','ILS RWY 16L','RNAV (GPS) RWY 16R','RNAV (GPS) RWY 34L','RNAV (GPS) RWY 34R','Visual RWY 16','Visual RWY 34'],KFLG:['RNAV (GPS) RWY 03','RNAV (GPS) RWY 21','Visual RWY 03','Visual RWY 21 — verify mountain ops']};
 
 // ══════════════════════════════════════════════════════════════════
 // APP STATE
@@ -1314,6 +1330,25 @@ function proximityApproachOnPosition(pos){
 
 function course(a,b){const r=Math.PI/180,d=180/Math.PI,la1=a.lat*r,lo1=a.lon*r,la2=b.lat*r,lo2=b.lon*r,dl=lo2-lo1;return((Math.atan2(Math.sin(dl)*Math.cos(la2),Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dl))*d)+360)%360;}
 function pickAlt(ac,pri,icing,floor){let s=ac.alts.filter(a=>a>=(floor||0)+2000);if(!s.length)s=[Math.max(...ac.alts)];if(icing)return Math.min(...s);if(pri==='fastest')return Math.max(...s);if(pri==='fuel')return s[Math.floor(s.length/2)];if(pri==='smooth')return s[Math.min(s.length-1,2)];return s[0];}
+function clampPlanAltToPerf(ac,ft){var al=ac&&ac.alts;if(!al||!al.length)return Math.round(ft);var lo=Math.min.apply(null,al),hi=Math.max.apply(null,al);return Math.max(lo,Math.min(hi,Math.round(ft)));}
+/** Returns { alt, source:'auto'|'user', requested?, clampedPerf?, clampedFromTerrain?, invalid? } */
+function resolvePlanAltitude(ac,pri,icing,tfloor,terrainOn){
+  var auto=pickAlt(ac,pri,icing,tfloor);
+  var el=document.getElementById('plan-alt');
+  var raw=el&&el.value?String(el.value).trim():'';
+  if(!raw)return{alt:auto,source:'auto'};
+  var n=parseInt(raw,10);
+  if(isNaN(n)||n<500||n>51000){
+    if(typeof toast==='function')toast('Planned cruise altitude invalid — using auto.');
+    return{alt:auto,source:'auto',invalid:true};
+  }
+  var c=clampPlanAltToPerf(ac,n);
+  var out={alt:c,source:'user',requested:n};
+  if(c!==n)out.clampedPerf=true;
+  var floorMin=terrainOn&&tfloor>0?tfloor+2000:null;
+  if(floorMin!=null&&c<floorMin){out.alt=floorMin;out.clampedFromTerrain=true;}
+  return out;
+}
 function rwyIdFromHdg(h){
   var x=Math.round((((h%360)+360)%360)/10);
   if(x===0)x=36;
@@ -1468,15 +1503,19 @@ async function fNotam(icao){
 // ══════════════════════════════════════════════════════════════════
 // WAYPOINT BUILDER
 // ══════════════════════════════════════════════════════════════════
+function normalizeFlightRules(rules){
+  return String(rules==null?'':rules).trim().toUpperCase()==='IFR'?'IFR':'VFR';
+}
 async function buildWaypoints(plan){
-  const {depIcao,arrIcao,rules,favRwy}=plan;
+  const {depIcao,arrIcao,favRwy}=plan;
+  const rulesNorm=normalizeFlightRules(plan.rules||(document.getElementById('rules')&&document.getElementById('rules').value)||'VFR');
   const rkey=`${depIcao}-${arrIcao}`;
   const vfr=document.getElementById('opt-vfr')?.checked;
   const apchOn=document.getElementById('opt-apch')?.checked;
-  const allowApproachFixes=(rules==='IFR')&&!!apchOn;
+  const allowApproachFixes=(rulesNorm==='IFR')&&!!apchOn;
   const optDirectRaw=document.getElementById('opt-direct')&&document.getElementById('opt-direct').checked===true;
-  const vfrVisualWp=document.getElementById('opt-vfr')&&document.getElementById('opt-vfr').checked!==false;
-  const useGpsDirect=optDirectRaw&&!(rules==='VFR'&&vfrVisualWp);
+  const vfrVisualWp=document.getElementById('opt-vfr')&&document.getElementById('opt-vfr').checked===true;
+  const useGpsDirect=optDirectRaw&&!(rulesNorm==='VFR'&&vfrVisualWp);
   const apchPref=document.getElementById('apch-pref')?.value||'auto';
   const rd=ROUTEDB[rkey];
   const depDb=AIRPORTS_DB[depIcao];
@@ -1484,11 +1523,11 @@ async function buildWaypoints(plan){
   const depRef=plan.dep||APTS[depIcao]||(depDb?{ident:depIcao,name:depDb[0],lat:depDb[1],lon:depDb[2],elev:depDb[3],rwys:[],pagl:1000}:{lat:33.4,lon:-112.0,name:depIcao,ident:depIcao,rwys:[],pagl:1000});
   const arrRef=plan.arr||APTS[arrIcao]||(arrDb?{ident:arrIcao,name:arrDb[0],lat:arrDb[1],lon:arrDb[2],elev:arrDb[3],rwys:[],pagl:1000}:{lat:34.0,lon:-112.0,name:arrIcao,ident:arrIcao,rwys:[],pagl:1000});
   let wpts=[];
-  if(rd){wpts=rules==='VFR'&&vfr?[...rd.vfr]:[...rd.ifr];}
+  if(rd){wpts=rulesNorm==='VFR'&&vfr?[...rd.vfr]:[...rd.ifr];}
   else{
     // Prefer plan.dep/plan.arr (synthesized runways + coords) over raw DB slice.
     // Routing is automatic: app determines best path end-to-end.
-    var routeIds=useGpsDirect?[depRef.ident||depIcao,arrRef.ident||arrIcao]:await smartRoute(depRef,arrRef,rules);
+    var routeIds=useGpsDirect?[depRef.ident||depIcao,arrRef.ident||arrIcao]:await smartRoute(depRef,arrRef,rulesNorm);
     wpts=routeIds.map(function(id){
       const nc=NAVCOORDS[id];
       if(nc) return {id:id,lat:nc.lat,lon:nc.lon,type:nc.type||'vor',freq:nc.freq||'',desc:nc.desc||id};
@@ -1505,7 +1544,7 @@ async function buildWaypoints(plan){
     wpts=splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,wpProf);
     wpts=pruneWaypointProgressToArr(depRef,arrRef,wpts);
     wpts=pruneBearingReversals(depRef,arrRef,wpts);
-    wpts=enforceDirectnessAndRebuild(depRef,arrRef,wpts,rules,wpProf);
+    wpts=enforceDirectnessAndRebuild(depRef,arrRef,wpts,rulesNorm,wpProf);
     wpts=splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,wpProf);
     wpts=mergeCloseRouteWaypoints(wpts,wpProf.minLegNm);
     wpts=simplifyRouteByDetourRemoval(depRef,arrRef,wpts);
@@ -2142,6 +2181,50 @@ async function fetchOurAirportsRunwaysFast(icao,ms){
     new Promise(function(resolve){setTimeout(function(){resolve(null);},timeoutMs);})
   ]);
 }
+/** Try OurAirports CSV then OSM — used when APTS cache has no rwys or plan still has synthetic pair (e.g. 15/33 from inbound guess). */
+async function fetchRunwaysForAirport(icao,lat,lon){
+  if(!icao) return null;
+  icao=String(icao).toUpperCase();
+  var oaRw=await fetchOurAirportsRunwaysFast(icao,4500);
+  if(oaRw&&oaRw.length) return oaRw;
+  var la=lat!=null?Number(lat):NaN,lo=lon!=null?Number(lon):NaN;
+  if(!isFinite(la)||!isFinite(lo)){
+    if(typeof APTS!=='undefined'&&APTS[icao]){
+      la=Number(APTS[icao].lat); lo=Number(APTS[icao].lon);
+    }
+  }
+  if(isFinite(la)&&isFinite(lo)){
+    var osmRw=await fetchOsmRunways(la,lo);
+    if(osmRw&&osmRw.length) return osmRw;
+  }
+  return null;
+}
+var _rwUpgradePromises={};
+/** Replace synthetic/empty destination runways with OA/OSM data; sync APTS cache; re-pick fav runway. */
+function upgradeDestinationRunways(plan){
+  if(!plan||!plan.arr||!plan.arrIcao) return Promise.resolve(false);
+  var a=plan.arr,icao=plan.arrIcao;
+  var needs=a.rwysSynthetic===true||!a.rwys||!a.rwys.length;
+  if(!needs) return Promise.resolve(false);
+  if(_rwUpgradePromises[icao]) return _rwUpgradePromises[icao];
+  _rwUpgradePromises[icao]=(async function(){
+    try{
+      var rw=await fetchRunwaysForAirport(icao,a.lat,a.lon);
+      if(!rw||!rw.length) return false;
+      a.rwys=rw.slice();
+      delete a.rwysSynthetic;
+      if(typeof APTS!=='undefined'&&APTS[icao]) APTS[icao].rwys=rw.slice();
+      var inbound=plan.dep&&plan.arr?Math.round(course(plan.dep,plan.arr)):180;
+      plan.favRwy=bestRwy(a,wdir(plan.am),inbound);
+      return true;
+    }catch(_e){
+      return false;
+    }finally{
+      delete _rwUpgradePromises[icao];
+    }
+  })();
+  return _rwUpgradePromises[icao];
+}
 async function fetchOsmRunways(lat,lon){
   var la=Number(lat),lo=Number(lon);
   if(!isFinite(la)||!isFinite(lo))return null;
@@ -2163,7 +2246,11 @@ async function fetchOsmRunways(lat,lon){
     for(var i=0;i<el.length;i++){
       var w=el[i];
       if(w.type!=='way'||!w.geometry||w.geometry.length<2)continue;
-      var g=w.geometry,h=_osmRunwayGeomHeading(g),len=_osmRunwayGeomLenFt(g);
+      var g=w.geometry;
+      var midLat=(g[0].lat+g[g.length-1].lat)/2,midLon=(g[0].lon+g[g.length-1].lon)/2;
+      /* Reject runways whose centroid is far from the airport ARP — avoids grabbing a neighbor field inside Overpass radius */
+      if(gcDist(la,lo,midLat,midLon)>2.55)continue;
+      var h=_osmRunwayGeomHeading(g),len=_osmRunwayGeomLenFt(g);
       if(h==null)continue;
       var tl=w.tags&&(w.tags['length']||w.tags['length:m']);
       if(tl){ var tn=parseFloat(String(tl).replace(/[^\d.]/g,''),10); if(!isNaN(tn)&&tn>80)len=Math.round(tn*3.28084); }
@@ -2186,7 +2273,14 @@ async function fetchOsmRunways(lat,lon){
 async function loadAptForBuild(icao){
   if(!icao) return {ident:'',name:'',elev:1000,lat:33.4,lon:-112.0,rwys:[],pagl:1000};
   icao=icao.trim().toUpperCase();
-  if(APTS[icao]) return APTS[icao];
+  if(APTS[icao]){
+    var cached=APTS[icao];
+    if(!cached.rwys||!cached.rwys.length){
+      var fill=await fetchRunwaysForAirport(icao,cached.lat,cached.lon);
+      if(fill&&fill.length) cached.rwys=fill.slice();
+    }
+    return cached;
+  }
   var db=AIRPORTS_DB[icao];
   if(db){
     var base={ident:icao,name:db[0],lat:db[1],lon:db[2],elev:db[3]||0,rwys:[],pagl:1000,nearestWx:icao};
@@ -2202,12 +2296,8 @@ async function loadAptForBuild(icao){
       if(adipRw&&adipRw.length) base.rwys=adipRw.slice();
     }
     if(!base.rwys||!base.rwys.length){
-      var oaRw=await fetchOurAirportsRunwaysFast(icao,900);
-      if(oaRw&&oaRw.length) base.rwys=oaRw;
-    }
-    if(!base.rwys||!base.rwys.length){
-      var osmRw=await fetchOsmRunways(base.lat,base.lon);
-      if(osmRw&&osmRw.length) base.rwys=osmRw;
+      var mergedRw=await fetchRunwaysForAirport(icao,base.lat,base.lon);
+      if(mergedRw&&mergedRw.length) base.rwys=mergedRw;
     }
     return base;
   }
@@ -2227,12 +2317,8 @@ async function loadAptForBuild(icao){
       if(adip2&&adip2.length) base2.rwys=adip2.slice();
     }
     if(!base2.rwys||!base2.rwys.length){
-      var oa2=await fetchOurAirportsRunwaysFast(kicao,900);
-      if(oa2&&oa2.length) base2.rwys=oa2;
-    }
-    if(!base2.rwys||!base2.rwys.length){
-      var osm2=await fetchOsmRunways(base2.lat,base2.lon);
-      if(osm2&&osm2.length) base2.rwys=osm2;
+      var merged2=await fetchRunwaysForAirport(kicao,base2.lat,base2.lon);
+      if(merged2&&merged2.length) base2.rwys=merged2;
     }
     return base2;
   }
@@ -2265,6 +2351,42 @@ async function refreshAirportsFromForm(){
   renderApproach(STATE.plan);
   await renderRadio();
   if(typeof toast==='function') toast('Airports updated — click Build for route / FPL / TFR sync');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PRE-BUILD: surface METAR snapshot + planned cruise context
+// ══════════════════════════════════════════════════════════════════
+async function previewBriefWx(){
+  var d=normalizeFormIcao(document.getElementById('dep').value);
+  var a=normalizeFormIcao(document.getElementById('arr').value);
+  var el=document.getElementById('pre-wx-snap');
+  if(!d||!a){
+    if(typeof toast==='function')toast('Enter departure and destination ICAO codes.');
+    else alert('Enter departure and destination ICAO codes.');
+    return;
+  }
+  if(el)el.innerHTML='<span style="color:var(--sky)">Loading METAR…</span>';
+  try{
+    var dm,am;
+    try{
+      dm=await fMetar(d);am=await fMetar(a);
+    }catch(_e){dm=null;am=null;}
+    var altEl=document.getElementById('plan-alt');
+    var altRaw=altEl&&altEl.value?String(altEl.value).trim():'';
+    var altNote=altRaw
+      ?'Planned cruise: <b>'+escHtml(altRaw)+'</b> ft MSL'
+      :'Planned cruise: <span style="color:var(--txt3)">not set</span> — auto on Build';
+    var h='<div style="font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--txt1)">';
+    h+='<div style="margin-bottom:10px;padding:8px;background:var(--panel2);border-radius:6px;border:1px solid var(--brd)">'+altNote+'</div>';
+    h+='<b>'+escHtml(d)+'</b> '+skyFmt(dm)+' · wind '+wfmt(dm)+'<br><span style="color:var(--txt3);font-size:9px">'+(dm&&dm.rawOb?escHtml(dm.rawOb):'No METAR')+'</span><br><br>';
+    h+='<b>'+escHtml(a)+'</b> '+skyFmt(am)+' · wind '+wfmt(am)+'<br><span style="color:var(--txt3);font-size:9px">'+(am&&am.rawOb?escHtml(am.rawOb):'No METAR')+'</span><br><br>';
+    h+='<span style="color:var(--txt2)">Surface winds only — verify winds aloft for your cruise altitude.</span> <a href="https://aviationweather.gov/gfa" target="_blank" rel="noopener noreferrer" style="color:var(--blu)">GFA</a>';
+    h+='</div>';
+    if(el)el.innerHTML=h;
+    if(typeof toast==='function')toast('Weather snapshot updated');
+  }catch(e){
+    if(el)el.innerHTML='<span style="color:var(--red)">'+(e&&e.message?escHtml(e.message):'Weather fetch failed')+'</span>';
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2315,7 +2437,9 @@ async function buildPlan(){
     const crs=Math.round(course(dep,arr));
     const tkey=`${depIcao}-${arrIcao}`;
     const tfloor=terrainOn?(TERRAIN_FLOORS[tkey]||0):0;
-    const alt=pickAlt(ac,pri,icing,tfloor);
+    const altPick=resolvePlanAltitude(ac,pri,icing,tfloor,terrainOn);
+    var alt=altPick.alt;
+    const icingLowCap=pickAlt(ac,pri,true,tfloor);
     const twarn=terrainOn&&tfloor>0&&alt<tfloor+1000;
     const hw=Math.round(5+Math.random()*18);
     const gs=Math.max(80,ac.tas-hw);
@@ -2330,7 +2454,12 @@ async function buildPlan(){
     if(tfloor>0)hazards.push(`Terrain floor ${tfloor.toLocaleString()} ft MSL — altitude set to ${alt.toLocaleString()} ft.`);
     if(twarn)hazards.push('⚠ TERRAIN: Altitude may be below safe clearance. Verify MEAs and ForeFlight profile view before departure.');
     if(arr.mtn)hazards.push('Mountain airport — verify arrival procedures. RNAV (RNP) requires aircraft authorization.');
-    if(icing)hazards.push('Icing avoidance preference active — altitude adjusted.');
+    if(icing&&altPick.source==='auto')hazards.push('Icing avoidance preference active — altitude adjusted.');
+    if(altPick.source==='user'){
+      if(altPick.clampedPerf)hazards.push(`Planned cruise ${altPick.requested.toLocaleString()} ft outside aircraft band — clamped to ${alt.toLocaleString()} ft MSL.`);
+      if(altPick.clampedFromTerrain)hazards.push(`Planned cruise below terrain corridor minimum (${(tfloor+2000).toLocaleString()} ft MSL) — raised to ${alt.toLocaleString()} ft.`);
+    }
+    if(icing&&altPick.source==='user'&&alt>icingLowCap)hazards.push(`Icing avoidance suggests ≤ ${icingLowCap.toLocaleString()} ft — verify forecast at planned cruise ${alt.toLocaleString()} ft.`);
     if(nightmtn)hazards.push('Night mountain preference active — verify sunset timing and terrain escape options.');
     if(am?.fltCat==='IFR'||am?.fltCat==='LIFR')hazards.push(`Destination currently ${am.fltCat} — review approach minima and alternates.`);
     if(rules==='VFR'&&(arr.elev||0)>5000)hazards.push(`High-elevation destination ${arr.elev.toLocaleString()} ft — density altitude affects performance.`);
@@ -2342,7 +2471,7 @@ async function buildPlan(){
       else hazards.push('NOTAMs empty with key set — verify key at api.faa.gov or FAA outage.');
     }
     const fltDate=document.getElementById('flt-date')&&document.getElementById('flt-date').value||new Date().toISOString().slice(0,10);
-    const plan={depIcao,arrIcao,dep,arr,ac,acid,pri,fltDate,rules,res,dist,crs,alt,eteMin,gs,hw,tripFuel,resFuel,totalFuel,primary,altRoute,dm,am,dt,at,dn,an,favRwy,tfloor,twarn,hazards,depWind:wfmt(dm),arrWind:wfmt(am)};
+    const plan={depIcao,arrIcao,dep,arr,ac,acid,pri,fltDate,rules,res,dist,crs,alt,eteMin,gs,hw,tripFuel,resFuel,totalFuel,primary,altRoute,dm,am,dt,at,dn,an,favRwy,tfloor,twarn,hazards,depWind:wfmt(dm),arrWind:wfmt(am),cruiseAltSource:altPick.source,cruiseAltRequested:altPick.requested!=null?altPick.requested:null};
     STATE.plan=plan;STATE.routes={primary,alt:altRoute};STATE.updates=[];
     ensureOurAirportsEnrichment().catch(function(){});
     // Build waypoints + FPL
@@ -2374,7 +2503,10 @@ async function buildPlan(){
     }
     STATE.fplXML=buildFPL(plan,wpts);
     // Chat context
-    STATE.hist=[{role:'user',content:`[FLIGHT PLAN]: Route: ${primary} | Aircraft: ${ac.name} | Alt: ${alt.toLocaleString()} ft | ${dist} NM | ${eteMin} min | GS: ${gs} KTAS | Headwind: ${hw} kt | Fuel: ${totalFuel} gal | Rules: ${rules} | Terrain floor: ${tfloor||'none'} ft | Dep METAR: ${dm?.rawOb||'N/A'} | Arr METAR: ${am?.rawOb||'N/A'} | Dep wind: ${wfmt(dm)} | Arr wind: ${wfmt(am)} | Runway: ${favRwy?'RWY '+favRwy.id:'TBD'} | Hazards: ${hazards.join('; ')||'none'} | Dep NOTAMs: ${dn.length} | Arr NOTAMs: ${an.length} | Waypoints: ${wpts.length} fixes`}];
+    var cruiseLine=altPick.source==='user'&&altPick.requested!=null
+      ?`Planned cruise ${altPick.requested.toLocaleString()} ft → using ${alt.toLocaleString()} ft MSL`
+      :`Cruise alt ${alt.toLocaleString()} ft MSL (auto)`;
+    STATE.hist=[{role:'user',content:`[FLIGHT PLAN]: Route: ${primary} | Aircraft: ${ac.name} | ${cruiseLine} | ${dist} NM | ${eteMin} min | GS: ${gs} KTAS | Headwind: ${hw} kt | Fuel: ${totalFuel} gal | Rules: ${rules} | Terrain floor: ${tfloor||'none'} ft | Dep METAR: ${dm?.rawOb||'N/A'} | Arr METAR: ${am?.rawOb||'N/A'} | Dep wind: ${wfmt(dm)} | Arr wind: ${wfmt(am)} | Runway: ${favRwy?'RWY '+favRwy.id:'TBD'} | Hazards: ${hazards.join('; ')||'none'} | Dep NOTAMs: ${dn.length} | Arr NOTAMs: ${an.length} | Waypoints: ${wpts.length} fixes`}];
     renderAll(plan);
     setTimeout(function(){
       try{
@@ -2546,9 +2678,12 @@ function rNotams(items,bid,cid){
 
 function renderApproach(p){
   show('approach');
+  upgradeDestinationRunways(p).then(function(ok){
+    if(ok&&STATE.plan===p) renderApproach(p);
+  });
   const r=p.favRwy;const patAlt=p.arr.elev+p.arr.pagl;
   document.getElementById('ap-rwy-badge').textContent=r?'RWY '+r.id:'TBD';
-  document.getElementById('ap-rwy-body').innerHTML=dr('Favored runway',r?'RWY '+r.id:'TBD — check ATIS','b')+dr('Heading',r?r.hdg+'°':'—')+dr('Length',r?r.len.toLocaleString()+' ft':'—')+dr('Pattern',r?(r.pat==='R'?'Right traffic':'Left traffic'):'—')+dr('Field elevation',p.arr.elev.toLocaleString()+' ft MSL')+(p.arr.rwysSynthetic?'<div class="warn info" style="margin-top:7px"><b>ℹ</b><div>Runway ends are <b>estimated from your inbound course</b> (airport not in detailed runway DB). Verify lengths, IDs, and traffic pattern against the Chart Supplement / ForeFlight.</div></div>':'')+(p.arr.mtn?'<div class="haz" style="margin-top:7px"><span style="color:var(--red)">⚠</span><span style="color:var(--amb)">Mountain airport — verify arrival and escape procedures</span></div>':'');
+  document.getElementById('ap-rwy-body').innerHTML=dr('Favored runway',r?'RWY '+r.id:'TBD — check ATIS','b')+dr('Heading',r?r.hdg+'°':'—')+dr('Length',r?r.len.toLocaleString()+' ft':'—')+dr('Pattern',r?(r.pat==='R'?'Right traffic':'Left traffic'):'—')+dr('Field elevation',p.arr.elev.toLocaleString()+' ft MSL')+'<div class="warn info" style="margin-top:8px"><b>ℹ</b><div><b>Favored runway</b> is picked from <b>wind + your approach course</b> in the plan — <b>not</b> from tower. If ATIS assigns a different runway (e.g. tower says 21 but we show 03), open sidebar <b>⚡ Update In Flight</b>, enter the runway ATC gave you, Apply, then Map → <b>⬡ PATTERN</b> again.</div></div>'+(p.arr.rwysSynthetic?'<div class="warn info" style="margin-top:7px"><b>ℹ</b><div>Runway ends are <b>estimated from your inbound course</b> (airport not in detailed runway DB). Verify lengths, IDs, and traffic pattern against the Chart Supplement / ForeFlight.</div></div>':'')+(p.arr.mtn?'<div class="haz" style="margin-top:7px"><span style="color:var(--red)">⚠</span><span style="color:var(--amb)">Mountain airport — verify arrival and escape procedures</span></div>':'');
   document.getElementById('ap-pat-body').innerHTML=dr('Pattern altitude',patAlt.toLocaleString()+' ft MSL')+dr('AGL',p.arr.pagl+' ft')+dr('Entry',r?`45° entry Rwy ${r.id}, ${r.pat==='R'?'right':'left'} traffic`:'Check local procedures')+'<div style="margin-top:5px;font-size:11px;color:var(--txt2)">ATC instructions always override pattern preference.</div>';
   // Approach fixes
   const fixes=STATE.apchFixes;
@@ -2584,40 +2719,84 @@ function renderFPLPanel(){
 // ══════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════
-// FEATURE 1: GPS PLANE TRACKER
+// FEATURE 1: GPS PLANE TRACKER (long timeouts + backup poll — cockpit GNSS is slow)
 // ═══════════════════════════════════════════════════════════════════════
 var _planeMarker=null,_trackLine=null,_trackPts=[],_planeWatchId=null,_mapFollow=false,_lastHeading=0;
-var _planeIcon=L&&L.divIcon?L.divIcon({className:'',html:'<div style="width:0;height:0"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="-16 -16 32 32" id="plane-svg" style="transform-origin:center;filter:drop-shadow(0 0 3px #000)"><polygon points="0,-14 4,-4 14,0 4,2 2,14 0,8 -2,14 -4,2 -14,0 -4,-4" fill="#00e57a" stroke="#003d1a" stroke-width="1.5"/></svg></div>',iconSize:[32,32],iconAnchor:[16,16]}):null;
+var _gpsPollTimer=null,_gpsResumeTimer=null;
+var _planeIcon=L&&L.divIcon?L.divIcon({className:'',html:'<div style="width:0;height:0"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="-16 -16 32 32" class="avisor-plane-svg" style="transform-origin:center;filter:drop-shadow(0 0 3px #000)"><polygon points="0,-14 4,-4 14,0 4,2 2,14 0,8 -2,14 -4,2 -14,0 -4,-4" fill="#00e57a" stroke="#003d1a" stroke-width="1.5"/></svg></div>',iconSize:[32,32],iconAnchor:[16,16]}):null;
 
-function startPlaneTracker(){
+function onPlaneGeoUpdate(pos){
+  if(!pos||!pos.coords)return;
+  var lat=pos.coords.latitude,lon=pos.coords.longitude;
+  if(!isFinite(lat)||!isFinite(lon))return;
+  var hdg=_lastHeading;
+  if(pos.coords.heading!=null&&!isNaN(pos.coords.heading))hdg=pos.coords.heading;
+  _lastHeading=hdg;
+  var ll=L.latLng(lat,lon);
+  if(!window._map)return;
+  if(!_trackLine)_trackLine=L.polyline([],{color:'#38beff',weight:2,opacity:0.85,dashArray:'4,4'}).addTo(_map);
+  if(!_planeMarker)_planeMarker=L.marker(ll,{icon:_planeIcon,zIndexOffset:4500}).addTo(_map);
+  else _planeMarker.setLatLng(ll);
+  var ic=_planeMarker.getElement&&_planeMarker.getElement();
+  var svg=ic&&ic.querySelector&&ic.querySelector('svg');
+  if(svg)svg.style.transform='rotate('+hdg+'deg)';
+  _trackPts.push(ll);
+  if(_trackLine)_trackLine.setLatLngs(_trackPts);
+  if(_mapFollow)_map.setView(ll,_map.getZoom(),{animate:false});
+  updateNextWaypointInfo(lat,lon);
+}
+function stopGpsPollBackup(){
+  if(_gpsPollTimer){clearInterval(_gpsPollTimer);_gpsPollTimer=null;}
+}
+function startGpsPollBackup(){
+  stopGpsPollBackup();
+  if(!navigator.geolocation)return;
+  _gpsPollTimer=setInterval(function(){
+    if(_planeWatchId==null)return;
+    navigator.geolocation.getCurrentPosition(onPlaneGeoUpdate,function(){},{enableHighAccuracy:true,maximumAge:90000,timeout:90000});
+  },7000);
+}
+function scheduleGpsWatchRestart(){
+  if(_gpsResumeTimer)return;
+  _gpsResumeTimer=setTimeout(function(){
+    _gpsResumeTimer=null;
+    if(_planeWatchId==null)return;
+    try{if(navigator.geolocation)navigator.geolocation.clearWatch(_planeWatchId);}catch(_e){}
+    _planeWatchId=null;
+    if(!navigator.geolocation)return;
+    _planeWatchId=navigator.geolocation.watchPosition(onPlaneGeoUpdate,function(err){
+      console.warn('Geolocation',err&&err.code,err&&err.message);
+      if(err&&err.code===1&&typeof toast==='function')toast('Location blocked — allow Location for this site');
+      if(err&&err.code!==1)scheduleGpsWatchRestart();
+    },{enableHighAccuracy:true,maximumAge:120000,timeout:120000});
+  },2000);
+}
+function startPlaneTrackerCore(){
   if(!window._map){setTimeout(startPlaneTracker,500);return;}
-  if(_planeWatchId!=null)return;
   if(!navigator.geolocation){if(typeof toast==='function')toast('GPS not available');return;}
-  _trackLine=L.polyline([],{color:'#38beff',weight:2,opacity:0.7,dashArray:'4,4'}).addTo(_map);
-  _planeWatchId=navigator.geolocation.watchPosition(function(pos){
-    var lat=pos.coords.latitude,lon=pos.coords.longitude,hdg=pos.coords.heading||_lastHeading;
-    if(pos.coords.heading!=null)_lastHeading=hdg;
-    var ll=L.latLng(lat,lon);
-    if(!_planeMarker){
-      _planeMarker=L.marker(ll,{icon:_planeIcon,zIndexOffset:1000}).addTo(_map);
-    } else {
-      _planeMarker.setLatLng(ll);
-    }
-    var svg=document.getElementById('plane-svg');
-    if(svg)svg.style.transform='rotate('+hdg+'deg)';
-    _trackPts.push(ll);
-    if(_trackLine)_trackLine.setLatLngs(_trackPts);
-    if(_mapFollow)_map.setView(ll,_map.getZoom());
-    updateNextWaypointInfo(lat,lon);
-  },function(err){
-    if(typeof toast==='function')toast('GPS: '+err.message);
-  },{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
-  if(typeof toast==='function')toast('GPS tracking started');
+  if(!_trackLine)_trackLine=L.polyline([],{color:'#38beff',weight:2,opacity:0.85,dashArray:'4,4'}).addTo(_map);
+  _planeWatchId=navigator.geolocation.watchPosition(onPlaneGeoUpdate,function(err){
+    console.warn('Geolocation',err&&err.code,err&&err.message);
+    if(err&&err.code===1&&typeof toast==='function')toast('Location blocked — allow Location for this site');
+    if(err&&err.code!==1)scheduleGpsWatchRestart();
+  },{enableHighAccuracy:true,maximumAge:120000,timeout:120000});
+  startGpsPollBackup();
+}
+function startPlaneTracker(){
+  if(_planeWatchId!=null){stopPlaneTracker();return;}
+  startPlaneTrackerCore();
+  var btn=document.getElementById('map-gps-btn');
+  if(btn){btn.textContent='✈ GPS OFF';btn.style.background='#301818';btn.style.borderColor='#cc4444';btn.style.color='#ffb0b0';}
+  if(typeof toast==='function')toast('GPS on — keep app visible; first fix may take 1–2 min (GNSS)');
 }
 
 function stopPlaneTracker(){
-  if(_planeWatchId!=null&&navigator.geolocation)navigator.geolocation.clearWatch(_planeWatchId);
+  stopGpsPollBackup();
+  if(_gpsResumeTimer){clearTimeout(_gpsResumeTimer);_gpsResumeTimer=null;}
+  if(_planeWatchId!=null&&navigator.geolocation){try{navigator.geolocation.clearWatch(_planeWatchId);}catch(_e){}}
   _planeWatchId=null;
+  var btn=document.getElementById('map-gps-btn');
+  if(btn){btn.textContent='✈ GPS ON';btn.style.background='#001a0d';btn.style.borderColor='#00e57a';btn.style.color='#00e57a';}
   if(typeof toast==='function')toast('GPS tracking stopped');
 }
 
@@ -2652,12 +2831,29 @@ function updateNextWaypointInfo(lat,lon){
 // ═══════════════════════════════════════════════════════════════════════
 // FEATURE 2: TRAFFIC PATTERN ON MAP
 // ═══════════════════════════════════════════════════════════════════════
-var _patternLayer=null,_patternMarkers=[];
+var _patternLayer=null,_patternMarkers=[],_patternShown=false,_lastPatternArgs=null;
+function ensureAvisorPatternPane(){
+  if(!_map||!_map.createPane)return;
+  try{
+    if(_map.getPane&&_map.getPane('avisorPattern'))return;
+    _map.createPane('avisorPattern');
+    var el=_map.getPane('avisorPattern');
+    if(el)el.style.zIndex=650;
+  }catch(_e){}
+}
 function drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,altFt){
   if(!window._map)return;
+  ensureAvisorPatternPane();
   clearPatternFromMap();
-  var R=3440.065,nm=1/R,leg=0.8,dep=1.0;
-  var hdg=rwyHdg*Math.PI/180,turn=leftTraffic?-1:1;
+  _lastPatternArgs={rwyHdg:rwyHdg,rwyLat:rwyLat,rwyLon:rwyLon,leftTraffic:leftTraffic,altFt:altFt};
+  /* rwyHdg = magnetic outbound from landing threshold along runway (AIM-style rectangular pattern). Legs ~½ NM — schematic only, not for navigation. */
+  var R=3440.065,nm=1/R;
+  var legNm=0.38,crossNm=0.34,depNm=0.48,downNm=0.55,finalNm=0.28;
+  var turn=leftTraffic?-1:1;
+  var fin=(((rwyHdg%360)+360)%360);
+  var crossHdg=(fin+turn*90+360)%360;
+  var downHdg=(fin+180)%360;
+  var baseHdg=(fin+turn*270+360)%360;
   function pt(fromLat,fromLon,bearingDeg,distNm){
     var b=bearingDeg*Math.PI/180,d=distNm/R;
     var lat1=fromLat*Math.PI/180,lon1=fromLon*Math.PI/180;
@@ -2665,41 +2861,46 @@ function drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,altFt){
     var lon2=lon1+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(lat1),Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
     return [lat2*180/Math.PI,lon2*180/Math.PI];
   }
-  var hdgDeg=rwyHdg;
-  var crosswindHdg=(hdgDeg+turn*90+360)%360;
-  var downwindHdg=(hdgDeg+turn*180+360)%360;
-  var baseHdg=(hdgDeg+turn*270+360)%360;
-  var depEnd=pt(rwyLat,rwyLon,hdgDeg,dep);
-  var crossStart=pt(depEnd[0],depEnd[1],crosswindHdg,leg);
-  var downwindStart=pt(crossStart[0],crossStart[1],downwindHdg,dep*2);
-  var baseStart=pt(downwindStart[0],downwindStart[1],baseHdg,leg);
-  var finalStart=pt(baseStart[0],baseStart[1],hdgDeg+180,dep*0.5);
-  var patternPts=[
-    [rwyLat,rwyLon],depEnd,crossStart,downwindStart,baseStart,finalStart,[rwyLat,rwyLon]
-  ];
-  _patternLayer=L.polyline(patternPts,{color:'#ff9900',weight:2.5,opacity:0.9}).addTo(_map);
+  var thr=[rwyLat,rwyLon];
+  var depEnd=pt(thr[0],thr[1],fin,depNm);
+  var crossEnd=pt(depEnd[0],depEnd[1],crossHdg,crossNm);
+  var downEnd=pt(crossEnd[0],crossEnd[1],downHdg,downNm);
+  var baseEnd=pt(downEnd[0],downEnd[1],baseHdg,legNm);
+  /* Final approach segment collinear with runway: fix short final before threshold, along landing course fin */
+  var finalFix=pt(thr[0],thr[1],(fin+180)%360,finalNm);
+  var patternPts=[thr,depEnd,crossEnd,downEnd,baseEnd,finalFix,thr];
+  var polyOpts={color:'#ffaa33',weight:4,opacity:1,pane:'avisorPattern'};
+  _patternLayer=L.polyline(patternPts,polyOpts).addTo(_map);
   var labels=[
-    {pt:depEnd,txt:'DEPARTURE'},
-    {pt:crossStart,txt:'CROSSWIND'},
-    {pt:[(downwindStart[0]+crossStart[0])/2,(downwindStart[1]+crossStart[1])/2],txt:'DOWNWIND'},
-    {pt:baseStart,txt:'BASE'},
-    {pt:[(finalStart[0]+baseStart[0])/2,(finalStart[1]+baseStart[1])/2],txt:'FINAL'}
+    {pt:depEnd,txt:'UPWIND / DEP'},
+    {pt:[(crossEnd[0]+depEnd[0])/2,(crossEnd[1]+depEnd[1])/2],txt:'CROSSWIND'},
+    {pt:[(downEnd[0]+crossEnd[0])/2,(downEnd[1]+crossEnd[1])/2],txt:'DOWNWIND'},
+    {pt:[(baseEnd[0]+downEnd[0])/2,(baseEnd[1]+downEnd[1])/2],txt:'BASE'},
+    {pt:[(thr[0]+finalFix[0])/2,(thr[1]+finalFix[1])/2],txt:'FINAL'}
   ];
   labels.forEach(function(l){
-    var m=L.marker(l.pt,{icon:L.divIcon({className:'',html:'<div style="background:rgba(180,80,0,0.85);color:#fff;font-size:9px;font-family:monospace;padding:1px 4px;border-radius:2px;white-space:nowrap">'+l.txt+'</div>',iconAnchor:[20,8]})});
+    var m=L.marker(l.pt,{icon:L.divIcon({className:'',html:'<div style="background:rgba(180,80,0,0.92);color:#fff;font-size:9px;font-family:monospace;padding:1px 4px;border-radius:2px;white-space:nowrap;border:1px solid #ffcc66">'+l.txt+'</div>',iconAnchor:[20,8]}),pane:'avisorPattern'});
     m.addTo(_map);
     _patternMarkers.push(m);
   });
-  var altLabel=L.marker([rwyLat,rwyLon],{icon:L.divIcon({className:'',html:'<div style="background:rgba(0,0,0,0.8);color:#ff9900;font-size:10px;font-family:monospace;padding:2px 6px;border-radius:3px;white-space:nowrap">TPA '+(altFt+1000)+'ft MSL</div>',iconAnchor:[-5,8]})});
+  var altLabel=L.marker([rwyLat,rwyLon],{icon:L.divIcon({className:'',html:'<div style="background:rgba(0,0,0,0.85);color:#ff9900;font-size:10px;font-family:monospace;padding:2px 6px;border-radius:3px;white-space:nowrap">TPA '+(altFt+1000)+'ft MSL</div>',iconAnchor:[-5,8]}),pane:'avisorPattern'});
   altLabel.addTo(_map);
   _patternMarkers.push(altLabel);
-  _map.fitBounds(L.polyline(patternPts).getBounds().pad(0.3));
+  try{if(_patternLayer.bringToFront)_patternLayer.bringToFront();}catch(_e){}
+  _patternShown=true;
+  try{
+    var b=L.polyline(patternPts).getBounds();
+    _map.fitBounds(b.pad(0.22),{maxZoom:15,padding:[20,20]});
+  }catch(_e){}
 }
 
 function clearPatternFromMap(){
-  if(_patternLayer){_map.removeLayer(_patternLayer);_patternLayer=null;}
-  _patternMarkers.forEach(function(m){_map.removeLayer(m);});
+  if(_patternLayer&&_map){try{_map.removeLayer(_patternLayer);}catch(_e){}}
+  _patternLayer=null;
+  _patternMarkers.forEach(function(m){try{_map.removeLayer(m);}catch(_e){}});
   _patternMarkers=[];
+  _patternShown=false;
+  _lastPatternArgs=null;
 }
 
 // Hook into existing drawPattern to also draw on map
@@ -2932,22 +3133,30 @@ function addMapControlButtons(){
   if(mapContainer)mapContainer.appendChild(ctrl);
 }
 
-function showPatternOnMap(){
-  if(!STATE||!STATE.plan){if(typeof toast==='function')toast('Build a plan first');return;}
-  var p=STATE.plan;
-  if(!p.arr||!p.arr.lat){if(typeof toast==='function')toast('No destination data');return;}
-  var rwyHdg=p.favRwy?rwyLabelToHeading(p.favRwy.id):360;
-  var leftTraffic=p.favRwy?p.favRwy.pat!=='R':true;
+/** Magnetic runway heading at the active threshold: prefer FAA/OurAirports hdg; runway-number ×10 is fallback only. */
+function patternMagHeading(fr){
+  if(!fr) return 360;
+  var h=fr.hdg;
+  if(h!=null&&h!==''&&!isNaN(Number(h))){
+    var n=Number(h);
+    if(isFinite(n)) return(((Math.round(n)%360)+360)%360);
+  }
+  return(((rwyLabelToHeading(fr.id)%360)+360)%360);
+}
+/** Threshold / pattern anchor + headings from current plan (same logic as map ⬡ PATTERN). Used after in-flight runway updates so redraw stays in sync. */
+function getPatternMapGeometryFromPlan(p){
+  if(!p||!p.arr||p.arr.lat==null)return null;
+  var fr=p.favRwy;
+  var rwyHdg=fr?patternMagHeading(fr):360;
+  var leftTraffic=fr?fr.pat!=='R':true;
   var elev=p.arr.elev||p.arr.elevation||0;
-  // Anchor pattern at runway threshold (computed from airport center + heading + half-length)
   var rwyLat=p.arr.lat, rwyLon=p.arr.lon;
-  if(p.favRwy&&p.favRwy.lat&&p.favRwy.lon){
-    rwyLat=p.favRwy.lat; rwyLon=p.favRwy.lon;
-  } else if(p.favRwy&&p.favRwy.leLatitude){
-    rwyLat=parseFloat(p.favRwy.leLatitude); rwyLon=parseFloat(p.favRwy.leLongitude);
-  } else if(p.favRwy&&p.favRwy.hdg!=null&&p.favRwy.len){
-    // Derive threshold: move from airport center opposite to runway heading by half length
-    var halfNm=(p.favRwy.len/2)/6076.12;
+  if(fr&&fr.lat!=null&&fr.lon!=null&&isFinite(Number(fr.lat))&&isFinite(Number(fr.lon))){
+    rwyLat=Number(fr.lat); rwyLon=Number(fr.lon);
+  } else if(fr&&fr.leLatitude){
+    rwyLat=parseFloat(fr.leLatitude); rwyLon=parseFloat(fr.leLongitude);
+  } else if(fr&&fr.hdg!=null&&fr.len){
+    var halfNm=(Number(fr.len)/2)/6076.12;
     var oppHdg=(rwyHdg+180)%360;
     var _R=3440.065,_d=halfNm/_R,_b=oppHdg*Math.PI/180;
     var _lat1=p.arr.lat*Math.PI/180,_lon1=p.arr.lon*Math.PI/180;
@@ -2955,9 +3164,24 @@ function showPatternOnMap(){
     var _lon2=_lon1+Math.atan2(Math.sin(_b)*Math.sin(_d)*Math.cos(_lat1),Math.cos(_d)-Math.sin(_lat1)*Math.sin(_lat2));
     rwyLat=_lat2*180/Math.PI; rwyLon=_lon2*180/Math.PI;
   }
-  drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,elev);
+  /* Bad OSM/threshold math can place the anchor miles offshore — fall back to airport reference. ARP is not always midfield; allow threshold up to ~full runway length from ARP. */
+  if(fr&&p.arr.lat!=null&&p.arr.lon!=null){
+    var lenFt=Math.max(1800,Number(fr.len)||5500);
+    var fullLenNm=lenFt/6076.12;
+    var dThrArp=gcDist(rwyLat,rwyLon,p.arr.lat,p.arr.lon);
+    if(!isFinite(dThrArp)||dThrArp>fullLenNm+0.55||dThrArp>2.8){
+      rwyLat=p.arr.lat; rwyLon=p.arr.lon;
+    }
+  }
+  return{rwyHdg:rwyHdg,rwyLat:rwyLat,rwyLon:rwyLon,leftTraffic:leftTraffic,altFt:elev};
+}
+function showPatternOnMap(){
+  if(!STATE||!STATE.plan){if(typeof toast==='function')toast('Build a plan first');return;}
+  var g=getPatternMapGeometryFromPlan(STATE.plan);
+  if(!g){if(typeof toast==='function')toast('No destination data');return;}
+  drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt);
   if(typeof tab==='function')tab('map');
-  if(typeof toast==='function')toast('Traffic pattern drawn for RWY '+(p.favRwy?p.favRwy.id:'??'));
+  if(typeof toast==='function')toast('VFR pattern (AIM-style schematic ~½ NM legs — verify against chart)');
 }
 
 window.addEventListener('load',function(){
@@ -3028,13 +3252,90 @@ function printBrief(){
 // ══════════════════════════════════════════════════════════════════
 // IN-FLIGHT UPDATE
 // ══════════════════════════════════════════════════════════════════
-function openIF(){document.getElementById('if-modal').classList.add('show');}
+function mergeDestRunwaysForUI(arr,arrIcao,favRwy){
+  var rwys=[],seen={},add=function(r){
+    if(!r||r.id==null)return;
+    var k=String(r.id).toUpperCase().replace(/^RWY\s*/i,'');
+    if(seen[k])return;
+    seen[k]=1;
+    rwys.push(r);
+  };
+  if(arr&&arr.rwys&&arr.rwys.length) arr.rwys.forEach(add);
+  if(arrIcao&&typeof APTS!=='undefined'&&APTS[arrIcao]&&APTS[arrIcao].rwys){
+    APTS[arrIcao].rwys.forEach(add);
+  }
+  if(favRwy&&favRwy.id){
+    var fk=String(favRwy.id).toUpperCase().replace(/^RWY\s*/i,'');
+    if(!seen[fk]){
+      seen[fk]=1;
+      rwys.push({
+        id:favRwy.id,
+        hdg:favRwy.hdg!=null?favRwy.hdg:rwyLabelToHeading(favRwy.id),
+        len:favRwy.len||4000,
+        pat:favRwy.pat||'L'
+      });
+    }
+  }
+  return rwys;
+}
+async function syncInFlightRunwayUI(){
+  var sel=document.getElementById('if-rwy-sel');
+  var inp=document.getElementById('if-rwy');
+  var hint=document.getElementById('if-rwy-hint');
+  if(!sel||!inp)return;
+  if(STATE.plan) await upgradeDestinationRunways(STATE.plan);
+  var arrIcao=STATE.plan&&STATE.plan.arrIcao;
+  var arr=STATE.plan&&STATE.plan.arr;
+  var fav=STATE.plan&&STATE.plan.favRwy;
+  sel.innerHTML='';
+  var z=document.createElement('option');
+  z.value='';
+  z.textContent='— Select runway at '+String(arrIcao||'destination')+' —';
+  sel.appendChild(z);
+  var rwys=mergeDestRunwaysForUI(arr,arrIcao,fav);
+  rwys.forEach(function(r){
+    var o=document.createElement('option');
+    var id=String(r.id||'').toUpperCase();
+    o.value=id;
+    o.textContent='RWY '+id+' · '+Math.round(r.len||0)+' ft · '+Math.round(r.hdg||0)+'°M';
+    sel.appendChild(o);
+  });
+  var oth=document.createElement('option');
+  oth.value='__OTHER__';
+  oth.textContent='Other… (type runway ID)';
+  sel.appendChild(oth);
+  if(fav&&fav.id){
+    var fv=String(fav.id).toUpperCase().replace(/^RWY\s*/,'');
+    sel.value=fv;
+    if(sel.value!==fv){sel.value='__OTHER__';inp.value=fv;inp.style.display='block';}
+    else{inp.value='';inp.style.display='none';}
+  }else{
+    inp.value='';
+    inp.style.display='none';
+  }
+  sel.onchange=function(){
+    if(sel.value==='__OTHER__'){inp.style.display='block';try{inp.focus();}catch(_e){}}
+    else{inp.style.display='none';if(sel.value)inp.value=sel.value;}
+  };
+  if(hint){
+    hint.textContent=rwys.length?'From plan / DB for '+String(arrIcao||''):(arrIcao?'No runway list yet — rebuild plan or pick Other':'Build a flight plan first');
+  }
+}
+async function openIF(){
+  var m=document.getElementById('if-modal');
+  if(m)m.classList.add('show');
+  await syncInFlightRunwayUI();
+}
 function closeIF(){document.getElementById('if-modal').classList.remove('show');}
 
 async function applyIF(){
   if(!STATE.plan){alert('Build a plan first.');return;}
   var p=STATE.plan;
-  const rwy=document.getElementById('if-rwy').value.trim().toUpperCase();
+  var selR=document.getElementById('if-rwy-sel');
+  var rwInp=document.getElementById('if-rwy');
+  var pick=selR&&selR.value&&selR.value!=='__OTHER__'?selR.value.trim().toUpperCase():'';
+  var typed=rwInp&&rwInp.value?rwInp.value.trim().toUpperCase():'';
+  const rwy=pick||typed;
   const atis=document.getElementById('if-atis').value.trim().toUpperCase();
   const apch=document.getElementById('if-apch').value;
   const wind=document.getElementById('if-wind').value.trim();
@@ -3047,7 +3348,8 @@ async function applyIF(){
 
   if(rwy){
     var cleanRwy=rwy.replace(/^RWY\s*/,'');
-    var fromDb=(p.arr&&p.arr.rwys||[]).find(function(x){return String(x.id).toUpperCase()===cleanRwy;});
+    var mergedRw=mergeDestRunwaysForUI(p.arr,p.arrIcao,null);
+    var fromDb=mergedRw.find(function(x){return String(x.id).toUpperCase()===cleanRwy.toUpperCase();});
     var fbHdg=rwyLabelToHeading(cleanRwy);
     p.favRwy=fromDb||{id:cleanRwy,hdg:fbHdg,len:4000,pat:'L'};
     changes.push('Runway -> RWY '+cleanRwy);
@@ -3056,12 +3358,13 @@ async function applyIF(){
 
   if(apch){
     var pref='auto';
-    if(apch==='LOC')pref='LOC';
-    else if(apch==='RNP15'||apch==='RNAV33')pref='RNAV';
-    else if(apch==='VIS15'||apch==='VIS33')pref='VIS';
+    if(apch==='ILS')pref='ILS';
+    else if(apch==='RNAV')pref='RNAV';
+    else if(apch==='VIS')pref='VIS';
+    else if(apch==='auto')pref='auto';
     var apchSel=document.getElementById('apch-pref');
     if(apchSel) apchSel.value=pref;
-    changes.push('Approach: '+apch);
+    changes.push('Approach pref: '+apch);
     needsRouteRebuild=true;
   }
 
@@ -3880,7 +4183,68 @@ function airwayBiasSetForCorridor(dep,arr){
   });
   return set;
 }
+/** Published public ICAOs (Kxxx) near dep→arr — ForeFlight-safe VFR fills (no synthetic CP ids). */
+function nearestPublishedAirportsAlongCorridor(dep,arr,want,maxXtkNm,excludeMap){
+  want=Math.max(0,Math.min(14,Math.floor(Number(want)||0)));
+  if(!want||!dep||!arr||typeof AIRPORTS_DB==='undefined'||!AIRPORTS_DB) return [];
+  var dLat=Number(dep.lat),dLon=Number(dep.lon),aLat=Number(arr.lat),aLon=Number(arr.lon);
+  if(!isFinite(dLat)||!isFinite(aLat)) return [];
+  var direct=gcDist(dLat,dLon,aLat,aLon);
+  if(direct<35) return [];
+  var conus=isConusCoord(dLat,dLon)&&isConusCoord(aLat,aLon);
+  excludeMap=excludeMap||{};
+  var depU=String(dep.ident||'').toUpperCase(),arrU=String(arr.ident||'').toUpperCase();
+  var mx=Math.max(20,Math.min(115,Number(maxXtkNm)||58));
+  var pool=[];
+  Object.keys(AIRPORTS_DB).forEach(function(id){
+    if(!/^K[A-Z0-9]{3}$/.test(id)) return;
+    var uid=id.toUpperCase();
+    if(uid===depU||uid===arrU||excludeMap[uid]) return;
+    var row=AIRPORTS_DB[id];
+    if(!row||row.length<4||!isFinite(row[1])||!isFinite(row[2])) return;
+    var la=row[1],lo=row[2];
+    if(conus&&!isConusCoord(la,lo)) return;
+    var along=alongTrackNmDepArr(dLat,dLon,aLat,aLon,la,lo);
+    if(along<8||along>direct-8) return;
+    var xtk=crossTrackDist(dLat,dLon,aLat,aLon,la,lo);
+    if(xtk>mx) return;
+    var name=row[0];
+    var nm=String(name||'').toUpperCase();
+    if(nm.indexOf('CLOSED')>=0) return;
+    var pri=(isMetroOrPublicAirportName(name)?26:0)+(nm.indexOf('REGIONAL')>=0||nm.indexOf('MUNICIPAL')>=0?10:0);
+    pool.push({id:uid,along:along,xtk:xtk,pri:pri});
+  });
+  if(!pool.length) return [];
+  pool.sort(function(a,b){return a.along-b.along;});
+  var alongOf={};
+  pool.forEach(function(p){alongOf[p.id]=p.along;});
+  var picked=[];
+  function pickWithGap(minGap){
+    picked=[];
+    for(var k=1;k<=want;k++){
+      var tgt=(direct*k)/(want+1),best=null,bs=1e9;
+      for(var i=0;i<pool.length;i++){
+        var p=pool[i];
+        if(picked.indexOf(p.id)>=0) continue;
+        var ok=true;
+        for(var j=0;j<picked.length;j++){
+          if(Math.abs(p.along-alongOf[picked[j]])<minGap){ok=false;break;}
+        }
+        if(!ok) continue;
+        var sc=Math.abs(p.along-tgt)+p.xtk*3.05-p.pri*0.4;
+        if(sc<bs){bs=sc;best=p;}
+      }
+      if(best) picked.push(best.id);
+    }
+  }
+  var minGap=Math.max(24,Math.min(98,direct/Math.max(want+1,3)*0.75));
+  pickWithGap(minGap);
+  if(picked.length<want) pickWithGap(Math.max(14,minGap*0.55));
+  picked.sort(function(a,b){return alongOf[a]-alongOf[b];});
+  return picked;
+}
 function buildCorridorRouteIds(dep,arr,rules,targetNm){
+  rules=normalizeFlightRules(rules);
   if(!dep||!arr||!isFinite(Number(dep.lat))||!isFinite(Number(dep.lon))||!isFinite(Number(arr.lat))||!isFinite(Number(arr.lon))){
     return [dep&&dep.ident?dep.ident:'DEP',arr&&arr.ident?arr.ident:'ARR'];
   }
@@ -3890,11 +4254,11 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
   var target=(isFinite(tn)&&tn>=25&&tn<=140)?tn:55;
   var needBase=Math.max(1,Math.round(direct/(target*1.38))-1);
   // Keep meaningful enroute references on longer flights (user preference: 3-4+ mids by distance).
-  var minNeedByDistance=direct>=520?4:direct>=260?3:1;
+  var minNeedByDistance=direct>=520?4:direct>=260?3:direct>=195?2:1;
   var need=Math.max(needBase,minNeedByDistance);
   var conus=isConusCoord(dep.lat,dep.lon)&&isConusCoord(arr.lat,arr.lon);
-  var xtkMax=(rules==='VFR')?28:48;
   var vfrVisualOn=!!(document.getElementById('opt-vfr')&&document.getElementById('opt-vfr').checked);
+  var xtkMax=(rules==='VFR')?(direct>320?42:direct>160?34:28):48;
   var airwayBias=rules==='IFR'?airwayBiasSetForCorridor(dep,arr):{};
   var routeHints=rules==='VFR'&&vfrVisualOn?buildVfrEnrouteHintSets(dep,arr):{victor:{},metro:{}};
   var cands=[];
@@ -3941,7 +4305,20 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
       });
     }
   }
-  if(cands.length===0) return [dep.ident,arr.ident];
+  if(cands.length===0){
+    if(rules==='VFR'&&vfrVisualOn&&direct>=95){
+      var nAp=Math.max(1,Math.min(6,Math.round(direct/72)-1));
+      var xtkWide=Math.min(105,(direct>320?42:direct>160?34:28)+42);
+      var exEmpty={};
+      exEmpty[String(dep.ident||'').toUpperCase()]=1;
+      exEmpty[String(arr.ident||'').toUpperCase()]=1;
+      var apMids=nearestPublishedAirportsAlongCorridor(dep,arr,nAp,xtkWide,exEmpty);
+      if(apMids.length){
+        return refineRouteIdsMonotonic(dep,arr,[dep.ident].concat(apMids).concat([arr.ident]),rules);
+      }
+    }
+    return [dep.ident,arr.ident];
+  }
   cands.sort(function(a,b){return a.along-b.along;});
   var mids=[],used={};
   var minMidGap=Math.max(14,target*0.35);
@@ -3969,23 +4346,23 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
     }
     if(best){used[String(best.id).toUpperCase()]=1;mids.push(best.id);}
   }
-  // If we still don't have enough named checkpoints (common in sparse areas),
-  // add coordinate checkpoints every ~target NM so VFR nav always has references.
+  // Sparse corridor: add published airports along-track (ForeFlight-safe), not synthetic coords.
   if(rules==='VFR'&&vfrVisualOn&&mids.length<need){
-    var cpIdx=1;
-    for(var mm=mids.length+1;mm<=need;mm++){
-      var at=(direct*mm)/(need+1);
-      var f=at/direct;
-      var lat=dep.lat + (arr.lat-dep.lat)*f;
-      var lon=dep.lon + (arr.lon-dep.lon)*f;
-      if(conus&&!isConusCoord(lat,lon)) continue;
-      var cid='CP'+String(cpIdx).padStart(2,'0');
-      while(NAVCOORDS[cid]){cpIdx++;cid='CP'+String(cpIdx).padStart(2,'0');}
-      NAVCOORDS[cid]={lat:lat,lon:lon,type:'vis',desc:'VFR coordinate checkpoint'};
-      mids.push(cid);
-      cpIdx++;
-      if(mids.length>=need) break;
-    }
+    var exFill={};
+    exFill[String(dep.ident||'').toUpperCase()]=1;
+    exFill[String(arr.ident||'').toUpperCase()]=1;
+    mids.forEach(function(mid){exFill[String(mid).toUpperCase()]=1;});
+    var addN=need-mids.length;
+    var xtkFill=Math.min(98,(direct>320?42:direct>160?34:28)+36);
+    var moreAp=nearestPublishedAirportsAlongCorridor(dep,arr,addN,xtkFill,exFill);
+    moreAp.forEach(function(aid){if(mids.indexOf(aid)<0)mids.push(aid);});
+    mids=mids.slice().sort(function(a,b){
+      function alongId(id){
+        var n=NAVCOORDS[id]||(AIRPORTS_DB[id]?{lat:AIRPORTS_DB[id][1],lon:AIRPORTS_DB[id][2]}:null)||APTS[id];
+        return n&&isFinite(Number(n.lat))?alongTrackNmDepArr(dep.lat,dep.lon,arr.lat,arr.lon,n.lat,n.lon):0;
+      }
+      return alongId(a)-alongId(b);
+    });
   }
   var route=[dep.ident].concat(mids).concat([arr.ident]);
   // Directness guard: if too circuitous, reduce density and retry once.
@@ -4082,7 +4459,7 @@ function refineRouteIdsMonotonic(dep,arr,ids,rules){
     return t;
   }
   var direct=gcDist(dep.lat,dep.lon,arr.lat,arr.lon);
-  var maxRatio=(rules==='VFR')?1.06:1.12;
+  var maxRatio=(rules==='VFR')?(direct>160?1.12:1.07):(direct>280?1.14:1.12);
   var guard=0;
   while(keep.length>2&&len(keep)>direct*maxRatio&&guard<24){
     guard++;
@@ -4101,12 +4478,13 @@ function refineRouteIdsMonotonic(dep,arr,ids,rules){
   return keep;
 }
 function smartRouteGeometric(dep,arr,rules){
+  rules=normalizeFlightRules(rules);
   var dist=gcDist(dep.lat,dep.lon,arr.lat,arr.lon);
   if(dist<90) return [dep.ident,arr.ident];
   var isVfr=(rules==='VFR');
   // VFR: keep practical/direct corridor with only a few orientation references.
   // IFR: allow denser navaid chain.
-  var need=isVfr?(dist>=700?2:dist>=260?1:0):(dist>=900?3:dist>=600?2:dist>=300?2:dist>=160?1:0);
+  var need=isVfr?(dist>=700?2:dist>=190?1:0):(dist>=900?3:dist>=600?2:dist>=300?2:dist>=160?1:0);
   var xtkMax=isVfr?(dist>500?34:26):(dist>700?52:dist>400?38:30);
   var minAlong=Math.min(70,Math.max(25,dist*0.08));
   var maxAlong=dist-minAlong;
@@ -4156,6 +4534,7 @@ function smartRouteGeometric(dep,arr,rules){
   return [dep.ident].concat(mids.slice(0,Math.max(need,mids.length))).concat([arr.ident]);
 }
 async function smartRoute(dep,arr,rules){
+  rules=normalizeFlightRules(rules);
   await ensureOurAirportsNavaids();
   // 1. Preset routes — most reliable
   var rkey=dep.ident+'-'+arr.ident;
@@ -4164,7 +4543,14 @@ async function smartRoute(dep,arr,rules){
   // 2. General corridor builder (works for any airport pair)
   var sp=readEnrouteWpSpacingProfile();
   var corr=buildCorridorRouteIds(dep,arr,rules,sp.corridorNm);
-  if(rules==='VFR') return corr;
+  if(rules==='VFR'){
+    var dgc=gcDist(dep.lat,dep.lon,arr.lat,arr.lon);
+    if(corr.length<=2&&dgc>=110){
+      var geoTry=smartRouteGeometric(dep,arr,rules);
+      if(geoTry.length>corr.length) return geoTry;
+    }
+    return corr;
+  }
   // 3. Geometric fallback
   var geo=smartRouteGeometric(dep,arr,rules);
   // 3. AI enhancement
@@ -4413,7 +4799,8 @@ function initPatternSelector(){
   var sel=document.getElementById('pat-rwy-sel');
   if(!sel||!STATE.plan) return;
   sel.innerHTML='<option value="">-- Select Runway --</option>';
-  var rwys=(STATE.plan.arr&&STATE.plan.arr.rwys)||[];
+  var fav0=(STATE.plan&&STATE.plan.favRwy)||null;
+  var rwys=mergeDestRunwaysForUI(STATE.plan.arr,STATE.plan.arrIcao,fav0);
   rwys.forEach(function(r){
     var o=document.createElement('option');
     o.value=r.id+'|'+r.hdg+'|'+(r.pat||'L');
@@ -4421,7 +4808,7 @@ function initPatternSelector(){
     sel.appendChild(o);
   });
   if(rwys.length){
-    var fav=(STATE.plan&&STATE.plan.favRwy)||null;
+    var fav=fav0;
     var idx=1;
     if(fav){
       var fi=rwys.findIndex(function(r){return String(r.id).toUpperCase()===String(fav.id).toUpperCase();});
@@ -4681,11 +5068,102 @@ function renderMap(){
   }
   mapFitRoute();
   refreshMapContextLayers();
+  /* Redraw VFR pattern from current plan — stale _lastPatternArgs after ⚡ In-flight runway update showed wrong runway geometry */
+  if(_patternShown&&typeof drawPatternOnMap==='function'&&STATE.plan&&STATE.plan.favRwy){
+    try{
+      var g=getPatternMapGeometryFromPlan(STATE.plan);
+      if(g) drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt);
+    }catch(_e){}
+  }
 }
 function drawKnownAirspace(layer){
   if(!layer)return;
   [{n:'PHX',lat:33.4343,lon:-112.0116},{n:'DEN',lat:39.8561,lon:-104.6737},{n:'LAS',lat:36.0800,lon:-115.1653},{n:'LAX',lat:33.9425,lon:-118.4081},{n:'SLC',lat:40.7772,lon:-111.9685},{n:'SEA',lat:47.4433,lon:-122.3131},{n:'DFW',lat:32.9001,lon:-97.0381}].forEach(function(b){[10,20,30].forEach(function(nm,i){L.circle([b.lat,b.lon],{radius:nm*1852,color:'#0066ff',weight:1.5,fillColor:'#0066ff',fillOpacity:0.04,opacity:[0.5,0.35,0.2][i],dashArray:i===0?null:'4 4'}).bindTooltip('Class B: '+b.n+' '+nm+'nm').addTo(layer);});});
   [{n:'SDL',lat:33.6229,lon:-111.9106},{n:'TUS',lat:32.1161,lon:-110.9410},{n:'ABQ',lat:35.0403,lon:-106.8094},{n:'BZN',lat:45.7775,lon:-111.1528}].forEach(function(c){L.circle([c.lat,c.lon],{radius:8*1852,color:'#cc44cc',weight:1.5,fillColor:'#cc44cc',fillOpacity:0.04,opacity:0.5}).bindTooltip('Class C: '+c.n).addTo(layer);});
+}
+
+// ══ Sidebar Options + planned cruise — persist in localStorage (per browser / device) ══
+var AVISOR_ROUTE_PREFS_KEY='avisor_route_prefs_v1';
+function saveAvisorRoutePrefs(){
+  try{
+    var o={
+      icing:!!document.getElementById('opt-icing')?.checked,
+      night:!!document.getElementById('opt-night')?.checked,
+      terrain:!!document.getElementById('opt-terrain')?.checked,
+      vfr:!!document.getElementById('opt-vfr')?.checked,
+      apch:!!document.getElementById('opt-apch')?.checked,
+      direct:!!document.getElementById('opt-direct')?.checked,
+      proxApproach:!!document.getElementById('opt-prox-approach')?.checked,
+      proxNm:parseInt(document.getElementById('opt-prox-nm')?.value,10)||25,
+      wpSpacing:(document.getElementById('opt-wp-spacing')||{}).value||'auto',
+      apchPref:(document.getElementById('apch-pref')||{}).value||'auto',
+      planAlt:String((document.getElementById('plan-alt')||{}).value||'').trim()
+    };
+    localStorage.setItem(AVISOR_ROUTE_PREFS_KEY,JSON.stringify(o));
+  }catch(_e){}
+}
+/** Keeps GPS direct and VFR Visual Waypoints from contradicting each other in the sidebar + saved prefs. */
+window._avisorShadowDirect=null;
+function syncGpsDirectUiWithVfrVisual(opts){
+  opts=opts||{};
+  var v=document.getElementById('opt-vfr');
+  var d=document.getElementById('opt-direct');
+  var hint=document.getElementById('opt-direct-hint');
+  var row=document.getElementById('opt-direct-row');
+  if(!v||!d)return;
+  if(v.checked){
+    if(opts.captureShadow!==false&&!d.disabled) window._avisorShadowDirect=!!d.checked;
+    d.checked=false;
+    d.disabled=true;
+    if(hint) hint.style.display='block';
+    if(row) row.classList.add('tog-disabled');
+  }else{
+    d.disabled=false;
+    if(window._avisorShadowDirect!=null){
+      d.checked=window._avisorShadowDirect;
+      window._avisorShadowDirect=null;
+    }
+    if(hint) hint.style.display='none';
+    if(row) row.classList.remove('tog-disabled');
+  }
+  if(opts.persist&&typeof saveAvisorRoutePrefs==='function') saveAvisorRoutePrefs();
+}
+function loadAvisorRoutePrefs(){
+  try{
+    var raw=localStorage.getItem(AVISOR_ROUTE_PREFS_KEY);
+    if(!raw)return;
+    var o=JSON.parse(raw);
+    function setChk(id,key){var e=document.getElementById(id);if(e&&typeof o[key]==='boolean')e.checked=o[key];}
+    setChk('opt-icing','icing');
+    setChk('opt-night','night');
+    setChk('opt-terrain','terrain');
+    setChk('opt-vfr','vfr');
+    setChk('opt-apch','apch');
+    setChk('opt-direct','direct');
+    setChk('opt-prox-approach','proxApproach');
+    var pn=document.getElementById('opt-prox-nm');
+    if(pn&&o.proxNm!=null&&!isNaN(Number(o.proxNm))) pn.value=String(Math.min(80,Math.max(5,parseInt(o.proxNm,10)||25)));
+    var ws=document.getElementById('opt-wp-spacing');
+    if(ws&&o.wpSpacing){ for(var wi=0;wi<ws.options.length;wi++){ if(ws.options[wi].value===o.wpSpacing){ ws.selectedIndex=wi; break; } } }
+    var ap=document.getElementById('apch-pref');
+    if(ap&&o.apchPref){ for(var ai=0;ai<ap.options.length;ai++){ if(ap.options[ai].value===o.apchPref){ ap.selectedIndex=ai; break; } } }
+    var pa=document.getElementById('plan-alt');
+    if(pa&&typeof o.planAlt==='string') pa.value=o.planAlt;
+    if(document.getElementById('opt-prox-approach')&&document.getElementById('opt-prox-approach').checked&&typeof syncProximityApproachWatch==='function') syncProximityApproachWatch();
+  }catch(_e){}
+}
+function wireAvisorPrefsPersistence(){
+  var ov=document.getElementById('opt-vfr');
+  if(ov) ov.addEventListener('change',function(){ if(typeof syncGpsDirectUiWithVfrVisual==='function') syncGpsDirectUiWithVfrVisual({persist:true}); });
+  [['opt-icing','change'],['opt-night','change'],['opt-terrain','change'],['opt-vfr','change'],['opt-apch','change'],['opt-direct','change'],['opt-prox-approach','change'],['opt-prox-nm','change'],['opt-wp-spacing','change'],['apch-pref','change']].forEach(function(p){
+    var el=document.getElementById(p[0]);
+    if(el) el.addEventListener(p[1],saveAvisorRoutePrefs);
+  });
+  var pa=document.getElementById('plan-alt');
+  if(pa){
+    pa.addEventListener('change',saveAvisorRoutePrefs);
+    pa.addEventListener('blur',saveAvisorRoutePrefs);
+  }
 }
 
 
@@ -4710,6 +5188,11 @@ function initSafetyCheck(){
     if(m)m.style.display="flex";
   }
 }
-window.addEventListener("load",initSafetyCheck);
+window.addEventListener("load",function(){
+  initSafetyCheck();
+  if(typeof loadAvisorRoutePrefs==='function') loadAvisorRoutePrefs();
+  if(typeof syncGpsDirectUiWithVfrVisual==='function') syncGpsDirectUiWithVfrVisual({persist:true});
+  if(typeof wireAvisorPrefsPersistence==='function') wireAvisorPrefsPersistence();
+});
 </script></body>
 </html>
