@@ -1635,6 +1635,7 @@ async function buildWaypoints(plan){
   if(String(wpts[wpts.length-1].id).toUpperCase()!==String(arrRef.ident||arrIcao).toUpperCase()){
     wpts.push({id:String(arrRef.ident||arrIcao).toUpperCase(),lat:arrRef.lat,lon:arrRef.lon,type:'apt',desc:arrRef.name||arrIcao});
   }
+  if(!useGpsDirect) wpts=ensureHalfwayWaypointIfShortTrip(depRef,arrRef,wpts);
   if(dropped>0&&typeof toast==='function') toast('Dropped '+dropped+' unverified waypoint(s)');
   STATE.waypoints=wpts;STATE.apchFixes=apchFixes;
   return wpts;
@@ -1683,10 +1684,11 @@ function syncWaypointsAfterManualEdit(opts){
 function nearestChartFixNear(lat,lon,maxNm){
   maxNm=Math.max(8,Number(maxNm)||18);
   var best=null,bd=maxNm;
+  var vfrSnap=!!(document.getElementById('opt-vfr')&&document.getElementById('opt-vfr').checked);
   Object.keys(NAVCOORDS||{}).forEach(function(id){
     var n=NAVCOORDS[id];
     if(!n||!isFinite(Number(n.lat))||!isFinite(Number(n.lon))) return;
-    if(!(n.type==='vor'||n.type==='fix')) return;
+    if(!(n.type==='vor'||n.type==='fix'||(vfrSnap&&n.type==='vis'))) return;
     if(BLOCKED_ROUTE_IDS[String(id).toUpperCase()]) return;
     var d=gcDist(lat,lon,n.lat,n.lon);
     if(d<bd){bd=d;best={id:String(id).toUpperCase(),lat:n.lat,lon:n.lon,type:n.type||'fix',freq:n.freq||'',desc:n.desc||id};}
@@ -1751,8 +1753,8 @@ function readEnrouteWpSpacingProfile(){
   var el=document.getElementById('opt-wp-spacing');
   var v=(el&&el.value)||'auto';
   if(v==='auto')
-    // Prefer fewer enroute waypoints by default; only add extras when legs exceed ~100 NM.
-    return{corridorNm:80,targetNm:80,minLegNm:60,maxLegNm:100,minAlongPickSep:32};
+    // Auto: split legs roughly in the ~55–80 NM band so short mountain/VFR corridors still get a midpoint.
+    return{corridorNm:80,targetNm:72,minLegNm:52,maxLegNm:78,minAlongPickSep:28};
   var n=parseInt(v,10);
   if(!isFinite(n)||n<25) n=55;
   var minLeg=Math.max(45,Math.min(90,n));
@@ -1762,14 +1764,61 @@ function readEnrouteWpSpacingProfile(){
 
 function mergeCloseRouteWaypoints(wpts,minLegNm){
   if(!Array.isArray(wpts)||wpts.length<3||!isFinite(minLegNm)||minLegNm<18) return wpts||[];
+  var effMin=minLegNm;
+  var w0=wpts[0],w1=wpts[wpts.length-1];
+  if(w0&&w1&&isFinite(Number(w0.lat))&&isFinite(Number(w1.lat))){
+    var span=gcDist(w0.lat,w0.lon,w1.lat,w1.lon);
+    if(span<150) effMin=Math.min(minLegNm,Math.max(16,span*0.34));
+  }
   var out=[wpts[0]];
   for(var i=1;i<wpts.length-1;i++){
     var prev=out[out.length-1],cur=wpts[i];
     if(!prev||!cur||!isFinite(Number(prev.lat))||!isFinite(Number(prev.lon))||!isFinite(Number(cur.lat))||!isFinite(Number(cur.lon))) continue;
-    if(gcDist(prev.lat,prev.lon,cur.lat,cur.lon)>=minLegNm) out.push(cur);
+    if(gcDist(prev.lat,prev.lon,cur.lat,cur.lon)>=effMin) out.push(cur);
   }
   out.push(wpts[wpts.length-1]);
   return out;
+}
+
+/** Non–GPS-direct routes under 95 NM: guarantee one published midpoint (~halfway) for cockpit / ForeFlight spacing. */
+function ensureHalfwayWaypointIfShortTrip(depRef,arrRef,wpts){
+  if(!depRef||!arrRef||!Array.isArray(wpts)||wpts.length!==2) return wpts;
+  var a=wpts[0],b=wpts[1];
+  if(!a||!b||!isFinite(Number(a.lat))||!isFinite(Number(b.lat))) return wpts;
+  var dl=Number(depRef.lat),dLo=Number(depRef.lon),al=Number(arrRef.lat),aLo=Number(arrRef.lon);
+  if(!isFinite(dl)||!isFinite(al)) return wpts;
+  var direct=gcDist(dl,dLo,al,aLo);
+  if(direct>=95||direct<12) return wpts;
+  var targetAlong=direct*0.5;
+  var allowVis=!!(document.getElementById('opt-vfr')&&document.getElementById('opt-vfr').checked);
+  var best=null,bs=1e9;
+  Object.keys(NAVCOORDS||{}).forEach(function(id){
+    var n=NAVCOORDS[id];
+    if(!n||!isFinite(Number(n.lat))||!isFinite(Number(n.lon))) return;
+    if(!(n.type==='vor'||n.type==='fix'||(allowVis&&n.type==='vis'))) return;
+    if(BLOCKED_ROUTE_IDS[String(id).toUpperCase()]) return;
+    var along=alongTrackNmDepArr(dl,dLo,al,aLo,n.lat,n.lon);
+    if(along<8||along>direct-8) return;
+    var xtk=crossTrackDist(dl,dLo,al,aLo,n.lat,n.lon);
+    if(xtk>55) return;
+    var score=Math.abs(along-targetAlong)+xtk*3.2;
+    if(score<bs){bs=score;best={id:String(id).toUpperCase(),lat:n.lat,lon:n.lon,type:n.type||'vor',freq:n.freq||'',desc:n.desc||id};}
+  });
+  if(best) return[wpts[0],best,wpts[1]];
+  var ex={};
+  ex[String(depRef.ident||'').toUpperCase()]=1;
+  ex[String(arrRef.ident||'').toUpperCase()]=1;
+  var apIds=nearestPublishedAirportsAlongCorridor(depRef,arrRef,1,95,ex);
+  if(apIds&&apIds.length){
+    var aid=String(apIds[0]).toUpperCase();
+    var aptNode=APTS[aid];
+    if(aptNode&&isFinite(Number(aptNode.lat)))
+      return[wpts[0],{id:aid,lat:aptNode.lat,lon:aptNode.lon,type:'apt',desc:aptNode.name||aid},wpts[1]];
+    var row=AIRPORTS_DB&&AIRPORTS_DB[aid];
+    if(row&&isFinite(Number(row[1]))&&isFinite(Number(row[2])))
+      return[wpts[0],{id:aid,lat:Number(row[1]),lon:Number(row[2]),type:'apt',desc:row[0]||aid},wpts[1]];
+  }
+  return wpts;
 }
 
 function simplifyRouteByDetourRemoval(depRef,arrRef,wpts){
@@ -1890,12 +1939,13 @@ function densifyWaypointsByDistance(wpts,depRef,arrRef,profile){
     if(inserts>0){
       var cands=[];
       var distA2Arr=arrLat!=null?gcDist(a.lat,a.lon,arrLat,arrLon):null;
+      var allowVisD=!!(document.getElementById('opt-vfr')&&document.getElementById('opt-vfr').checked);
       Object.keys(NAVCOORDS||{}).forEach(function(id){
         var n=NAVCOORDS[id];
         if(!n||!isFinite(Number(n.lat))||!isFinite(Number(n.lon))) return;
         if(!isConusCoord(n.lat,n.lon)) return;
         if(id===a.id||id===b.id) return;
-        if(!(n.type==='vor'||n.type==='fix')) return;
+        if(!(n.type==='vor'||n.type==='fix'||(allowVisD&&n.type==='vis'))) return;
         if(BLOCKED_ROUTE_IDS[String(id).toUpperCase()]) return;
         var along=alongTrackNmDepArr(a.lat,a.lon,b.lat,b.lon,n.lat,n.lon);
         if(along<8||along>leg-8) return;
@@ -1958,10 +2008,11 @@ function splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,profile){
       var leg=gcDist(a.lat,a.lon,b.lat,b.lon);
       if(leg<=hardCap) continue;
       var best=null,bs=1e9;
+      var allowVisS=!!(document.getElementById('opt-vfr')&&document.getElementById('opt-vfr').checked);
       Object.keys(NAVCOORDS||{}).forEach(function(id){
         var n=NAVCOORDS[id];
         if(!n||!isFinite(Number(n.lat))||!isFinite(Number(n.lon))) return;
-        if(!(n.type==='vor'||n.type==='fix')) return;
+        if(!(n.type==='vor'||n.type==='fix'||(allowVisS&&n.type==='vis'))) return;
         var uid=String(id).toUpperCase();
         if(BLOCKED_ROUTE_IDS[uid]||hasId(uid)) return;
         var along=alongTrackNmDepArr(a.lat,a.lon,b.lat,b.lon,n.lat,n.lon);
@@ -2025,12 +2076,13 @@ function enforceDirectnessAndRebuild(depRef,arrRef,wpts,rules,profile){
 
   var step=Math.max(40,Math.min(95,Number(profile.targetNm)||55));
   var xtkMax=(rules==='VFR')?30:52;
+  var allowVisE=!!(document.getElementById('opt-vfr')&&document.getElementById('opt-vfr').checked);
   var cands=[];
   Object.keys(NAVCOORDS||{}).forEach(function(id){
     var n=NAVCOORDS[id];
     if(!n||!isFinite(Number(n.lat))||!isFinite(Number(n.lon))) return;
     if(!isConusCoord(n.lat,n.lon)) return;
-    if(!(n.type==='vor'||n.type==='fix')) return;
+    if(!(n.type==='vor'||n.type==='fix'||(rules==='VFR'&&allowVisE&&n.type==='vis'))) return;
     if(BLOCKED_ROUTE_IDS[String(id).toUpperCase()]) return;
     var along=alongTrackNmDepArr(depRef.lat,depRef.lon,arrRef.lat,arrRef.lon,n.lat,n.lon);
     if(along<12||along>direct-12) return;
@@ -3792,6 +3844,11 @@ var NAVCOORDS={
   RSK:{lat:39.5258,lon:-107.7697,type:"fix",desc:"RSK intersection"},
   MEYRS:{lat:39.3611,lon:-107.0278,type:"fix",desc:"MEYRS intersection"},
   HOBES:{lat:34.9389,lon:-112.9040,type:"fix",desc:"HOBES RNAV fix (AZ)"},
+  VCMPV:{lat:34.5639,lon:-111.8542,type:"vis",desc:"Camp Verde area — VFR visual planning checkpoint"},
+  VRIMX:{lat:34.6325,lon:-111.7510,type:"vis",desc:"Rimrock / Lake Montezuma — VFR visual planning checkpoint"},
+  VSENO:{lat:34.8697,lon:-111.7609,type:"vis",desc:"Sedona / Oak Creek — VFR visual planning checkpoint"},
+  VCK01:{lat:33.8800,lon:-111.9000,type:"vis",desc:"Cave Creek / Carefree Hwy visual checkpoint"},
+  VJR02:{lat:34.9800,lon:-112.0500,type:"vis",desc:"Jerome / Mingus Mountain visual checkpoint"},
   STEWW:{lat:37.2455,lon:-113.5356,type:"fix",desc:"STEWW RNAV fix (UT)"},
   KUBAE:{lat:39.8200,lon:-114.6000,type:"fix",desc:"KUBAE RNAV fix (NV corridor, verify against current chart)"},
   PARZZ:{lat:41.6041,lon:-115.0360,type:"fix",desc:"PARZZ RNAV fix (NV)"},
@@ -4114,6 +4171,7 @@ function isMetroOrPublicAirportName(name){
   if(nm.indexOf('METRO')>=0) return true;
   if(nm.indexOf('AIRPORT')>=0&&nm.length>=22) return true;
   if(nm.indexOf('FIELD')>=0&&nm.length>=18) return true;
+  if(nm.indexOf('SEDONA')>=0||nm.indexOf('PAYSON')>=0||nm.indexOf('PRESCOTT')>=0||nm.indexOf('VERDE')>=0||nm.indexOf('RIMROCK')>=0||nm.indexOf('COTTONWOOD')>=0) return true;
   return false;
 }
 /** VFR: Victor fixes on segments that parallel dep→arr, plus metro/public fields near the great circle (city-scale references). */
@@ -4150,7 +4208,7 @@ function buildVfrEnrouteHintSets(dep,arr){
   });
   var bbMinLat=Math.min(dep.lat,arr.lat)-2.8,bbMaxLat=Math.max(dep.lat,arr.lat)+2.8;
   var bbMinLon=Math.min(dep.lon,arr.lon)-4.2,bbMaxLon=Math.max(dep.lon,arr.lon)+4.2;
-  if(AIRPORTS_DB&&dist>120){
+  if(AIRPORTS_DB&&dist>=50){
     Object.keys(AIRPORTS_DB).forEach(function(id){
       if(!/^K[A-Z0-9]{3}$/.test(id)) return;
       var row=AIRPORTS_DB[id];
@@ -4245,11 +4303,13 @@ function nearestPublishedAirportsAlongCorridor(dep,arr,want,maxXtkNm,excludeMap)
 }
 function buildCorridorRouteIds(dep,arr,rules,targetNm){
   rules=normalizeFlightRules(rules);
+  var vfrVisualOn=!!(document.getElementById('opt-vfr')&&document.getElementById('opt-vfr').checked);
   if(!dep||!arr||!isFinite(Number(dep.lat))||!isFinite(Number(dep.lon))||!isFinite(Number(arr.lat))||!isFinite(Number(arr.lon))){
     return [dep&&dep.ident?dep.ident:'DEP',arr&&arr.ident?arr.ident:'ARR'];
   }
   var direct=gcDist(dep.lat,dep.lon,arr.lat,arr.lon);
-  if(direct<95) return [dep.ident,arr.ident];
+  if(direct<32) return [dep.ident,arr.ident];
+  if(direct<95&&!(rules==='VFR'&&vfrVisualOn)) return [dep.ident,arr.ident];
   var tn=Number(targetNm);
   var target=(isFinite(tn)&&tn>=25&&tn<=140)?tn:55;
   var needBase=Math.max(1,Math.round(direct/(target*1.38))-1);
@@ -4257,7 +4317,6 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
   var minNeedByDistance=direct>=520?4:direct>=260?3:direct>=195?2:1;
   var need=Math.max(needBase,minNeedByDistance);
   var conus=isConusCoord(dep.lat,dep.lon)&&isConusCoord(arr.lat,arr.lon);
-  var vfrVisualOn=!!(document.getElementById('opt-vfr')&&document.getElementById('opt-vfr').checked);
   var xtkMax=(rules==='VFR')?(direct>320?42:direct>160?34:28):48;
   var airwayBias=rules==='IFR'?airwayBiasSetForCorridor(dep,arr):{};
   var routeHints=rules==='VFR'&&vfrVisualOn?buildVfrEnrouteHintSets(dep,arr):{victor:{},metro:{}};
@@ -4275,6 +4334,7 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
     var xtk=crossTrackDist(dep.lat,dep.lon,arr.lat,arr.lon,n.lat,n.lon);
     var xMax=xtkMax;
     if(rules==='VFR'&&vfrVisualOn&&(n.type==='apt'||routeHints.metro[uid])) xMax=Math.max(xtkMax,40);
+    if(rules==='VFR'&&vfrVisualOn&&n.type==='vis') xMax=Math.max(xMax,44);
     if(xtk>xMax) return;
     candSeen[uid]=1;
     cands.push({id:uid,along:along,xtk:xtk,lat:n.lat,lon:n.lon,type:n.type||'fix'});
@@ -4282,7 +4342,7 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
   Object.keys(NAVCOORDS||{}).forEach(function(id){
     var n=NAVCOORDS[id];
     if(!n) return;
-    if(n.type==='vor'||n.type==='fix') pushCand(id,n);
+    if(n.type==='vor'||n.type==='fix'||(rules==='VFR'&&vfrVisualOn&&n.type==='vis')) pushCand(id,n);
   });
   // VFR visual references: allow coded airport checkpoints near corridor.
   if(rules==='VFR'&&vfrVisualOn){
@@ -4332,6 +4392,7 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
         if(routeHints.victor[cid]) score-=28;
         if(routeHints.metro[cid]) score-=18;
         if(c.type==='apt') score-=8;
+        else if(c.type==='vis') score-=12;
         else if(c.type==='vor') score-=5;
         else if(c.type==='fix') score+=1;
       }else{
@@ -4480,7 +4541,7 @@ function refineRouteIdsMonotonic(dep,arr,ids,rules){
 function smartRouteGeometric(dep,arr,rules){
   rules=normalizeFlightRules(rules);
   var dist=gcDist(dep.lat,dep.lon,arr.lat,arr.lon);
-  if(dist<90) return [dep.ident,arr.ident];
+  if(dist<38) return [dep.ident,arr.ident];
   var isVfr=(rules==='VFR');
   // VFR: keep practical/direct corridor with only a few orientation references.
   // IFR: allow denser navaid chain.
@@ -4545,7 +4606,7 @@ async function smartRoute(dep,arr,rules){
   var corr=buildCorridorRouteIds(dep,arr,rules,sp.corridorNm);
   if(rules==='VFR'){
     var dgc=gcDist(dep.lat,dep.lon,arr.lat,arr.lon);
-    if(corr.length<=2&&dgc>=110){
+    if(corr.length<=2&&dgc>=40){
       var geoTry=smartRouteGeometric(dep,arr,rules);
       if(geoTry.length>corr.length) return geoTry;
     }
