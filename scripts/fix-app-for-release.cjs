@@ -35,9 +35,9 @@ function showToast(msg, type) {
 }
 <\/script>`;
 
-const swScriptEnd = '</script>\n<script src="./vendor/pdf.min.js">';
+const swScriptEnd = '<script src="./vendor/pdf.min.js"><\/script>';
 if (html.includes(swScriptEnd)) {
-  html = html.replace(swScriptEnd, '</script>\n' + toastScript + '\n<script src="./vendor/pdf.min.js">');
+    html = html.replace(swScriptEnd, toastScript + '\n' + swScriptEnd);
   console.log('  showToast helper injected.');
 } else {
   console.warn('  WARNING: SW script anchor not found - showToast not injected. Check manually.');
