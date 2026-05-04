@@ -26,10 +26,15 @@ html=html.replace(/\balert\(('(?:[^'\\]|\\.)*'\s*\+[^)]{0,80})\)/g,'showToast($1
 html=html.replace(/\balert\(([A-Za-z_$][^)]{0,60})\)/g,'showToast($1)');
 const aa=(html.match(/\balert\(/g)||[]).length;
 if(ab>aa){p++;console.log('  alert() replaced:',ab-aa);}
+
+// Safe console.log removal: only remove the console.log() call itself, not surrounding code
 const lb=(html.match(/console\.log/g)||[]).length;
-html=html.replace(/[ \t]*console\.log\([^\n]+\n/g,'\n');
+html=html.replace(/\bconsole\.log\([^)]*\);/g,'');
+// Clean up lines that are now blank due to removal
+html=html.replace(/^([ \t]*)\n/gm,(m,ws)=>ws.trim()===''?'':m);
 const la=(html.match(/console\.log/g)||[]).length;
 if(lb>la){p++;console.log('  console.log removed:',lb-la);}
+
 const oL='var legNm=0.38,crossNm=0.34,depNm=0.48,downNm=0.55,finalNm=0.28;';
 const nL='var legNm=0.5,crossNm=0.5,depNm=0.9,downNm=1.0,finalNm=0.5;';
 if(html.includes(oL)){html=html.replace(oL,nL);p++;console.log('  Pattern legs fixed');}
