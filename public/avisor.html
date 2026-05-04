@@ -3984,7 +3984,7 @@ async function ensureOurAirportsNavaids(){
             if(!NAVCOORDS[id]) NAVCOORDS[id]={lat:lat,lon:lon,type:'vor',freq:fmhz,desc:desc};
             seen[id]=1;added++;
           });
-          if(added>0){
+          if(added>0){return true;}
         }catch(_e){}
       }
       var urls=[
