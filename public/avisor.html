@@ -2894,14 +2894,14 @@ function ensureAvisorPatternPane(){
     if(el)el.style.zIndex=650;
   }catch(_e){}
 }
-function drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,altFt){
+function drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,altFt,rwyLenNm){
   if(!window._map)return;
   ensureAvisorPatternPane();
   clearPatternFromMap();
   _lastPatternArgs={rwyHdg:rwyHdg,rwyLat:rwyLat,rwyLon:rwyLon,leftTraffic:leftTraffic,altFt:altFt};
   /* rwyHdg = magnetic outbound from landing threshold along runway (AIM-style rectangular pattern). Legs ~½ NM — schematic only, not for navigation. */
   var R=3440.065,nm=1/R;
-  var legNm=0.5,crossNm=0.5,depNm=0.9,downNm=1.0,finalNm=0.5;
+  var rl=rwyLenNm||0.9;var depNm=Math.max(0.9,Math.min(rl,2.5));var legNm=Math.max(0.5,depNm*0.4);var crossNm=Math.max(0.5,depNm*0.4);var downNm=Math.max(1.0,depNm*0.85);var finalNm=Math.max(0.5,depNm*0.4);
   var turn=leftTraffic?-1:1;
   var fin=(((rwyHdg%360)+360)%360);
   var crossHdg=(fin+turn*90+360)%360;
@@ -3232,7 +3232,7 @@ function showPatternOnMap(){
   if(!STATE||!STATE.plan){if(typeof toast==='function')toast('Build a plan first');return;}
   var g=getPatternMapGeometryFromPlan(STATE.plan);
   if(!g){if(typeof toast==='function')toast('No destination data');return;}
-  drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt);
+  drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,g.rwyLenNm||g.lenNm||g.len_nm);
   if(typeof tab==='function')tab('map');
   if(typeof toast==='function')toast('VFR pattern (AIM-style schematic ~½ NM legs — verify against chart)');
 }
@@ -5134,7 +5134,7 @@ function renderMap(){
   if(_patternShown&&typeof drawPatternOnMap==='function'&&STATE.plan&&STATE.plan.favRwy){
     try{
       var g=getPatternMapGeometryFromPlan(STATE.plan);
-      if(g) drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt);
+      if(g) drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,g.rwyLenNm||g.lenNm||g.len_nm);
     }catch(_e){}
   }
 }
