@@ -1,5 +1,15 @@
-# PilotAvisor PWA — Option B static hosting (HTTPS)
-# Build: npm ci && npm run plane   ·   Publish folder: dist
+# PilotAvisor PWA — static hosting, no build step
+# Serves public/ directly — avisor.html is the single-file app
 [build]
-  command = "npm run plane"
-  publish = "dist"
+  command = ""
+  publish = "public"
+
+[[headers]]
+  for = "/avisor.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
