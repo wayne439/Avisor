@@ -2898,10 +2898,10 @@ function drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,altFt,rwyLenNm){
   if(!window._map)return;
   ensureAvisorPatternPane();
   clearPatternFromMap();
-  _lastPatternArgs={rwyHdg:rwyHdg,rwyLat:rwyLat,rwyLon:rwyLon,leftTraffic:leftTraffic,altFt:altFt};
+  _lastPatternArgs={rwyHdg:rwyHdg,rwyLat:rwyLat,rwyLon:rwyLon,leftTraffic:leftTraffic,altFt:altFt,rwyLenNm:rwyLenNm||0};
   /* rwyHdg = magnetic outbound from landing threshold along runway (AIM-style rectangular pattern). Legs ~½ NM — schematic only, not for navigation. */
   var R=3440.065,nm=1/R;
-  var rl=rwyLenNm||0.9;var depNm=Math.max(0.9,Math.min(rl,2.5));var legNm=Math.max(0.5,depNm*0.4);var crossNm=Math.max(0.5,depNm*0.4);var downNm=Math.max(1.0,depNm*0.85);var finalNm=Math.max(0.5,depNm*0.4);
+  var _rwy=rwyLenNm>0.3?rwyLenNm:(function(){try{var rwys=(window.STATE&&STATE.plan&&STATE.plan.arr&&STATE.plan.arr.rwys)||[];var match=rwys.find(function(r){return Math.abs(r.hdg-rwyHdg)<5;});return match&&match.len?(match.len/6076):1.0;}catch(e){return 1.0;}})();var rl=Math.max(1.0,Math.min(_rwy,2.5));var depNm=rl;var legNm=Math.max(0.5,depNm*0.4);var crossNm=Math.max(0.5,depNm*0.4);var downNm=Math.max(1.0,depNm*0.85);var finalNm=Math.max(0.5,depNm*0.4);
   var turn=leftTraffic?-1:1;
   var fin=(((rwyHdg%360)+360)%360);
   var crossHdg=(fin+turn*90+360)%360;
@@ -3232,7 +3232,7 @@ function showPatternOnMap(){
   if(!STATE||!STATE.plan){if(typeof toast==='function')toast('Build a plan first');return;}
   var g=getPatternMapGeometryFromPlan(STATE.plan);
   if(!g){if(typeof toast==='function')toast('No destination data');return;}
-  drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,(g.len||0)/6076);
+  drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,g.rwyLenNm||0);
   if(typeof tab==='function')tab('map');
   if(typeof toast==='function')toast('VFR pattern (AIM-style schematic ~½ NM legs — verify against chart)');
 }
@@ -5134,7 +5134,7 @@ function renderMap(){
   if(_patternShown&&typeof drawPatternOnMap==='function'&&STATE.plan&&STATE.plan.favRwy){
     try{
       var g=getPatternMapGeometryFromPlan(STATE.plan);
-      if(g) drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,(g.len||0)/6076);
+      if(g) drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,g.rwyLenNm||0);
     }catch(_e){}
   }
 }
