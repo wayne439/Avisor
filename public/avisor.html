@@ -3232,7 +3232,7 @@ function showPatternOnMap(){
   if(!STATE||!STATE.plan){if(typeof toast==='function')toast('Build a plan first');return;}
   var g=getPatternMapGeometryFromPlan(STATE.plan);
   if(!g){if(typeof toast==='function')toast('No destination data');return;}
-  drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,g.rwyLenNm||g.lenNm||g.len_nm);
+  drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,(g.len||0)/6076);
   if(typeof tab==='function')tab('map');
   if(typeof toast==='function')toast('VFR pattern (AIM-style schematic ~½ NM legs — verify against chart)');
 }
@@ -5134,7 +5134,7 @@ function renderMap(){
   if(_patternShown&&typeof drawPatternOnMap==='function'&&STATE.plan&&STATE.plan.favRwy){
     try{
       var g=getPatternMapGeometryFromPlan(STATE.plan);
-      if(g) drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,g.rwyLenNm||g.lenNm||g.len_nm);
+      if(g) drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,(g.len||0)/6076);
     }catch(_e){}
   }
 }
