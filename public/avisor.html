@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -13,27 +13,6 @@
 <script>
 /* Skip SW on Vite dev (5173): avoids cache/intercept quirks; LAN http://10.x is not a secure SW context anyway. */
 window.addEventListener('load',function(){var p=location.port;if(p==='5173')return;if(!('serviceWorker'in navigator))return;navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(function(){});});
-</script>
-<script>
-/* showToast: non-blocking replacement for alert() - added for release */
-function showToast(msg, type) {
-    type = type || 'warn';
-  var colours = { info: '#1a3a5c', warn: '#6b3900', error: '#6b1a1a', ok: '#1a4a2a' };
-  var el = document.createElement('div');
-  el.style.cssText = [
-        'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
-        'background:' + (colours[type] || colours.warn), 'color:#fff',
-        'padding:10px 22px', 'border-radius:8px', 'font-size:14px', 'font-weight:500',
-        'box-shadow:0 4px 16px rgba(0,0,0,.45)', 'z-index:99999',
-        'max-width:88vw', 'text-align:center', 'pointer-events:none', 'transition:opacity .4s'
-      ].join(';');
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(function () {
-    el.style.opacity = '0';
-    setTimeout(function () { el.remove(); }, 400);
-  }, 3400);
-}
 </script>
 <script src="./vendor/pdf.min.js"></script>
 <style>
@@ -379,6 +358,7 @@ canvas#cgc{display:block;width:100%;height:auto}
 <link rel="stylesheet" href="./vendor/leaflet/leaflet.min.css">
 <script src="./vendor/leaflet/leaflet.min.js"></script>
 <script src="./vendor/esri-leaflet.js"></script>
+<script>function showToast(msg,type){type=type||"warn";var el=document.createElement("div");var bg={info:"#1a3a5c",warn:"#6b3900",error:"#6b1a1a"};el.style.cssText="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:"+(bg[type]||bg.warn)+";color:#fff;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.45);z-index:99999;max-width:88vw;text-align:center;pointer-events:none;transition:opacity .4s";el.textContent=msg;document.body.appendChild(el);setTimeout(function(){el.style.opacity="0";setTimeout(function(){el.remove();},400);},3400);}</script>
 </head>
 <body><div id="safety-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center"><div style="background:#0d1829;border:1px solid #38beff;border-radius:12px;padding:32px;max-width:480px;margin:20px;font-family:monospace"><div style="color:#38beff;font-size:13px;font-weight:bold;letter-spacing:2px;margin-bottom:16px">⚠ SAFETY NOTICE</div><div style="color:#d8e8ff;font-size:12px;line-height:1.8;margin-bottom:20px">PilotAvisor is a <strong style="color:#ffaa00">flight planning aid only</strong>.<br><br>It is <strong style="color:#ff5555">NOT approved</strong> for navigation and does not replace:<br>• Official FAA charts and publications<br>• A proper preflight weather briefing<br>• ATC clearances and NOTAMs<br>• Your pilot-in-command judgment<br><br>Always file a flight plan and brief via <strong style="color:#38beff">1800wxbrief.com</strong> before flight.</div><label style="display:flex;align-items:center;gap:10px;color:#a0b8cc;font-size:11px;margin-bottom:20px;cursor:pointer"><input type="checkbox" id="disclaimer-check" style="width:16px;height:16px"> I understand this is a planning aid only and not certified navigation software.</label><button onclick="acknowledgeSafety()" id="disclaimer-btn" style="width:100%;padding:12px;background:#003d1a;border:1px solid #00e57a;border-radius:6px;color:#00e57a;font-family:monospace;font-size:12px;letter-spacing:1px;cursor:pointer;opacity:0.5" disabled>ACKNOWLEDGE &amp; CONTINUE</button></div></div>
 
@@ -1271,7 +1251,7 @@ const PROCS={KASE:['RNAV (RNP) Z RWY 15 — aircraft authorization required','LO
 (function(){
   if(typeof APT!=='undefined'&&typeof APTS!=='undefined'){
     Object.keys(APT).forEach(function(k){APTS[k]=APT[k];});
-
+    console.log('Merged '+Object.keys(APT).length+' APT entries into APTS');
   }
 })();
 
@@ -2563,7 +2543,7 @@ async function buildPlan(){
       // Mark the stop waypoint specially
       const stopIdx = leg1.length - 1;
       if(wpts[stopIdx]) wpts[stopIdx].fuelStop = true;
-
+      console.log('Fuel stop route: '+wpts.map(function(w){return w.id;}).join(' → '));
     } else {
       wpts = await buildWaypoints(plan);
     }
@@ -3116,7 +3096,7 @@ function loadNavaidDB(){
       db.push({id:cols[iIdent],name:cols[iName],type:t,lat:lat,lon:lon});
     }
     _navaidDB=db;
-
+    console.log('[Avisor] Navaid DB loaded:',db.length,'US navaids');
     return db;
   });
 }
@@ -3984,7 +3964,7 @@ async function ensureOurAirportsNavaids(){
             if(!NAVCOORDS[id]) NAVCOORDS[id]={lat:lat,lon:lon,type:'vor',freq:fmhz,desc:desc};
             seen[id]=1;added++;
           });
-          if(added>0){return true;}
+          if(added>0){console.log('Loaded navaid bundle:',added);return true;}
         }catch(_e){}
       }
       var urls=[
@@ -4013,7 +3993,7 @@ async function ensureOurAirportsNavaids(){
         if(!NAVCOORDS[id]) NAVCOORDS[id]={lat:lat,lon:lon,type:'vor',freq:fmhz,desc:name+' '+typ};
         seen[id]=1;added++;
       }
-      if(added>0)
+      if(added>0) console.log('Loaded OurAirports navaids:',added);
       return true;
     }catch(e){console.warn('OurAirports navaids',e&&e.message);return false;}
   })();
@@ -4110,7 +4090,7 @@ async function ensureOurAirportsEnrichment(){
       }
     }catch(e2){console.warn('OurAirports comments',e2&&e2.message);}
     if(freqLoaded===0&&commentLoaded===0) console.warn('OurAirports enrichment did not load (checked local + remote URLs)');
-    else
+    else console.log('OurAirports enrichment loaded',freqLoaded,'frequencies',commentLoaded,'comments');
     return true;
   })();
   return _ourAirportsEnrichmentPromise;
@@ -4651,7 +4631,7 @@ async function smartRoute(dep,arr,rules){
     if(mids.length>0&&mids.length<=mf){
       var ok=true;
       for(var i=0;i<mids.length;i++){var nc=NAVCOORDS[mids[i]];if(!nc){ok=false;break;}var xtk=crossTrackDist(dep.lat,dep.lon,arr.lat,arr.lon,nc.lat,nc.lon);var d1=gcDist(dep.lat,dep.lon,nc.lat,nc.lon);if(xtk>42||d1>=dist){ok=false;break;}}
-      if(ok){
+      if(ok){console.log('AI route:',dep.ident,mids.join(' '),arr.ident);return [dep.ident].concat(mids).concat([arr.ident]);}
     }
   }catch(e){console.warn('AI route:',e.message);}
   return geo;
