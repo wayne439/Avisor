@@ -4,6 +4,19 @@
   command = ""
   publish = "public"
 
+# API proxies — mirror Vite dev server proxy rules
+[[redirects]]
+  from = "/awc-api/*"
+  to = "https://aviationweather.gov/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/faa-api/*"
+  to = "https://api.faa.gov/:splat"
+  status = 200
+  force = true
+
 [[headers]]
   for = "/avisor.html"
   [headers.values]
