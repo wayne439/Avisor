@@ -1250,7 +1250,7 @@ const PROCS={KASE:['RNAV (RNP) Z RWY 15 — aircraft authorization required','LO
 (function(){
   if(typeof APT!=='undefined'&&typeof APTS!=='undefined'){
     Object.keys(APT).forEach(function(k){APTS[k]=APT[k];});
-    console.log('Merged '+Object.keys(APT).length+' APT entries into APTS');
+
   }
 })();
 
@@ -1735,7 +1735,7 @@ function replaceWaypointAtIndex(idx){
   var raw=typeof prompt==='function'?prompt('Replace with VOR, FIX, or airport ICAO (e.g. DRK, KSLC):',hint):'';
   if(raw==null||String(raw).trim()==='') return;
   var wp=waypointFromUserIdent(raw);
-  if(!wp){alert('Unknown fix or airport: '+String(raw).trim().toUpperCase());return;}
+  if(!wp){showToast('Unknown fix or airport: '+String(raw).trim().toUpperCase());return;}
   var prev=wpts[i];
   if(prev&&prev.fuelStop) wp.fuelStop=true;
   wpts[i]=wp;
@@ -2414,7 +2414,7 @@ async function previewBriefWx(){
   var el=document.getElementById('pre-wx-snap');
   if(!d||!a){
     if(typeof toast==='function')toast('Enter departure and destination ICAO codes.');
-    else alert('Enter departure and destination ICAO codes.');
+    else showToast('Enter departure and destination ICAO codes.');
     return;
   }
   if(el)el.innerHTML='<span style="color:var(--sky)">Loading METAR…</span>';
@@ -2459,23 +2459,23 @@ async function buildPlan(){
   const nightmtn=document.getElementById('opt-night').checked;
   const terrainOn=document.getElementById('opt-terrain').checked;
   const fuelStopIcao = getFuelStop ? getFuelStop() : '';
-  if(!depIcao||!arrIcao){alert('Enter departure and destination ICAO codes.');return;}
+  if(!depIcao||!arrIcao){showToast('Enter departure and destination ICAO codes.');return;}
   if(!isKnownAirportIcao(depIcao)){
     if(typeof toast==='function') toast('Departure is not a known airport: '+depIcao);
-    else alert('Departure is not a known airport: '+depIcao);
+    else showToast('Departure is not a known airport: '+depIcao);
     validateRouteIcaoField('dep');
     return;
   }
   if(!isKnownAirportIcao(arrIcao)){
     if(typeof toast==='function') toast('Destination is not a known airport: '+arrIcao);
-    else alert('Destination is not a known airport: '+arrIcao);
+    else showToast('Destination is not a known airport: '+arrIcao);
     validateRouteIcaoField('arr');
     return;
   }
   const fsIcao=normalizeFormIcao(fuelStopIcao);
   if(fuelStopIcao&&fsIcao&&!isKnownAirportIcao(fsIcao)){
     if(typeof toast==='function') toast('Fuel stop is not a known airport: '+fsIcao);
-    else alert('Fuel stop is not a known airport: '+fsIcao);
+    else showToast('Fuel stop is not a known airport: '+fsIcao);
     return;
   }
   const ac=ACPERF[acid];
@@ -2542,7 +2542,7 @@ async function buildPlan(){
       // Mark the stop waypoint specially
       const stopIdx = leg1.length - 1;
       if(wpts[stopIdx]) wpts[stopIdx].fuelStop = true;
-      console.log('Fuel stop route: '+wpts.map(function(w){return w.id;}).join(' → '));
+
     } else {
       wpts = await buildWaypoints(plan);
     }
@@ -2573,7 +2573,7 @@ async function buildPlan(){
     addChatMsg('ai',`Plan built: **${depIcao} → ${arrIcao}** in the ${ac.name}. ${eteMin} min, ${totalFuel} gal, ${alt.toLocaleString()} ft. ${wpts.length} waypoints in .fpl file. ${STATE.apchFixes.length?`Approach fixes: ${STATE.apchFixes.slice(0,-1).map(f=>f.id).join(', ')}.`:''} ${hazards.length?hazards.length+' hazard(s) flagged.':'No major hazards.'}`);
   
     syncProximityApproachWatch();
-  }catch(e){console.error(e);alert('Error: '+e.message);}
+  }catch(e){console.error(e);showToast('Error: '+e.message);}
   finally{btns.forEach(function(b){ b.disabled=false; });setOv(false);}
 }
 function syncAC(){const v=document.getElementById('aircraft').value;const w=document.getElementById('wb-ac');if(w&&WBDATA[v])w.value=v;loadWB();}
@@ -3095,7 +3095,7 @@ function loadNavaidDB(){
       db.push({id:cols[iIdent],name:cols[iName],type:t,lat:lat,lon:lon});
     }
     _navaidDB=db;
-    console.log('[Avisor] Navaid DB loaded:',db.length,'US navaids');
+
     return db;
   });
 }
@@ -3247,14 +3247,14 @@ window.addEventListener('load',function(){
     }
   },1000);
 });function openInMaps(){
-  if(!STATE.plan||!STATE.plan.arr){alert("Build a plan first");return;}
+  if(!STATE.plan||!STATE.plan.arr){showToast("Build a plan first");return;}
   var lat=STATE.plan.arr.lat,lon=STATE.plan.arr.lon,name=STATE.plan.arrIcao;
   var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(/Mac/.test(navigator.platform)&&navigator.maxTouchPoints>0);
   if(isIOS){window.open("maps://?daddr="+lat+","+lon+"&q="+encodeURIComponent(name),"_blank");}
   else{window.open("https://www.google.com/maps/dir/?api=1&destination="+lat+","+lon,"_blank");}
 }
 function downloadFPL(){
-  if(!STATE.fplXML){alert('Build a flight plan first.');return;}
+  if(!STATE.fplXML){showToast('Build a flight plan first.');return;}
   const p=STATE.plan;
   const fn=`${p.depIcao}-${p.arrIcao}-${new Date().toISOString().slice(0,10)}.fpl`;
   const blob=new Blob([STATE.fplXML],{type:'application/xml'});
@@ -3264,7 +3264,7 @@ function downloadFPL(){
 function copyFPL(){if(!STATE.fplXML)return;navigator.clipboard.writeText(STATE.fplXML).then(()=>toast('FPL XML COPIED ✓'));}
 function cpRoute(which){if(!STATE.plan)return;navigator.clipboard.writeText(STATE.routes[which]||'').then(()=>toast('ROUTE COPIED ✓'));}
 function openFF(){
-  if(!STATE.plan){ alert('Build a flight plan first.'); return; }
+  if(!STATE.plan){ showToast('Build a flight plan first.'); return; }
   var p=STATE.plan;
   var routeIds=(STATE.waypoints||[]).map(function(w){return String((w&&w.id)||'').toUpperCase().replace(/[^A-Z0-9]/g,'');})
     .filter(function(id){return /^[A-Z0-9]{3,5}$/.test(id)&&id.indexOf('USR')!==0&&!BLOCKED_ROUTE_IDS[id];});
@@ -3288,7 +3288,7 @@ function openFF(){
   },1200);
 }
 function openFFDirect(){
-  if(!STATE.plan){ alert('Build a flight plan first.'); return; }
+  if(!STATE.plan){ showToast('Build a flight plan first.'); return; }
   var p=STATE.plan;
   var q=encodeURIComponent(p.depIcao+' '+p.arrIcao);
   window.location.href='foreflightmobile://maps/search?q='+q;
@@ -3381,7 +3381,7 @@ async function openIF(){
 function closeIF(){document.getElementById('if-modal').classList.remove('show');}
 
 async function applyIF(){
-  if(!STATE.plan){alert('Build a plan first.');return;}
+  if(!STATE.plan){showToast('Build a plan first.');return;}
   var p=STATE.plan;
   var selR=document.getElementById('if-rwy-sel');
   var rwInp=document.getElementById('if-rwy');
@@ -3462,7 +3462,7 @@ async function applyIF(){
       console.warn('IF update route rebuild failed:',e&&e.message?e.message:e);
     }
   }
-  if(!changes.length){alert('Enter at least one change.');return;}
+  if(!changes.length){showToast('Enter at least one change.');return;}
   const ts=new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit'})+'Z';
   STATE.updates.push({ts,changes});
   renderAll(p);
@@ -3494,7 +3494,7 @@ function addStation(){
   const name=document.getElementById('cs-name').value.trim();
   const arm=parseFloat(document.getElementById('cs-arm').value);
   const max=parseFloat(document.getElementById('cs-max').value)||999;
-  if(!name||isNaN(arm)){alert('Enter station name and arm.');return;}
+  if(!name||isNaN(arm)){showToast('Enter station name and arm.');return;}
   STATE.customStations.push({id:'cs'+Date.now(),lbl:name,arm,max,unit:'lbs'});
   document.getElementById('cs-name').value='';document.getElementById('cs-arm').value='';document.getElementById('cs-max').value='';
   renderCustomStations();toast('Station "'+name+'" added');
@@ -3514,7 +3514,7 @@ function renderCustomStations(){
   });
 }
 function calcWB(){
-  const prof=STATE.wbProfile;if(!prof){alert('Select an aircraft profile first.');return;}
+  const prof=STATE.wbProfile;if(!prof){showToast('Select an aircraft profile first.');return;}
   const rows=[{label:'Empty Aircraft',weight:prof.emptyWt,arm:prof.emptyCG,moment:prof.emptyWt*prof.emptyCG}];
   let tW=prof.emptyWt,tM=prof.emptyWt*prof.emptyCG;const warns=[];
   const all=[...prof.stations,...STATE.customStations];
@@ -3562,7 +3562,7 @@ function drawCG(prof,loadedW,loadedCG){
 // ══════════════════════════════════════════════════════════════════
 async function uploadPOH(event){
   const file=event.target.files?.[0];
-  if(!file)return;if(file.type!=='application/pdf'){alert('Please upload a PDF file.');return;}
+  if(!file)return;if(file.type!=='application/pdf'){showToast('Please upload a PDF file.');return;}
   STATE.pohFile=file.name;
   document.getElementById('poh-prog').style.display='block';
   document.getElementById('poh-drop').style.display='none';
@@ -3580,7 +3580,7 @@ async function uploadPOH(event){
       document.getElementById('poh-filename').textContent=file.name;document.getElementById('poh-pages').textContent=n;document.getElementById('poh-chars').textContent=STATE.pohText.length.toLocaleString();
       document.getElementById('poh-badge').textContent='POH LOADED';document.getElementById('poh-badge').className='badge b-g';
     },400);
-  }catch(e){document.getElementById('poh-prog').style.display='none';document.getElementById('poh-drop').style.display='block';alert('PDF error: '+e.message);}
+  }catch(e){document.getElementById('poh-prog').style.display='none';document.getElementById('poh-drop').style.display='block';showToast('PDF error: '+e.message);}
 }
 function setPOHProg(p,m){document.getElementById('poh-prog-fill').style.width=p+'%';document.getElementById('poh-prog-txt').textContent=m;}
 const pz=document.getElementById('poh-drop');
@@ -3625,7 +3625,7 @@ function toggleATC(){
 }
 function startATC(){
   if(!('webkitSpeechRecognition' in window||'SpeechRecognition' in window)){
-    alert('Speech recognition not supported in this browser. Try Chrome or Edge.');return;
+    showToast('Speech recognition not supported in this browser. Try Chrome or Edge.');return;
   }
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   const rec=new SR();
@@ -3696,8 +3696,8 @@ function clearATC(){STATE.atcLines=[];document.getElementById('atc-transcript').
 function copyATC(){const txt=STATE.atcLines.map(l=>`${l.ts} ${l.txt}`).join('\n');navigator.clipboard.writeText(txt).then(()=>toast('TRANSCRIPT COPIED'));}
 async function analyzeATC(){
   const key=document.getElementById('apikey').value.trim();
-  if(!key){alert('Add your Anthropic API key to enable AI analysis.');return;}
-  if(!STATE.atcLines.length){alert('No transcript to analyze.');return;}
+  if(!key){showToast('Add your Anthropic API key to enable AI analysis.');return;}
+  if(!STATE.atcLines.length){showToast('No transcript to analyze.');return;}
   const txt=STATE.atcLines.slice(-30).map(l=>`[${l.ts}] ${l.txt}`).join('\n');
   setOv(true,'ANALYZING ATC...');
   try{
@@ -3706,7 +3706,7 @@ async function analyzeATC(){
     setOv(false);
     // Switch to chat and show result
     tab('chat');addChatMsg('ai','**ATC Analysis:**\n\n'+reply);
-  }catch(e){setOv(false);alert('Error: '+e.message);}
+  }catch(e){setOv(false);showToast('Error: '+e.message);}
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -3963,7 +3963,7 @@ async function ensureOurAirportsNavaids(){
             if(!NAVCOORDS[id]) NAVCOORDS[id]={lat:lat,lon:lon,type:'vor',freq:fmhz,desc:desc};
             seen[id]=1;added++;
           });
-          if(added>0){console.log('Loaded navaid bundle:',added);return true;}
+          if(added>0){
         }catch(_e){}
       }
       var urls=[
@@ -3992,7 +3992,7 @@ async function ensureOurAirportsNavaids(){
         if(!NAVCOORDS[id]) NAVCOORDS[id]={lat:lat,lon:lon,type:'vor',freq:fmhz,desc:name+' '+typ};
         seen[id]=1;added++;
       }
-      if(added>0) console.log('Loaded OurAirports navaids:',added);
+      if(added>0)
       return true;
     }catch(e){console.warn('OurAirports navaids',e&&e.message);return false;}
   })();
@@ -4089,7 +4089,7 @@ async function ensureOurAirportsEnrichment(){
       }
     }catch(e2){console.warn('OurAirports comments',e2&&e2.message);}
     if(freqLoaded===0&&commentLoaded===0) console.warn('OurAirports enrichment did not load (checked local + remote URLs)');
-    else console.log('OurAirports enrichment loaded',freqLoaded,'frequencies',commentLoaded,'comments');
+    else
     return true;
   })();
   return _ourAirportsEnrichmentPromise;
@@ -4630,7 +4630,7 @@ async function smartRoute(dep,arr,rules){
     if(mids.length>0&&mids.length<=mf){
       var ok=true;
       for(var i=0;i<mids.length;i++){var nc=NAVCOORDS[mids[i]];if(!nc){ok=false;break;}var xtk=crossTrackDist(dep.lat,dep.lon,arr.lat,arr.lon,nc.lat,nc.lon);var d1=gcDist(dep.lat,dep.lon,nc.lat,nc.lon);if(xtk>42||d1>=dist){ok=false;break;}}
-      if(ok){console.log('AI route:',dep.ident,mids.join(' '),arr.ident);return [dep.ident].concat(mids).concat([arr.ident]);}
+      if(ok){
     }
   }catch(e){console.warn('AI route:',e.message);}
   return geo;
