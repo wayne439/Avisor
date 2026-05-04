@@ -14,6 +14,27 @@
 /* Skip SW on Vite dev (5173): avoids cache/intercept quirks; LAN http://10.x is not a secure SW context anyway. */
 window.addEventListener('load',function(){var p=location.port;if(p==='5173')return;if(!('serviceWorker'in navigator))return;navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(function(){});});
 </script>
+<script>
+/* showToast: non-blocking replacement for alert() - added for release */
+function showToast(msg, type) {
+    type = type || 'warn';
+  var colours = { info: '#1a3a5c', warn: '#6b3900', error: '#6b1a1a', ok: '#1a4a2a' };
+  var el = document.createElement('div');
+  el.style.cssText = [
+        'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
+        'background:' + (colours[type] || colours.warn), 'color:#fff',
+        'padding:10px 22px', 'border-radius:8px', 'font-size:14px', 'font-weight:500',
+        'box-shadow:0 4px 16px rgba(0,0,0,.45)', 'z-index:99999',
+        'max-width:88vw', 'text-align:center', 'pointer-events:none', 'transition:opacity .4s'
+      ].join(';');
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function () {
+    el.style.opacity = '0';
+    setTimeout(function () { el.remove(); }, 400);
+  }, 3400);
+}
+</script>
 <script src="./vendor/pdf.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
