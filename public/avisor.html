@@ -604,6 +604,7 @@ canvas#cgc{display:block;width:100%;height:auto}
         <div class="card-h"><span class="card-title">Mid-flight changes</span><span class="badge b-a">⚡ EN ROUTE</span></div>
         <div class="card-b" style="font-size:11px;color:var(--txt2);line-height:1.65">
           ATC assigned a different runway, new ATIS, ceiling drop, or fuel check — open <b>In-Flight Update</b>, apply, then re-download your <b>.fpl</b> into ForeFlight.
+          <div style="margin-top:8px;font-size:9px;color:var(--txt3);line-height:1.5">On <b>Sectional Map</b>: turn <b>GPS ON</b> for live position; <b>⛰ TERR</b> shows approximate terrain MSL vs GPS altitude (needs data).</div>
           <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
             <button type="button" class="btn-inflight" onclick="openIF()" style="width:auto;padding:8px 14px">⚡ IN-FLIGHT UPDATE</button>
             <span style="font-family:var(--mono);font-size:8px;color:var(--txt3)">Also on header: <b>⚡ IN FLIGHT</b></span>
@@ -2886,12 +2887,15 @@ function renderFPLPanel(){
 // ═══════════════════════════════════════════════════════════════════════
 var _planeMarker=null,_trackLine=null,_trackPts=[],_planeWatchId=null,_mapFollow=false,_lastHeading=0;
 var _gpsPollTimer=null,_gpsResumeTimer=null;
+/** Open-Meteo terrain MSL at GPS position — throttled; optional HUD near map controls */
+var _terrainElevEnabled=true,_terrainElevInFlight=false,_terrainElevFetchT=0,_terrainElevLastPt=null,_lastPlaneCoords=null;
 var _planeIcon=L&&L.divIcon?L.divIcon({className:'',html:'<div style="width:0;height:0"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="-16 -16 32 32" class="avisor-plane-svg" style="transform-origin:center;filter:drop-shadow(0 0 3px #000)"><polygon points="0,-14 4,-4 14,0 4,2 2,14 0,8 -2,14 -4,2 -14,0 -4,-4" fill="#00e57a" stroke="#003d1a" stroke-width="1.5"/></svg></div>',iconSize:[32,32],iconAnchor:[16,16]}):null;
 
 function onPlaneGeoUpdate(pos){
   if(!pos||!pos.coords)return;
   var lat=pos.coords.latitude,lon=pos.coords.longitude;
   if(!isFinite(lat)||!isFinite(lon))return;
+  _lastPlaneCoords=pos.coords;
   var hdg=_lastHeading;
   if(pos.coords.heading!=null&&!isNaN(pos.coords.heading))hdg=pos.coords.heading;
   _lastHeading=hdg;
@@ -2907,6 +2911,94 @@ function onPlaneGeoUpdate(pos){
   if(_trackLine)_trackLine.setLatLngs(_trackPts);
   if(_mapFollow)_map.setView(ll,_map.getZoom(),{animate:false});
   updateNextWaypointInfo(lat,lon);
+  if(_terrainElevEnabled) refreshTerrainHudIfNeeded(lat,lon,pos.coords);
+}
+/** Bottom-left overlay on Leaflet map — terrain MSL + GPS alt vs model */
+function ensureFlightTerrainHud(){
+  if(!window._map)return null;
+  var root=_map.getContainer();
+  if(!root)return null;
+  var el=document.getElementById('flight-terrain-hud');
+  if(el)return el;
+  el=document.createElement('div');
+  el.id='flight-terrain-hud';
+  el.style.cssText='display:none;position:absolute;bottom:56px;left:10px;z-index:1100;max-width:min(272px,calc(100% - 20px));padding:8px 10px;background:rgba(8,14,22,.94);border:1px solid #2d6b4a;color:#b8f0d8;font-family:monospace;font-size:9px;line-height:1.45;border-radius:5px;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.35)';
+  el.setAttribute('aria-live','polite');
+  root.appendChild(el);
+  return el;
+}
+function fetchTerrainMslOpenMeteo(lat,lon){
+  var url='https://api.open-meteo.com/v1/elevation?latitude='+encodeURIComponent(Number(lat).toFixed(5))+'&longitude='+encodeURIComponent(Number(lon).toFixed(5));
+  return fetchJSONTimeout(url,null,14000).then(function(r){
+    if(!r||!r.ok) throw new Error('elev');
+    return r.json();
+  }).then(function(j){
+    var e=j&&j.elevation&&j.elevation[0];
+    return isFinite(Number(e))?Number(e):null;
+  });
+}
+function refreshTerrainHudIfNeeded(lat,lon,coords){
+  if(!window._map||!_terrainElevEnabled)return;
+  var now=Date.now();
+  if(_terrainElevLastPt&&isFinite(_terrainElevLastPt.lat)){
+    var movedNm=gcDist(lat,lon,_terrainElevLastPt.lat,_terrainElevLastPt.lon);
+    if(movedNm<0.22&&(now-_terrainElevFetchT)<22000)return;
+  }
+  if(_terrainElevInFlight)return;
+  _terrainElevInFlight=true;
+  _terrainElevFetchT=now;
+  _terrainElevLastPt={lat:lat,lon:lon};
+  var el=ensureFlightTerrainHud();
+  if(el){el.style.display='block';el.innerHTML='<div style="opacity:.85;font-size:8px;color:#7ab098;margin-bottom:5px">⛰ En-route terrain</div><div style="color:#9bd">Looking up terrain MSL…</div><div style="margin-top:7px;font-size:7px;color:#5a7068">Open-Meteo elevation API</div>';}
+  fetchTerrainMslOpenMeteo(lat,lon).then(function(msl){
+    _terrainElevInFlight=false;
+    renderFlightTerrainHud(lat,lon,msl,coords);
+  }).catch(function(){
+    _terrainElevInFlight=false;
+    renderFlightTerrainHud(lat,lon,null,coords);
+  });
+}
+function renderFlightTerrainHud(lat,lon,terrainMsl,coords){
+  var el=ensureFlightTerrainHud();
+  if(!el||!_terrainElevEnabled)return;
+  var lines=[];
+  var latH=lat>=0?'N':'S',lonH=lon>=0?'E':'W';
+  lines.push('<div style="color:#9cb;font-size:8px;margin-bottom:6px">'+Math.abs(lat).toFixed(4)+'°'+latH+' '+Math.abs(lon).toFixed(4)+'°'+lonH+'</div>');
+  if(terrainMsl!=null&&isFinite(terrainMsl))
+    lines.push('<div><b>Terrain</b> ~ '+Math.round(terrainMsl).toLocaleString()+' ft MSL</div>');
+  else lines.push('<div style="color:#daa">Terrain lookup failed (offline?)</div>');
+  var gpsAlt=coords&&(coords.altitude!=null&&!isNaN(coords.altitude))?Number(coords.altitude):null;
+  var altAcc=coords&&(coords.altitudeAccuracy!=null&&!isNaN(coords.altitudeAccuracy))?Number(coords.altitudeAccuracy):null;
+  if(gpsAlt!=null&&isFinite(gpsAlt)){
+    var accSuffix=(altAcc!=null&&altAcc<=180)?' <span style="opacity:.65">(±'+Math.round(altAcc)+'m)</span>':'';
+    lines.push('<div><b>GPS altitude</b> '+Math.round(gpsAlt).toLocaleString()+' ft'+accSuffix+'</div>');
+    lines.push('<div style="font-size:8px;opacity:.75;margin-top:2px">Phone/barometric mix varies — not pressure altitude.</div>');
+    if(terrainMsl!=null&&isFinite(terrainMsl)){
+      var above=Math.round(gpsAlt-terrainMsl);
+      lines.push('<div style="color:#8fd;margin-top:4px">~ <b>'+above.toLocaleString()+'</b> ft above terrain model (GPS − DEM)</div>');
+    }
+  }
+  var cruise=(STATE&&STATE.plan&&STATE.plan.alt!=null)?Number(STATE.plan.alt):null;
+  if(cruise&&isFinite(cruise)&&terrainMsl!=null&&isFinite(terrainMsl)){
+    lines.push('<div style="color:#acd;font-size:8px;margin-top:6px;padding-top:6px;border-top:1px solid #2a4a38"><b>Planned cruise</b> '+Math.round(cruise).toLocaleString()+' MSL → ~<b>'+Math.round(cruise-terrainMsl).toLocaleString()+'</b> ft above this terrain cell</div>');
+  }
+  el.style.display='block';
+  el.innerHTML='<div style="opacity:.85;font-size:8px;color:#7ab098;margin-bottom:5px">⛰ En-route terrain</div>'+lines.join('')+'<div style="margin-top:8px;font-size:7px;color:#5a7068;line-height:1.35">Planning aid only — verify with sectional / ForeFlight Profile.</div>';
+}
+function toggleTerrainElevHud(){
+  _terrainElevEnabled=!_terrainElevEnabled;
+  var btn=document.getElementById('map-terrain-btn');
+  if(btn){
+    btn.textContent=_terrainElevEnabled?'⛰ TERR ON':'⛰ TERR OFF';
+    btn.style.borderColor=_terrainElevEnabled?'#2d8f5a':'#555';
+    btn.style.color=_terrainElevEnabled?'#8fdfb5':'#888';
+  }
+  var el=document.getElementById('flight-terrain-hud');
+  if(el&&!_terrainElevEnabled) el.style.display='none';
+  if(_terrainElevEnabled&&_lastPlaneCoords&&_planeMarker){
+    _terrainElevLastPt=null;
+    refreshTerrainHudIfNeeded(_lastPlaneCoords.latitude,_lastPlaneCoords.longitude,_lastPlaneCoords);
+  }
 }
 function stopGpsPollBackup(){
   if(_gpsPollTimer){clearInterval(_gpsPollTimer);_gpsPollTimer=null;}
@@ -2958,6 +3050,11 @@ function stopPlaneTracker(){
   if(_gpsResumeTimer){clearTimeout(_gpsResumeTimer);_gpsResumeTimer=null;}
   if(_planeWatchId!=null&&navigator.geolocation){try{navigator.geolocation.clearWatch(_planeWatchId);}catch(_e){}}
   _planeWatchId=null;
+  _lastPlaneCoords=null;
+  _terrainElevInFlight=false;
+  _terrainElevLastPt=null;
+  var hud=document.getElementById('flight-terrain-hud');
+  if(hud)hud.style.display='none';
   var btn=document.getElementById('map-gps-btn');
   if(btn){btn.textContent='✈ GPS ON';btn.style.background='#001a0d';btn.style.borderColor='#00e57a';btn.style.color='#00e57a';}
   if(typeof toast==='function')toast('GPS tracking stopped');
@@ -3331,6 +3428,7 @@ function addMapControlButtons(){
   ctrl.style.cssText='position:absolute;top:8px;left:8px;z-index:1000;display:flex;flex-direction:column;gap:5px';
   ctrl.innerHTML='<button id="map-gps-btn" onclick="startPlaneTracker()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#001a0d;border:1px solid #00e57a;color:#00e57a;border-radius:4px;cursor:pointer;white-space:nowrap">✈ GPS ON</button>'
     +'<button id="map-follow-btn" onclick="toggleMapFollow()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#001a2a;border:1px solid #38beff;color:#38beff;border-radius:4px;cursor:pointer;white-space:nowrap">⊙ FOLLOW</button>'
+    +'<button type="button" id="map-terrain-btn" onclick="toggleTerrainElevHud()" title="Show terrain MSL at GPS position during flight (uses network)" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#0a2218;border:1px solid #2d8f5a;color:#8fdfb5;border-radius:4px;cursor:pointer;white-space:nowrap">⛰ TERR ON</button>'
     +'<button id="map-edit-btn" onclick="toggleMapEditMode()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#1a0050;border:1px solid #b87aff;color:#b87aff;border-radius:4px;cursor:pointer;white-space:nowrap">✏ ADD WPT</button>'
     +'<button id="map-pattern-btn" onclick="showPatternOnMap()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#2a1500;border:1px solid #ff9900;color:#ff9900;border-radius:4px;cursor:pointer;white-space:nowrap">⬡ PATTERN</button>'
     +'<button onclick="userClearTrafficPattern()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#1a0000;border:1px solid #ff5555;color:#ff5555;border-radius:4px;cursor:pointer;white-space:nowrap">✕ CLR PTN</button>';
