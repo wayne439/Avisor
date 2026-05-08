@@ -46,7 +46,9 @@ body{color:var(--txt);font-family:var(--sans);font-size:13px;user-select:none}
 .logo-mark svg{width:18px;height:18px}
 .logo-text{font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:3px;color:var(--blu)}
 .logo-text span{color:var(--txt3);font-size:9px;letter-spacing:1px;margin-left:6px;vertical-align:middle}
-.topbar-pills{margin-left:auto;display:flex;gap:6px;align-items:center}
+.topbar-pills{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.topbar-if-btn{font-family:var(--mono);font-size:9px;padding:4px 10px;border:1px solid var(--amb2);background:rgba(255,170,0,.08);color:var(--amb);letter-spacing:1px;cursor:pointer;border-radius:3px;flex-shrink:0}
+.topbar-if-btn:hover{background:rgba(255,170,0,.18);border-color:var(--amb);color:#ffd080}
 .pill{font-family:var(--mono);font-size:9px;padding:2px 7px;border:1px solid var(--line2);color:var(--txt2);letter-spacing:1px;display:flex;align-items:center;gap:4px}
 .live{background:var(--grn);width:5px;height:5px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px var(--grn);animation:blink 2s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
@@ -350,6 +352,7 @@ canvas#cgc{display:block;width:100%;height:auto}
 .date-input{width:100%;padding:8px;font-size:13px;font-family:monospace;border-radius:8px;background:var(--card,#131929);color:var(--tx,#dde5f5);border:1px solid var(--brd,#2a3350);}
 @media(max-width:420px){
   .topbar-pills{display:none}
+  .topbar-if-btn{padding:3px 7px;font-size:8px;letter-spacing:0}
   .tabs{font-size:8px}
   .tab{padding:6px 8px;letter-spacing:0px}
 }
@@ -427,6 +430,7 @@ canvas#cgc{display:block;width:100%;height:auto}
     </svg>
   </div>
   <div class="logo-text">PilotAvisor <span>AI FLIGHT ADVISOR</span></div>
+  <button type="button" class="topbar-if-btn" id="topbar-if-btn" onclick="openInFlightFromHeader()" title="Mid-flight: runway, ATIS, weather, fuel — then re-download .fpl">⚡ IN FLIGHT</button>
   <div class="topbar-pills">
     <div class="pill"><div class="live"></div>NOAA LIVE</div>
     <div class="pill"><div class="live" style="background:var(--amb);box-shadow:0 0 5px var(--amb)"></div>FAA NOTAMs</div>
@@ -519,6 +523,15 @@ canvas#cgc{display:block;width:100%;height:auto}
     </div>
   </div>
 
+  <div class="section">
+    <div class="section-title">⚡ In-Flight Update</div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--txt2);line-height:1.6;margin-bottom:8px">Change runway, ATIS, weather, approach, or fuel <b>after takeoff</b>. Applies to your plan and refreshes the .fpl export.</div>
+    <button class="btn-inflight" type="button" onclick="openIF()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      OPEN IN-FLIGHT UPDATE
+    </button>
+  </div>
+
   <div class="section adv-section">
     <div class="section-title">Options</div>
     <div style="font-size:8px;color:var(--txt3);margin:-2px 0 10px;line-height:1.45">Preferences below are <b>saved in this browser</b> — set once per device; change anytime.</div>
@@ -551,15 +564,6 @@ canvas#cgc{display:block;width:100%;height:auto}
     <div class="field"><label>Approach Preference</label>
       <select id="apch-pref"><option value="auto">Auto (wind-favored)</option><option value="RNAV">RNAV/GPS</option><option value="ILS">ILS</option><option value="LOC">LOC/DME</option><option value="VIS">Visual</option></select>
     </div>
-  </div>
-
-  <div class="section adv-section">
-    <div class="section-title">⚡ In-Flight Update</div>
-    <div style="font-family:var(--mono);font-size:9px;color:var(--txt2);line-height:1.6;margin-bottom:8px">Update runway, approach, weather mid-flight. Re-exports .fpl immediately.</div>
-    <button class="btn-inflight" onclick="openIF()">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-      UPDATE IN FLIGHT
-    </button>
   </div>
 
   <div class="section adv-section">
@@ -596,6 +600,16 @@ canvas#cgc{display:block;width:100%;height:auto}
       <div class="empty-msg">ENTER ROUTE IN SIDEBAR<br>CLICK BUILD FLIGHT PLAN</div>
     </div>
     <div id="d-brief" style="display:none">
+      <div class="card c-a" style="margin-bottom:12px;border-color:rgba(255,170,0,.35);background:rgba(255,170,0,.04)">
+        <div class="card-h"><span class="card-title">Mid-flight changes</span><span class="badge b-a">⚡ EN ROUTE</span></div>
+        <div class="card-b" style="font-size:11px;color:var(--txt2);line-height:1.65">
+          ATC assigned a different runway, new ATIS, ceiling drop, or fuel check — open <b>In-Flight Update</b>, apply, then re-download your <b>.fpl</b> into ForeFlight.
+          <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <button type="button" class="btn-inflight" onclick="openIF()" style="width:auto;padding:8px 14px">⚡ IN-FLIGHT UPDATE</button>
+            <span style="font-family:var(--mono);font-size:8px;color:var(--txt3)">Also on header: <b>⚡ IN FLIGHT</b></span>
+          </div>
+        </div>
+      </div>
       <div class="stat-grid" id="stat-grid"></div>
       <div id="terrain-alert"></div>
       <div class="card c-g" id="brief-pattern-card">
@@ -3532,6 +3546,14 @@ async function syncInFlightRunwayUI(){
   if(hint){
     hint.textContent=rwys.length?'From plan / DB for '+String(arrIcao||''):(arrIcao?'No runway list yet — rebuild plan or pick Other':'Build a flight plan first');
   }
+}
+function openInFlightFromHeader(){
+  if(!STATE||!STATE.plan){
+    if(typeof showToast==='function') showToast('Build a flight plan first — then use ⚡ In Flight for runway, weather, and fuel updates.');
+    else if(typeof toast==='function') toast('Build a flight plan first.');
+    return;
+  }
+  openIF();
 }
 async function openIF(){
   var m=document.getElementById('if-modal');
