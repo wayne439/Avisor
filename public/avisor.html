@@ -952,7 +952,7 @@ canvas#cgc{display:block;width:100%;height:auto}
           <label style="font-family:monospace;font-size:9px;color:#7a9aaa;cursor:pointer"><input type="checkbox" id="map-show-vis" checked onchange="renderMap()"> VFR</label>
           <label style="font-family:monospace;font-size:9px;color:#7a9aaa;cursor:pointer"><input type="checkbox" id="map-show-circle" checked onchange="renderMap()"> VOR rings</label>
           <button type="button" onclick="mapFitRouteFromControl()" style="padding:4px 9px;background:#0a1525;border:1px solid #334455;color:#7acfff;font-family:monospace;font-size:9px;cursor:pointer">FIT</button>
-          <span id="map-basemap-chip" title="Active chart base layer — desktop browsers sometimes fall back to terrain if FAA tiles fail (extensions/firewall). Click FAA chart to retry." style="font-family:monospace;font-size:8px;color:#8aa;max-width:120px;line-height:1.25;text-align:right"></span>
+          <span id="map-basemap-chip" title="Active basemap. If you picked Topo/relief in the layer menu, use FAA chart to return to sectionals." style="font-family:monospace;font-size:8px;color:#8aa;max-width:120px;line-height:1.25;text-align:right"></span>
           <button type="button" onclick="openFFApp&&openFFApp()" style="padding:4px 9px;background:#001a00;border:1px solid #00aa44;color:#00e878;font-family:monospace;font-size:9px;cursor:pointer">&#9992; FF</button>
         </div>
       </div>
@@ -5219,13 +5219,18 @@ function retryFaaSectionalBasemap(){
   try{
     fs.addTo(m);
     fs._errCount=0;
+    fs._avisorTileHintShown=false;
     fs._avisorSuppressFallbackUntil=(typeof performance!=='undefined'&&performance.now)?performance.now()+45000:0;
     if(typeof toast==='function')toast('Loading FAA sectional… allow tiles.arcgis.com if blocked');
   }catch(e){ if(typeof toast==='function')toast('Could not enable FAA chart'); }
   updateMapBasemapChip();
 }
-/** Reset AIS fallback counters when tiles succeed — avoids desktop swapping to topo on transient errors */
-function wireAisTileFallbackGuard(chartLayer,fallbackTopo){
+/**
+ * Track sectional tile health — do NOT auto-switch basemap (pan/zoom causes bursts of tileerror;
+ * swapping to topo looked like “map reverted to old style” with no clear undo).
+ * Optional one-time hint if many tiles fail while sectional stays active.
+ */
+function wireAisTileFallbackGuard(chartLayer){
   if(!chartLayer)return;
   chartLayer.on('tileload',function(){
     chartLayer._errCount=0;
@@ -5238,16 +5243,12 @@ function wireAisTileFallbackGuard(chartLayer,fallbackTopo){
     chartLayer._errCount++;
     clearTimeout(chartLayer._errTimer);
     chartLayer._errTimer=setTimeout(function(){
-      /* Desktop pulls many tiles at once; 5 errors in 3s falsely triggers fallback — require sustained failures */
-      if(chartLayer._errCount>22&&_map&&fallbackTopo&&_map.hasLayer(chartLayer)){
-        _map.removeLayer(chartLayer);
-        fallbackTopo.addTo(_map);
-        try{ localStorage.setItem('avisor_last_basemap_fallback','topo'); }catch(_e){}
-        if(typeof toast==='function')toast('FAA chart tiles failed — switched to terrain. Tap “FAA chart” in the bar or allow tiles.arcgis.com (disable ad-block for this site).');
-        updateMapBasemapChip();
+      if(chartLayer._errCount>14&&_map&&_map.hasLayer(chartLayer)&&!chartLayer._avisorTileHintShown){
+        chartLayer._avisorTileHintShown=true;
+        if(typeof toast==='function')toast('Some sectional tiles skipped — network or tiles.arcgis.com blocked. Map stays FAA; pan/zoom or tap “FAA chart” in the bar to refresh.');
       }
       chartLayer._errCount=0;
-    },9000);
+    },12000);
   });
 }
 
@@ -5361,7 +5362,7 @@ function initMap(){
   var def=(isFileMode?topo:(faaSec||topo));
   def.addTo(_map);
   if(isFileMode&&typeof toast==='function') toast('FILE MODE: map limited. Use http://localhost for FAA sectionals.');
-  if(faaSec) wireAisTileFallbackGuard(faaSec,topo);
+  if(faaSec) wireAisTileFallbackGuard(faaSec);
   // (faaSec/ifrLow refs already stored on _map inside init block above)
   L.control.layers(baseLayers,{
     'Airspace B/C/D':airspL,
