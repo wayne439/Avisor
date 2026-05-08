@@ -27,11 +27,9 @@ html=html.replace(/\balert\(([A-Za-z_$][^)]{0,60})\)/g,'showToast($1)');
 const aa=(html.match(/\balert\(/g)||[]).length;
 if(ab>aa){p++;console.log('  alert() replaced:',ab-aa);}
 
-// Safe console.log removal: only remove the console.log() call itself, not surrounding code
+// Safe console.log removal: only remove whole log lines (never adjacent code)
 const lb=(html.match(/console\.log/g)||[]).length;
-html=html.replace(/\bconsole\.log\([^)]*\);/g,'');
-// Clean up lines that are now blank due to removal
-html=html.replace(/^([ \t]*)\n/gm,(m,ws)=>ws.trim()===''?'':m);
+html=html.replace(/^[ \t]*console\.log\(.*\);\s*$/gm,'');
 const la=(html.match(/console\.log/g)||[]).length;
 if(lb>la){p++;console.log('  console.log removed:',lb-la);}
 
