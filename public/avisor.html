@@ -114,6 +114,8 @@ body.simple-ui .adv-section{display:none}
 #p-map.panel.on #d-map{flex:1 1 auto;display:flex!important;flex-direction:column;min-height:min(480px,calc(100vh - 150px));overflow:hidden}
 #p-map #map-container{flex:1 1 auto;width:100%;height:calc(100vh - 120px);min-height:min(360px,calc(100vh - 220px));position:relative;background:#0a0e1a;z-index:0}
 .map-subbar{display:flex;gap:6px;align-items:center;padding:5px 10px;background:#060810;border-bottom:2px solid #1e2a3a;flex-shrink:0;flex-wrap:wrap}
+.map-menu-btn{padding:4px 9px;background:#0a1525;border:1px solid #334455;color:#7acfff;font-family:monospace;font-size:9px;cursor:pointer}
+.map-menu-btn:hover{border-color:#7acfff;color:#bfe8ff}
 
 /* ═══ EMPTY STATE ═══════════════════════════════════════════════ */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px;color:var(--txt3);gap:8px}
@@ -922,6 +924,7 @@ canvas#cgc{display:block;width:100%;height:auto}
     <div id="e-map" class="empty"><div class="ei">//</div><div class="et">BUILD PLAN TO PREVIEW SECTIONAL ROUTE</div></div>
     <div id="d-map" style="display:none;flex-direction:column;flex:1;min-height:0">
       <div class="map-subbar">
+        <button type="button" class="map-menu-btn" onclick="backToMenuFromMap()">☰ MENU</button>
         <div style="font-family:monospace;font-size:11px;font-weight:bold;color:#ff00ff;flex-shrink:0" id="map-route-label">SECTIONAL PREVIEW</div>
         <span style="flex:1;min-width:4px"></span>
         <div class="map-subbar-actions">
@@ -3265,6 +3268,13 @@ function showPatternOnMap(){
   if(typeof tab==='function')tab('map');
   if(typeof toast==='function')toast('VFR pattern (AIM-style schematic ~½ NM legs — verify against chart)');
 }
+function backToMenuFromMap(){
+  if(typeof tab==='function') tab('brief');
+  try{
+    var left=document.querySelector('.left');
+    if(left&&left.scrollTo) left.scrollTo({top:0,behavior:'smooth'});
+  }catch(_e){}
+}
 
 window.addEventListener('load',function(){
   setTimeout(function(){
@@ -4537,12 +4547,28 @@ function refineRouteIdsMonotonic(dep,arr,ids,rules){
     keep.push(id);prevAlong=along;
   }
   keep.push(ids[ids.length-1]);
+  // Remove obvious out-of-the-way mids even when total ratio still looks acceptable.
+  var direct=gcDist(dep.lat,dep.lon,arr.lat,arr.lon);
+  var xtkHard=(rules==='VFR')?Math.max(30,Math.min(62,direct*0.12)):Math.max(40,Math.min(78,direct*0.16));
+  for(var pr=0;pr<18&&keep.length>2;pr++){
+    var cut=-1;
+    for(var cj=1;cj<keep.length-1;cj++){
+      var cp=node(keep[cj-1]),cc=node(keep[cj]),cn=node(keep[cj+1]);
+      if(!cp||!cc||!cn) continue;
+      var xtkMid=crossTrackDist(dep.lat,dep.lon,arr.lat,arr.lon,cc.lat,cc.lon);
+      var withMid=gcDist(cp.lat,cp.lon,cc.lat,cc.lon)+gcDist(cc.lat,cc.lon,cn.lat,cn.lon);
+      var noMid=gcDist(cp.lat,cp.lon,cn.lat,cn.lon);
+      var detour=withMid-noMid;
+      if((xtkMid>xtkHard&&detour>6)||(detour>Math.max(14,noMid*0.24))||(xtkMid>xtkHard*1.25&&detour>2)){ cut=cj; break; }
+    }
+    if(cut<0) break;
+    keep.splice(cut,1);
+  }
   // Final detour pruning: remove worst offender until ratio acceptable.
   function len(route){
     var t=0;for(var k=1;k<route.length;k++){var a=node(route[k-1]),b=node(route[k]);if(a&&b)t+=gcDist(a.lat,a.lon,b.lat,b.lon);}
     return t;
   }
-  var direct=gcDist(dep.lat,dep.lon,arr.lat,arr.lon);
   var maxRatio=(rules==='VFR')?(direct>160?1.12:1.07):(direct>280?1.14:1.12);
   var guard=0;
   while(keep.length>2&&len(keep)>direct*maxRatio&&guard<24){
