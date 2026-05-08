@@ -58,6 +58,9 @@ body{color:var(--txt);font-family:var(--sans);font-size:13px;user-select:none}
 .left{width:260px;background:var(--sky2);border-right:1px solid var(--line);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
 .section{padding:11px 13px;border-bottom:1px solid var(--line)}
 .section-title{font-family:var(--mono);font-size:9px;color:var(--blu);letter-spacing:2px;text-transform:uppercase;margin-bottom:9px}
+body.simple-ui .adv-section{display:none}
+#ui-simple-toggle{width:100%;padding:7px 9px;background:transparent;border:1px solid var(--line2);color:var(--txt2);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer}
+#ui-simple-toggle:hover{border-color:var(--blu3);color:var(--blu)}
 .field{margin-bottom:8px}
 .field label{display:block;font-family:var(--mono);font-size:9px;color:var(--txt2);letter-spacing:1px;margin-bottom:3px;text-transform:uppercase}
 .field input,.field select{width:100%;background:var(--sky3);border:1px solid var(--line);color:var(--txt);font-family:var(--mono);font-size:12px;padding:6px 8px;outline:none;transition:border-color .15s}
@@ -488,9 +491,12 @@ canvas#cgc{display:block;width:100%;height:auto}
       <div class="field"><label>Reserve (min)</label><input id="reserve" type="number" value="45" min="30" max="120"></div>
       <div class="field"><label>Tail #</label><input id="tail" placeholder="N12345" oninput="this.value=this.value.toUpperCase()"></div>
     </div>
+    <div class="field" style="margin-top:4px">
+      <button type="button" id="ui-simple-toggle" onclick="toggleSimpleUi()">Show Advanced Options</button>
+    </div>
   </div>
 
-  <div class="section">
+  <div class="section adv-section">
     <div class="section-title">Options</div>
     <div style="font-size:8px;color:var(--txt3);margin:-2px 0 10px;line-height:1.45">Preferences below are <b>saved in this browser</b> — set once per device; change anytime.</div>
     <div class="tog-row"><span class="tog-lbl">Avoid Icing</span><label class="tog"><input type="checkbox" id="opt-icing"><div class="tog-tr"></div><div class="tog-th"></div></label></div>
@@ -524,7 +530,7 @@ canvas#cgc{display:block;width:100%;height:auto}
     </div>
   </div>
 
-  <div class="section">
+  <div class="section adv-section">
     <div class="section-title">⚡ In-Flight Update</div>
     <div style="font-family:var(--mono);font-size:9px;color:var(--txt2);line-height:1.6;margin-bottom:8px">Update runway, approach, weather mid-flight. Re-exports .fpl immediately.</div>
     <button class="btn-inflight" onclick="openIF()">
@@ -533,18 +539,18 @@ canvas#cgc{display:block;width:100%;height:auto}
     </button>
   </div>
 
-  <div class="section">
+  <div class="section adv-section">
     <div class="section-title">AI Advisor Key</div>
     <div class="apikey-note">For AI chat + POH analysis.<br><a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer">console.anthropic.com</a></div>
     <div class="field" style="margin-top:7px"><input id="apikey" type="password" placeholder="sk-ant-..."></div>
   </div>
-  <div class="section">
+  <div class="section adv-section">
     <div class="section-title">FAA NOTAM API key</div>
     <div class="apikey-note">Free key from <a href="https://api.faa.gov/" target="_blank" rel="noopener noreferrer">api.faa.gov</a> (register → NOTAM API). Without it, NOTAM list stays empty.</div>
     <div class="field" style="margin-top:7px"><input id="faa-notam-key" type="password" placeholder="FAA API key"></div>
   </div>
 
-  <div class="section" style="flex:1">
+  <div class="section adv-section" style="flex:1">
     <div class="section-title">Notes</div>
     <div class="field"><input id="notes" placeholder="Pax, fuel on board, requests..."></div>
   </div>
@@ -1460,19 +1466,37 @@ function normalizeAwMetarTaf(ob){
 }
 async function fMetar(icao){
   try{
-    const r=await fetchJSONTimeout(`https://aviationweather.gov/awc-api/data/metar?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
-    if(!r.ok)return null;
-    var row=(await r.json())?.[0]||null;
+    var rows=await fetchAwcJson('/data/metar?ids='+encodeURIComponent(icao)+'&format=json');
+    var row=(rows&&rows[0])||null;
     return row?normalizeAwMetarTaf(row):null;
   }catch(e){console.warn('METAR',icao,e&&e.message);return null;}
 }
 async function fTaf(icao){
   try{
-    const r=await fetchJSONTimeout(`https://aviationweather.gov/awc-api/data/taf?ids=${encodeURIComponent(icao)}&format=json`,null,8000);
-    if(!r.ok)return null;
-    var row=(await r.json())?.[0]||null;
+    var rows=await fetchAwcJson('/data/taf?ids='+encodeURIComponent(icao)+'&format=json');
+    var row=(rows&&rows[0])||null;
     return row?normalizeAwMetarTaf(row):null;
   }catch(e){console.warn('TAF',icao,e&&e.message);return null;}
+}
+async function fetchAwcJson(path){
+  var p=String(path||'');
+  if(p.charAt(0)!=='/') p='/'+p;
+  var urls=['/awc-api'+p,'https://aviationweather.gov/awc-api'+p];
+  for(var i=0;i<urls.length;i++){
+    try{
+      var r=await fetchJSONTimeout(urls[i],null,9000);
+      if(!r||!r.ok) continue;
+      var j=await r.json();
+      if(Array.isArray(j)) return j;
+    }catch(_e){}
+  }
+  return null;
+}
+function nearestWxIcaoFor(icao){
+  var id=normalizeFormIcao(icao||'');
+  var a=(typeof APTS!=='undefined'&&APTS[id])?APTS[id]:((typeof APT!=='undefined'&&APT[id])?APT[id]:null);
+  var wx=a&&a.nearestWx?normalizeFormIcao(a.nearestWx):id;
+  return wx||id;
 }
 function getFaaNotamApiKey(){
   var el=document.getElementById('faa-notam-key');
@@ -2420,9 +2444,11 @@ async function previewBriefWx(){
   }
   if(el)el.innerHTML='<span style="color:var(--sky)">Loading METAR…</span>';
   try{
+    var dWx=nearestWxIcaoFor(d);
+    var aWx=nearestWxIcaoFor(a);
     var dm,am;
     try{
-      dm=await fMetar(d);am=await fMetar(a);
+      dm=await fMetar(dWx);am=await fMetar(aWx);
     }catch(_e){dm=null;am=null;}
     var altEl=document.getElementById('plan-alt');
     var altRaw=altEl&&altEl.value?String(altEl.value).trim():'';
@@ -2431,8 +2457,11 @@ async function previewBriefWx(){
       :'Planned cruise: <span style="color:var(--txt3)">not set</span> — auto on Build';
     var h='<div style="font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--txt1)">';
     h+='<div style="margin-bottom:10px;padding:8px;background:var(--panel2);border-radius:6px;border:1px solid var(--brd)">'+altNote+'</div>';
-    h+='<b>'+escHtml(d)+'</b> '+skyFmt(dm)+' · wind '+wfmt(dm)+'<br><span style="color:var(--txt3);font-size:9px">'+(dm&&dm.rawOb?escHtml(dm.rawOb):'No METAR')+'</span><br><br>';
-    h+='<b>'+escHtml(a)+'</b> '+skyFmt(am)+' · wind '+wfmt(am)+'<br><span style="color:var(--txt3);font-size:9px">'+(am&&am.rawOb?escHtml(am.rawOb):'No METAR')+'</span><br><br>';
+    h+='<b>'+escHtml(d)+'</b>'+(dWx!==d?'<span style="color:var(--txt3)"> via '+escHtml(dWx)+'</span>':'')+' '+skyFmt(dm)+' · wind '+wfmt(dm)+'<br><span style="color:var(--txt3);font-size:9px">'+(dm&&dm.rawOb?escHtml(dm.rawOb):'No METAR')+'</span><br><br>';
+    h+='<b>'+escHtml(a)+'</b>'+(aWx!==a?'<span style="color:var(--txt3)"> via '+escHtml(aWx)+'</span>':'')+' '+skyFmt(am)+' · wind '+wfmt(am)+'<br><span style="color:var(--txt3);font-size:9px">'+(am&&am.rawOb?escHtml(am.rawOb):'No METAR')+'</span><br><br>';
+    if(!dm&&!am){
+      h+='<span style="color:var(--amb)">No live METAR returned for either airport. Check connection, ICAO, or AviationWeather availability.</span><br><br>';
+    }
     h+='<span style="color:var(--txt2)">Surface winds only — verify winds aloft for your cruise altitude.</span> <a href="https://aviationweather.gov/gfa" target="_blank" rel="noopener noreferrer" style="color:var(--blu)">GFA</a>';
     h+='</div>';
     if(el)el.innerHTML=h;
@@ -5250,8 +5279,26 @@ function initSafetyCheck(){
     if(m)m.style.display="flex";
   }
 }
+function setSimpleUiMode(on){
+  try{
+    document.body.classList.toggle('simple-ui',!!on);
+    localStorage.setItem('avisor_simple_ui',on?'1':'0');
+    var btn=document.getElementById('ui-simple-toggle');
+    if(btn) btn.textContent=on?'Show Advanced Options':'Hide Advanced Options';
+  }catch(_e){}
+}
+function initSimpleUi(){
+  var saved=localStorage.getItem('avisor_simple_ui');
+  var on=(saved==null)?true:(saved==='1');
+  setSimpleUiMode(on);
+}
+function toggleSimpleUi(){
+  var on=!document.body.classList.contains('simple-ui');
+  setSimpleUiMode(on);
+}
 window.addEventListener("load",function(){
   initSafetyCheck();
+  initSimpleUi();
   if(typeof loadAvisorRoutePrefs==='function') loadAvisorRoutePrefs();
   if(typeof syncGpsDirectUiWithVfrVisual==='function') syncGpsDirectUiWithVfrVisual({persist:true});
   if(typeof wireAvisorPrefsPersistence==='function') wireAvisorPrefsPersistence();
