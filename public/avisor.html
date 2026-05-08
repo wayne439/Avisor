@@ -935,7 +935,7 @@ canvas#cgc{display:block;width:100%;height:auto}
         <div class="map-subbar-actions">
           <label style="font-family:monospace;font-size:9px;color:#7a9aaa;cursor:pointer"><input type="checkbox" id="map-show-vis" checked onchange="renderMap()"> VFR</label>
           <label style="font-family:monospace;font-size:9px;color:#7a9aaa;cursor:pointer"><input type="checkbox" id="map-show-circle" checked onchange="renderMap()"> VOR rings</label>
-          <button type="button" onclick="mapFitRoute()" style="padding:4px 9px;background:#0a1525;border:1px solid #334455;color:#7acfff;font-family:monospace;font-size:9px;cursor:pointer">FIT</button>
+          <button type="button" onclick="mapFitRouteFromControl()" style="padding:4px 9px;background:#0a1525;border:1px solid #334455;color:#7acfff;font-family:monospace;font-size:9px;cursor:pointer">FIT</button>
           <button type="button" onclick="openFFApp&&openFFApp()" style="padding:4px 9px;background:#001a00;border:1px solid #00aa44;color:#00e878;font-family:monospace;font-size:9px;cursor:pointer">&#9992; FF</button>
         </div>
       </div>
@@ -2979,6 +2979,8 @@ function updateNextWaypointInfo(lat,lon){
 // FEATURE 2: TRAFFIC PATTERN ON MAP
 // ═══════════════════════════════════════════════════════════════════════
 var _patternLayer=null,_patternMarkers=[],_patternShown=false,_lastPatternArgs=null;
+/** User tapped FIT — keep whole-route framing; don't steal zoom back to pattern on the next redraw. Cleared when PATTERN is tapped again. */
+var _avisorPreferRouteFit=false;
 function ensureAvisorPatternPane(){
   if(!_map||!_map.createPane)return;
   try{
@@ -2988,14 +2990,35 @@ function ensureAvisorPatternPane(){
     if(el)el.style.zIndex=650;
   }catch(_e){}
 }
-function drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,altFt,rwyLenNm){
+function drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,altFt,rwyLenNm,skipAutoZoom){
   if(!window._map)return;
   ensureAvisorPatternPane();
   clearPatternFromMap();
   _lastPatternArgs={rwyHdg:rwyHdg,rwyLat:rwyLat,rwyLon:rwyLon,leftTraffic:leftTraffic,altFt:altFt,rwyLenNm:rwyLenNm||0};
-  /* rwyHdg = magnetic outbound from landing threshold along runway (AIM-style rectangular pattern). Legs ~½ NM — schematic only, not for navigation. */
-  var R=3440.065,nm=1/R;
-  var _rwy=rwyLenNm>0.3?rwyLenNm:(function(){try{var rwys=(window.STATE&&STATE.plan&&STATE.plan.arr&&STATE.plan.arr.rwys)||[];var match=rwys.find(function(r){return Math.abs(r.hdg-rwyHdg)<5;});return match&&match.len?(match.len/6076):1.0;}catch(e){return 1.0;}})();var rl=Math.max(1.0,Math.min(_rwy,2.5));var depNm=rl;var legNm=Math.max(0.5,depNm*0.4);var crossNm=Math.max(0.5,depNm*0.4);var downNm=Math.max(1.0,depNm*0.85);var finalNm=Math.max(0.5,depNm*0.4);
+  /* rwyHdg = outbound from threshold along runway (OurAirports: true°; synthetic: numbered approx). AIM-style rectangle — schematic only, not for navigation. */
+  var R=3440.065;
+  var _plan=window.STATE&&STATE.plan, _fr=_plan&&_plan.favRwy, _rwys=(_plan&&_plan.arr&&_plan.arr.rwys)||[];
+  function _normRwyId(s){return String(s||'').toUpperCase().replace(/^RWY\s*/i,'').replace(/\s+/g,'');}
+  var _rwyGuess=(function(){
+    try{
+      if(rwyLenNm>0.3) return rwyLenNm;
+      var fid=_fr&&_fr.id?_normRwyId(_fr.id):'';
+      if(fid&&_rwys.length){
+        var byId=_rwys.find(function(r){return r&&r.id!=null&&_normRwyId(r.id)===fid;});
+        if(byId&&byId.len&&Number(byId.len)>400) return Number(byId.len)/6076.12;
+      }
+      var match=_rwys.find(function(r){return patternHdgDiffDeg(rwyHdg,r&&r.hdg)<8;});
+      if(match&&match.len&&Number(match.len)>400) return Number(match.len)/6076.12;
+    }catch(_e){}
+    return 1.35;
+  })();
+  /* Scale with runway length; keep legible on sectional (avoid postage-stamp patterns at Class B). */
+  var rl=Math.max(1.35,Math.min(_rwyGuess,3.85));
+  var depNm=rl;
+  var legNm=Math.max(0.55,depNm*0.42);
+  var crossNm=Math.max(0.55,depNm*0.42);
+  var downNm=Math.max(1.05,depNm*0.88);
+  var finalNm=Math.max(0.55,depNm*0.42);
   var turn=leftTraffic?-1:1;
   var fin=(((rwyHdg%360)+360)%360);
   var crossHdg=(fin+turn*90+360)%360;
@@ -3018,27 +3041,34 @@ function drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,altFt,rwyLenNm){
   var patternPts=[thr,depEnd,crossEnd,downEnd,baseEnd,finalFix,thr];
   var polyOpts={color:'#ffaa33',weight:4,opacity:1,pane:'avisorPattern'};
   _patternLayer=L.polyline(patternPts,polyOpts).addTo(_map);
+  var upMid=pt(thr[0],thr[1],fin,depNm*0.42);
+  var depPad=pt(depEnd[0],depEnd[1],crossHdg,leftTraffic?0.06:-0.06);
+  var tpaSide=(leftTraffic?90:-90);
+  var tpaPt=pt(rwyLat,rwyLon,(fin+tpaSide+360)%360,0.32);
   var labels=[
-    {pt:depEnd,txt:'UPWIND / DEP'},
-    {pt:[(crossEnd[0]+depEnd[0])/2,(crossEnd[1]+depEnd[1])/2],txt:'CROSSWIND'},
-    {pt:[(downEnd[0]+crossEnd[0])/2,(downEnd[1]+crossEnd[1])/2],txt:'DOWNWIND'},
-    {pt:[(baseEnd[0]+downEnd[0])/2,(baseEnd[1]+downEnd[1])/2],txt:'BASE'},
-    {pt:[(thr[0]+finalFix[0])/2,(thr[1]+finalFix[1])/2],txt:'FINAL'}
+    {pt:upMid,txt:'UPWIND',anchor:[10,7]},
+    {pt:depPad,txt:'DEP',anchor:[8,14]},
+    {pt:[(crossEnd[0]+depEnd[0])/2,(crossEnd[1]+depEnd[1])/2],txt:'X-WIND',anchor:[18,8]},
+    {pt:[(downEnd[0]+crossEnd[0])/2,(downEnd[1]+crossEnd[1])/2],txt:'DOWNWIND',anchor:[28,10]},
+    {pt:[(baseEnd[0]+downEnd[0])/2,(baseEnd[1]+downEnd[1])/2],txt:'BASE',anchor:[16,12]},
+    {pt:[(thr[0]+finalFix[0])/2,(thr[1]+finalFix[1])/2],txt:'FINAL',anchor:[20,14]}
   ];
   labels.forEach(function(l){
-    var m=L.marker(l.pt,{icon:L.divIcon({className:'',html:'<div style="background:rgba(180,80,0,0.92);color:#fff;font-size:9px;font-family:monospace;padding:1px 4px;border-radius:2px;white-space:nowrap;border:1px solid #ffcc66">'+l.txt+'</div>',iconAnchor:[20,8]}),pane:'avisorPattern'});
+    var ax=(l.anchor&&l.anchor[0])||18, ay=(l.anchor&&l.anchor[1])||8;
+    var m=L.marker(l.pt,{icon:L.divIcon({className:'',html:'<div style="background:rgba(180,80,0,0.92);color:#fff;font-size:8px;font-family:monospace;padding:1px 3px;border-radius:2px;white-space:nowrap;border:1px solid #ffcc66;max-width:78px;text-align:center;line-height:1.2">'+l.txt+'</div>',iconAnchor:[ax,ay]}),pane:'avisorPattern'});
     m.addTo(_map);
     _patternMarkers.push(m);
   });
-  var altLabel=L.marker([rwyLat,rwyLon],{icon:L.divIcon({className:'',html:'<div style="background:rgba(0,0,0,0.85);color:#ff9900;font-size:10px;font-family:monospace;padding:2px 6px;border-radius:3px;white-space:nowrap">TPA '+(altFt+1000)+'ft MSL</div>',iconAnchor:[-5,8]}),pane:'avisorPattern'});
+  var rwyLbl=_fr&&_fr.id?(' RWY '+_normRwyId(_fr.id)):'';
+  var altLabel=L.marker(tpaPt,{icon:L.divIcon({className:'',html:'<div style="background:rgba(0,0,0,0.85);color:#ff9900;font-size:9px;font-family:monospace;padding:2px 5px;border-radius:3px;white-space:nowrap;max-width:120px">TPA '+(altFt+1000)+' MSL'+rwyLbl+'</div>',iconAnchor:[4,10]}),pane:'avisorPattern'});
   altLabel.addTo(_map);
   _patternMarkers.push(altLabel);
   try{if(_patternLayer.bringToFront)_patternLayer.bringToFront();}catch(_e){}
   _patternShown=true;
-  try{
+  if(!skipAutoZoom){ try{
     var b=L.polyline(patternPts).getBounds();
     _map.fitBounds(b.pad(0.22),{maxZoom:15,padding:[20,20]});
-  }catch(_e){}
+  }catch(_e){} }
 }
 
 function clearPatternFromMap(){
@@ -3048,6 +3078,10 @@ function clearPatternFromMap(){
   _patternMarkers=[];
   _patternShown=false;
   _lastPatternArgs=null;
+}
+function userClearTrafficPattern(){
+  _avisorPreferRouteFit=false;
+  clearPatternFromMap();
 }
 
 // Hook into existing drawPattern to also draw on map
@@ -3283,7 +3317,7 @@ function addMapControlButtons(){
     +'<button id="map-follow-btn" onclick="toggleMapFollow()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#001a2a;border:1px solid #38beff;color:#38beff;border-radius:4px;cursor:pointer;white-space:nowrap">⊙ FOLLOW</button>'
     +'<button id="map-edit-btn" onclick="toggleMapEditMode()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#1a0050;border:1px solid #b87aff;color:#b87aff;border-radius:4px;cursor:pointer;white-space:nowrap">✏ ADD WPT</button>'
     +'<button id="map-pattern-btn" onclick="showPatternOnMap()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#2a1500;border:1px solid #ff9900;color:#ff9900;border-radius:4px;cursor:pointer;white-space:nowrap">⬡ PATTERN</button>'
-    +'<button onclick="clearPatternFromMap()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#1a0000;border:1px solid #ff5555;color:#ff5555;border-radius:4px;cursor:pointer;white-space:nowrap">✕ CLR PTN</button>';
+    +'<button onclick="userClearTrafficPattern()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#1a0000;border:1px solid #ff5555;color:#ff5555;border-radius:4px;cursor:pointer;white-space:nowrap">✕ CLR PTN</button>';
   var mapContainer=document.getElementById('map-container');
   if(mapContainer)mapContainer.appendChild(ctrl);
 }
@@ -3298,6 +3332,12 @@ function patternMagHeading(fr){
   }
   return(((rwyLabelToHeading(fr.id)%360)+360)%360);
 }
+/** Smallest angle between two runway headings (handles 360/0 wrap). */
+function patternHdgDiffDeg(a,b){
+  var x=Number(a),y=Number(b);
+  if(!isFinite(x)||!isFinite(y)) return 999;
+  return Math.abs(((x-y)+540)%360-180);
+}
 /** Threshold / pattern anchor + headings from current plan (same logic as map ⬡ PATTERN). Used after in-flight runway updates so redraw stays in sync. */
 function getPatternMapGeometryFromPlan(p){
   if(!p||!p.arr||p.arr.lat==null)return null;
@@ -3305,6 +3345,9 @@ function getPatternMapGeometryFromPlan(p){
   var rwyHdg=fr?patternMagHeading(fr):360;
   var leftTraffic=fr?fr.pat!=='R':true;
   var elev=p.arr.elev||p.arr.elevation||0;
+  var rwyLenNm=0;
+  if(fr&&fr.len!=null&&isFinite(Number(fr.len))&&Number(fr.len)>400)
+    rwyLenNm=Number(fr.len)/6076.12;
   var rwyLat=p.arr.lat, rwyLon=p.arr.lon;
   if(fr&&fr.lat!=null&&fr.lon!=null&&isFinite(Number(fr.lat))&&isFinite(Number(fr.lon))){
     rwyLat=Number(fr.lat); rwyLon=Number(fr.lon);
@@ -3328,15 +3371,16 @@ function getPatternMapGeometryFromPlan(p){
       rwyLat=p.arr.lat; rwyLon=p.arr.lon;
     }
   }
-  return{rwyHdg:rwyHdg,rwyLat:rwyLat,rwyLon:rwyLon,leftTraffic:leftTraffic,altFt:elev};
+  return{rwyHdg:rwyHdg,rwyLat:rwyLat,rwyLon:rwyLon,leftTraffic:leftTraffic,altFt:elev,rwyLenNm:rwyLenNm};
 }
 function showPatternOnMap(){
   if(!STATE||!STATE.plan){if(typeof toast==='function')toast('Build a plan first');return;}
+  _avisorPreferRouteFit=false;
   var g=getPatternMapGeometryFromPlan(STATE.plan);
   if(!g){if(typeof toast==='function')toast('No destination data');return;}
-  drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,g.rwyLenNm||0);
+  drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,g.rwyLenNm||0,false);
   if(typeof tab==='function')tab('map');
-  if(typeof toast==='function')toast('VFR pattern (AIM-style schematic ~½ NM legs — verify against chart)');
+  if(typeof toast==='function')toast('VFR pattern (schematic from plan runway — verify with chart/ATIS). FIT = whole route.');
 }
 function backToMenuFromMap(){
   if(typeof tab==='function') tab('brief');
@@ -5187,6 +5231,11 @@ function mapFitRoute(){
   else{_map.fitBounds(L.latLngBounds(c).pad(0.18));var mz=avisorActiveAisChartMinZ();if(mz&&_map.getZoom()<mz)_map.setZoom(mz);}
   refreshMapContextLayers();
 }
+/** FIT control: frame full route; keep that framing when the pattern overlay redraws. */
+function mapFitRouteFromControl(){
+  _avisorPreferRouteFit=true;
+  mapFitRoute();
+}
 function renderMap(){
   var sw=STATE.waypoints||[];
   if(!_map)return;
@@ -5261,13 +5310,15 @@ function renderMap(){
     if(STATE.plan) lbl.textContent=named+' | '+STATE.plan.dist+'NM | '+STATE.plan.eteMin+'min';
     else lbl.textContent=named||'SECTIONAL PREVIEW';
   }
-  mapFitRoute();
-  refreshMapContextLayers();
-  /* Redraw VFR pattern from current plan — stale _lastPatternArgs after ⚡ In-flight runway update showed wrong runway geometry */
-  if(_patternShown&&typeof drawPatternOnMap==='function'&&STATE.plan&&STATE.plan.favRwy){
+  /* If VFR pattern overlay is active, fitting the whole route first shrinks the schematic to a few pixels — skip that and re-zoom to the pattern. */
+  var _patternRouteLock=_patternShown&&STATE.plan&&STATE.plan.favRwy;
+  if(_patternRouteLock&&!_avisorPreferRouteFit) refreshMapContextLayers();
+  else mapFitRoute();
+  /* Redraw VFR pattern from current plan — stale geometry after ⚡ In-flight runway updates */
+  if(_patternRouteLock&&typeof drawPatternOnMap==='function'){
     try{
       var g=getPatternMapGeometryFromPlan(STATE.plan);
-      if(g) drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,g.rwyLenNm||0);
+      if(g) drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,g.rwyLenNm||0,!!_avisorPreferRouteFit);
     }catch(_e){}
   }
 }
