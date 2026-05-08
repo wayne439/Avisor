@@ -1780,6 +1780,59 @@ function replaceWaypointAtIndex(idx){
   syncWaypointsAfterManualEdit();
   renderWaypoints();
 }
+/** When set (STATE.waypoints index), next map tap repositions that enroute fix. */
+var _pendingRouteWpMoveIdx=null;
+/** After moving a waypoint via map tap-mode: restore drag/pan and escape handler. */
+function _routeWpMoveChromeCleanup(){
+  try{
+    if(window._map){
+      var c=_map.getContainer();
+      if(c) c.style.cursor=_mapEditMode?'crosshair':'';
+      if(_map.dragging) _map.dragging.enable();
+    }
+  }catch(_e){}
+  try{document.removeEventListener('keydown',_routeWpMoveEsc,true);}catch(_e){}
+}
+function _routeWpMoveEsc(ev){
+  if(ev.key==='Escape'){ev.stopPropagation(); cancelPendingRouteWaypointMove(false);}
+}
+/** Cancel tap-on-map waypoint move (silent=true: no toast). */
+function cancelPendingRouteWaypointMove(silent){
+  if(_pendingRouteWpMoveIdx==null) return;
+  _pendingRouteWpMoveIdx=null;
+  _routeWpMoveChromeCleanup();
+  if(!silent&&typeof toast==='function') toast('Waypoint move cancelled — drag or Tap map… to try again');
+}
+/**
+ * Tablet/phone-friendly: tap marker → Tap map… → tap position (snaps like drag).
+ * Also disable pan while waiting so the first finger-press lands as the new position.
+ */
+function startWaypointMapReposition(idx){
+  var i=parseInt(idx,10);
+  var sw=STATE.waypoints||[];
+  if(!window._map){ if(typeof toast==='function') toast('Open the Sectional Map tab after building a route'); return; }
+  if(!isFinite(i)||i<1||i>=sw.length-1) return;
+  cancelPendingRouteWaypointMove(true);
+  if(_mapEditMode){
+    _mapEditMode=false;
+    try{
+      var eb=document.getElementById('map-edit-btn');
+      if(eb){eb.style.background='';eb.style.borderColor='';eb.textContent='✏ ADD WPT';}
+    }catch(_e){}
+    _mapEditCooldown=true;
+    setTimeout(function(){ _mapEditCooldown=false; }, 320);
+    try{_map.getContainer().style.cursor='';}catch(_e){}
+  }
+  _pendingRouteWpMoveIdx=i;
+  try{
+    _map.dragging.disable();
+    _map.getContainer().style.cursor='crosshair';
+    document.addEventListener('keydown',_routeWpMoveEsc,true);
+  }catch(_e){}
+  var wid=(sw[i]&&sw[i].id)?String(sw[i].id):('WP'+i);
+  if(typeof toast==='function') toast('Tap chart to move '+wid+' • Esc=cancel • still draggable on desktop');
+  try{if(_map.closePopup) _map.closePopup();}catch(_e){}
+}
 function getApchKey(icao,rwyId,pref){
   if(icao==='KASE'){if(pref==='LOC'||pref==='ILS')return'KASE-LOC15';if((rwyId||'').startsWith('33'))return'KASE-VIS33';return'KASE-RNP15';}
   if(icao==='KSDL')return'KSDL-RNAV21';
@@ -3007,6 +3060,7 @@ var _mapEditMode=false,_customWpMarkers=[],_routeLine=null;
 
 var _mapEditCooldown=false;
 var _editCooldown=false;function toggleMapEditMode(){
+  if(_pendingRouteWpMoveIdx!==null) cancelPendingRouteWaypointMove(true);
   _mapEditMode=!_mapEditMode;_editCooldown=true;setTimeout(function(){_editCooldown=false;},400);
   _mapEditCooldown=true;
   setTimeout(function(){_mapEditCooldown=false;},300);
@@ -3027,6 +3081,13 @@ var _editCooldown=false;function toggleMapEditMode(){
 function initMapInteraction(){
   if(!window._map)return;
   _map.on('click',function(e){
+    if(_pendingRouteWpMoveIdx!==null&&!_mapEditCooldown){
+      var wi=_pendingRouteWpMoveIdx;
+      _pendingRouteWpMoveIdx=null;
+      _routeWpMoveChromeCleanup();
+      applyWaypointDragEnd(wi,e.latlng.lat,e.latlng.lng);
+      return;
+    }
     if(!_mapEditMode||_mapEditCooldown)return;
     var lat=Math.round(e.latlng.lat*10000)/10000;
     var lon=Math.round(e.latlng.lng*10000)/10000;
@@ -3806,6 +3867,7 @@ function tab(id){
     document.getElementById('t-'+i)?.classList.toggle('on',i===id);
     document.getElementById('p-'+i)?.classList.toggle('on',i===id);
   });
+  if(id!=='map'){ try{ cancelPendingRouteWaypointMove(true); }catch(_e){} }
   var gmb=document.getElementById('global-map-exit');
   if(gmb) gmb.style.display=(id==='map')?'block':'none';
 
@@ -5163,15 +5225,21 @@ function renderMap(){
     else if(w.type==='vor'){svg='<svg width="28" height="28"><polygon points="14,4 22,9 22,19 14,24 6,19 6,9" fill="none" stroke="#ffaa00" stroke-width="1.5"/><circle cx="14" cy="14" r="3" fill="#ffaa00"/></svg>';}
     else if(w.type==='fix'){svg='<svg width="20" height="20"><polygon points="10,2 18,18 2,18" fill="none" stroke="#b388ff" stroke-width="1.5"/></svg>';sz=20;an=10;}
     else{svg='<svg width="14" height="14"><polygon points="7,1 13,7 7,13 1,7" fill="rgba(0,232,120,0.7)" stroke="#00e878" stroke-width="1"/></svg>';sz=14;an=7;}
+    var iconHtml=svg,iconW=sz,iconH=sz,iconAx=an,iconAy=an;
+    if(editable){
+      iconHtml='<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;touch-action:none;-webkit-user-select:none;user-select:none">'+svg+'</div>';
+      iconW=40;iconH=40;iconAx=20;iconAy=20;
+    }
     var d2=i>0?Math.round(gcDist(wptsDisplay[i-1].w.lat,wptsDisplay[i-1].w.lon,w.lat,w.lon))+'nm':'Depart';
     var popup='<div style="font-family:monospace;font-size:11px;line-height:1.6"><b>'+w.id+'</b><br><span style="color:#888;font-size:10px">'+({apt:'Airport',vor:'VOR/DME',fix:'Fix',vis:'VFR'}[w.type]||'Fix')+'</span><br>'+(w.desc||'')+'<br>'+(w.freq?'<span style=color:#ffaa00>'+w.freq+' MHz</span><br>':'')+'<span style="color:#666;font-size:9px">'+w.lat.toFixed(4)+'N '+Math.abs(w.lon).toFixed(4)+'W &nbsp; '+d2+'</span>';
-    if(editable){popup+='<div style="margin-top:7px;color:#8aa;font-size:9px">Drag marker to move — snaps to nearby chart fix when close.</div>'+
-      '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'+
+    if(editable){popup+='<div style="margin-top:7px;color:#8aa;font-size:9px">Drag the waypoint symbol, or tap <b>Tap map…</b> then tap the chart — snaps to a nearby fix when close.</div>'+
+      '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;max-width:248px">'+
+      '<button type="button" style="padding:4px 8px;font-size:10px;cursor:pointer;background:#14352a;color:#9fe8cc;border:1px solid #2a8860;border-radius:4px" onclick="startWaypointMapReposition('+wi+');">Tap map…</button>'+
       '<button type="button" style="padding:4px 10px;font-size:11px;cursor:pointer;background:#1a2840;color:#dde5f5;border:1px solid #3a5068;border-radius:4px" onclick="replaceWaypointAtIndex('+wi+');try{if(window._map)_map.closePopup();}catch(_e){}">Replace…</button>'+
       '<button type="button" style="padding:4px 10px;font-size:11px;cursor:pointer;background:#301818;color:#ffb0b0;border:1px solid #663030;border-radius:4px" onclick="deleteWaypointAtIndex('+wi+');try{if(window._map)_map.closePopup();}catch(_e){}">Delete</button>'+
       '</div>';}
     popup+='</div>';
-    var mk=L.marker([w.lat,w.lon],{icon:L.divIcon({html:svg,iconSize:[sz,sz],iconAnchor:[an,an],className:''}),title:(editable?'Drag to move — ':'')+w.id,draggable:editable}).bindPopup(popup,{maxWidth:260,className:'avisor-popup'});
+    var mk=L.marker([w.lat,w.lon],{icon:L.divIcon({html:iconHtml,iconSize:[iconW,iconH],iconAnchor:[iconAx,iconAy],className:''}),title:(editable?'Drag or Tap map… — ':'')+w.id,draggable:editable,zIndexOffset:editable?760:410,riseOnHover:editable}).bindPopup(popup,{maxWidth:280,className:'avisor-popup'});
     if(editable){
       mk.on('dragstart',function(){try{mk.closePopup();}catch(_e){}});
       mk.on('dragend',function(ev){var ll=ev.target.getLatLng();applyWaypointDragEnd(wi,ll.lat,ll.lng);});
