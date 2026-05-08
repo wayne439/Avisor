@@ -936,6 +936,7 @@ canvas#cgc{display:block;width:100%;height:auto}
           <label style="font-family:monospace;font-size:9px;color:#7a9aaa;cursor:pointer"><input type="checkbox" id="map-show-vis" checked onchange="renderMap()"> VFR</label>
           <label style="font-family:monospace;font-size:9px;color:#7a9aaa;cursor:pointer"><input type="checkbox" id="map-show-circle" checked onchange="renderMap()"> VOR rings</label>
           <button type="button" onclick="mapFitRouteFromControl()" style="padding:4px 9px;background:#0a1525;border:1px solid #334455;color:#7acfff;font-family:monospace;font-size:9px;cursor:pointer">FIT</button>
+          <span id="map-basemap-chip" title="Active chart base layer — desktop browsers sometimes fall back to terrain if FAA tiles fail (extensions/firewall). Click FAA chart to retry." style="font-family:monospace;font-size:8px;color:#8aa;max-width:120px;line-height:1.25;text-align:right"></span>
           <button type="button" onclick="openFFApp&&openFFApp()" style="padding:4px 9px;background:#001a00;border:1px solid #00aa44;color:#00e878;font-family:monospace;font-size:9px;cursor:pointer">&#9992; FF</button>
         </div>
       </div>
@@ -5071,6 +5072,64 @@ function avisorClampZoomForAisCharts(z){
   var mz=avisorActiveAisChartMinZ();
   return(!mz||z==null)?z:Math.max(z,mz);
 }
+/** Which FAA/base tile layer is drawn — avoids mistaken fallback on flaky desktops */
+function updateMapBasemapChip(){
+  var el=document.getElementById('map-basemap-chip');
+  if(!el||!window._map)return;
+  var m=_map, fs=m._avisorFaaSectional, lo=m._avisorIfrLow, tac=m._avisorFaaTac, tp=m._avisorTopo, sv=m._avisorSkyVec;
+  if(fs&&m.hasLayer(fs)){
+    el.innerHTML='<span style="color:#5fdf9f">FAA sectional ✓</span>';
+    return;
+  }
+  if(lo&&m.hasLayer(lo)){ el.innerHTML='<span style="color:#8cf">IFR low ✓</span>'; return; }
+  if(tac&&m.hasLayer(tac)){ el.innerHTML='<span style="color:#9cf">TAC ✓</span>'; return; }
+  if(tp&&m.hasLayer(tp)){
+    el.innerHTML='<span style="color:#fa8">Terrain fallback</span> <button type="button" onclick="retryFaaSectionalBasemap()" style="margin-left:4px;padding:2px 5px;font-size:8px;cursor:pointer;background:#1a3a52;border:1px solid #489;color:#bff;font-family:monospace;border-radius:3px">FAA chart</button>';
+    return;
+  }
+  if(sv&&m.hasLayer(sv)){ el.innerHTML='<span style="color:#bbb">OSM streets</span>'; return; }
+  el.innerHTML='<span style="color:#888">Base map</span>';
+}
+function retryFaaSectionalBasemap(){
+  var m=window._map, fs=m&&m._avisorFaaSectional;
+  if(!m||!fs){ if(typeof toast==='function')toast('FAA chart layer unavailable'); return; }
+  var bases=[m._avisorTopo,m._avisorSkyVec,m._avisorSat,m._avisorNight,m._avisorIfrLow,m._avisorFaaTac];
+  bases.forEach(function(Lyr){ try{ if(Lyr&&m.hasLayer(Lyr)) m.removeLayer(Lyr); }catch(_e){} });
+  try{
+    fs.addTo(m);
+    fs._errCount=0;
+    fs._avisorSuppressFallbackUntil=(typeof performance!=='undefined'&&performance.now)?performance.now()+45000:0;
+    if(typeof toast==='function')toast('Loading FAA sectional… allow tiles.arcgis.com if blocked');
+  }catch(e){ if(typeof toast==='function')toast('Could not enable FAA chart'); }
+  updateMapBasemapChip();
+}
+/** Reset AIS fallback counters when tiles succeed — avoids desktop swapping to topo on transient errors */
+function wireAisTileFallbackGuard(chartLayer,fallbackTopo){
+  if(!chartLayer)return;
+  chartLayer.on('tileload',function(){
+    chartLayer._errCount=0;
+    clearTimeout(chartLayer._errTimer);
+  });
+  chartLayer.on('tileerror',function(){
+    var _nw=(typeof performance!=='undefined'&&performance.now)?performance.now():0;
+    if(chartLayer._avisorSuppressFallbackUntil&&_nw&&_nw<chartLayer._avisorSuppressFallbackUntil) return;
+    if(!chartLayer._errCount)chartLayer._errCount=0;
+    chartLayer._errCount++;
+    clearTimeout(chartLayer._errTimer);
+    chartLayer._errTimer=setTimeout(function(){
+      /* Desktop pulls many tiles at once; 5 errors in 3s falsely triggers fallback — require sustained failures */
+      if(chartLayer._errCount>22&&_map&&fallbackTopo&&_map.hasLayer(chartLayer)){
+        _map.removeLayer(chartLayer);
+        fallbackTopo.addTo(_map);
+        try{ localStorage.setItem('avisor_last_basemap_fallback','topo'); }catch(_e){}
+        if(typeof toast==='function')toast('FAA chart tiles failed — switched to terrain. Tap “FAA chart” in the bar or allow tiles.arcgis.com (disable ad-block for this site).');
+        updateMapBasemapChip();
+      }
+      chartLayer._errCount=0;
+    },9000);
+  });
+}
+
 function refreshMapContextLayers(){
   if(!_map) return;
   var aptLayer=_map._ctxAirportsLayer,navLayer=_map._ctxNavLayer;
@@ -5136,18 +5195,19 @@ function initMap(){
   var _arcgisBase='https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services';
   if(!isFileMode){
     try{
+      /* Omit crossOrigin on FAA rasters — some desktop browsers fail tile loads with CORS + canvas pipeline */
       faaSec=L.tileLayer(_arcgisBase+'/VFR_Sectional/MapServer/tile/{z}/{y}/{x}',{
         minZoom:5,maxZoom:14,minNativeZoom:8,maxNativeZoom:12,
-        attribution:'FAA/AIS Sectional',crossOrigin:true
+        attribution:'FAA/AIS Sectional'
       });
       ifrLow=L.tileLayer(_arcgisBase+'/IFR_AreaLow/MapServer/tile/{z}/{y}/{x}',{
         minZoom:5,maxZoom:12,minNativeZoom:7,maxNativeZoom:12,
-        attribution:'FAA/AIS IFR Low',crossOrigin:true
+        attribution:'FAA/AIS IFR Low'
       });
       // TAC - Terminal Area Charts (denser coverage around busy airports)
       var faaVfrTac=L.tileLayer(_arcgisBase+'/VFR_Terminal/MapServer/tile/{z}/{y}/{x}',{
         minZoom:9,maxZoom:14,minNativeZoom:10,maxNativeZoom:12,
-        attribution:'FAA/AIS TAC',crossOrigin:true,opacity:0.95
+        attribution:'FAA/AIS TAC',opacity:0.95
       });
       // Store refs for layer control
       _map._avisorFaaSectional=faaSec;
@@ -5160,6 +5220,10 @@ function initMap(){
   var topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17,subdomains:'abc'});
   var sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
   var night=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19});
+  _map._avisorTopo=topo;
+  _map._avisorSkyVec=skyVec;
+  _map._avisorSat=sat;
+  _map._avisorNight=night;
   var airspL=L.layerGroup();
   var ctxAirportsL=L.layerGroup();
   var ctxNavL=L.layerGroup();
@@ -5176,18 +5240,7 @@ function initMap(){
   var def=(isFileMode?topo:(faaSec||topo));
   def.addTo(_map);
   if(isFileMode&&typeof toast==='function') toast('FILE MODE: map limited. Use http://localhost for FAA sectionals.');
-  if(faaSec) faaSec.on('tileerror',function(){
-    if(!faaSec._errCount)faaSec._errCount=0;
-    faaSec._errCount++;
-    clearTimeout(faaSec._errTimer);
-    faaSec._errTimer=setTimeout(function(){
-      if(faaSec._errCount>5&&_map&&_map.hasLayer(faaSec)){
-        _map.removeLayer(faaSec);topo.addTo(_map);
-        if(typeof toast==='function')toast('FAA SECTIONAL UNAVAILABLE — USING TOPO');
-      }
-      faaSec._errCount=0;
-    },3000);
-  });
+  if(faaSec) wireAisTileFallbackGuard(faaSec,topo);
   // (faaSec/ifrLow refs already stored on _map inside init block above)
   L.control.layers(baseLayers,{
     'Airspace B/C/D':airspL,
@@ -5202,6 +5255,11 @@ function initMap(){
       else if(ev.name&&ev.name.indexOf('TAC')>=0)need=10;
     }
     if(need&&_map.getZoom()<need)_map.setZoom(need);
+    try{
+      var nm=(ev&&ev.name)||'';
+      if(nm) localStorage.setItem('avisor_basemap_name',nm);
+    }catch(_e){}
+    updateMapBasemapChip();
   });
   L.control.zoom({position:'bottomright'}).addTo(_map);
   drawKnownAirspace(airspL);
@@ -5219,6 +5277,8 @@ function initMap(){
   setTimeout(function(){if(_map)_map.invalidateSize(true);},320);
   setTimeout(function(){if(_map)_map.invalidateSize(true);},700);
   setTimeout(function(){refreshMapContextLayers();},180);
+  setTimeout(function(){updateMapBasemapChip();},50);
+  setTimeout(function(){updateMapBasemapChip();},400);
 }
 function mapFitRoute(){
   if(!_map)return;
