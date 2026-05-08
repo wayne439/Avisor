@@ -26,6 +26,24 @@ function registerServiceWorker(): void {
 }
 
 type FormFields = { dep: string; arr: string; runway: string; atis: string; note: string };
+type BuildMeta = {
+  version?: string;
+  commit?: string;
+  generatedAtUtc?: string;
+  dirty?: boolean;
+};
+
+async function readBuildMeta(): Promise<BuildMeta | null> {
+  try {
+    const base = import.meta.env.BASE_URL || "/";
+    const url = `${base}build-meta.json`.replace(/\/+/g, "/");
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as BuildMeta;
+  } catch {
+    return null;
+  }
+}
 
 function readForm(): FormFields {
   return {
@@ -71,19 +89,46 @@ async function boot(): Promise<void> {
   if (!root) return;
 
   const avisorUrl = `${import.meta.env.BASE_URL || "/"}avisor.html`.replace(/\/+/g, "/");
+  const airportBriefUrl = `${import.meta.env.BASE_URL || "/"}airport-brief.html`.replace(/\/+/g, "/");
+  const meta = await readBuildMeta();
+  const ver = meta ? `${meta.version || "0.0.0"} · ${meta.commit || "unknown"}${meta.dirty ? "-dirty" : ""}` : "build meta unavailable";
 
   root.innerHTML = `
     <header class="top">
-      <span class="brand">PilotAvisor dev server</span>
+      <span class="brand">PilotAvisor</span>
       <span id="net-dot" class="dot"></span>
       <span id="net-label"></span>
+      <span class="build-stamp">Build ${esc(ver)}</span>
     </header>
 
     <section class="card hero">
-      <h1>Test the full planner</h1>
-      <p class="lead">Weather, NOTAMs, and map layers need <b>http://localhost</b> — not a double‑clicked <code>file://</code> file.</p>
-      <a class="big-btn" href="${avisorUrl}">Open PilotAvisor planner →</a>
-      <p class="hint">Planner file: <code>public/avisor.html</code> · Re-copy from Desktop after edits: <code>npm run sync:avisor</code></p>
+      <h1>A cockpit planning copilot built for real GA workload</h1>
+      <p class="lead">Plan, brief, route, export, and re-brief in one workflow. PilotAvisor is safety-first, source-backed, and designed to keep workload down when it matters.</p>
+      <div class="row">
+        <a class="big-btn" href="${avisorUrl}">Open Flight Planner →</a>
+        <a class="big-btn secondary-link" href="${airportBriefUrl}">Open Airport Brief →</a>
+      </div>
+      <ul class="proof-list">
+        <li>ForeFlight-ready route export and in-flight replan loop</li>
+        <li>Offline-aware app shell with local FAA and airport datasets</li>
+        <li>Build stamp + deploy verify hooks for trustable releases</li>
+      </ul>
+      <p class="hint">Planner file: <code>public/avisor.html</code> · Re-copy and stamp version: <code>npm run sync:avisor</code></p>
+    </section>
+
+    <section class="card">
+      <h2>Why PilotAvisor</h2>
+      <p class="lead">Aviation tools should feel like a briefing assistant, not a generic chatbot. PilotAvisor focuses on briefing readiness, route clarity, and fast cockpit decisions.</p>
+      <div class="grid">
+        <div class="mini">
+          <b>Brief-ready outputs</b>
+          <span>Weather, NOTAM, runway, frequencies, and route context in one flow.</span>
+        </div>
+        <div class="mini">
+          <b>Pilot workflow fit</b>
+          <span>Optimized for iPad/phone cockpit use and quick updates under load.</span>
+        </div>
+      </div>
     </section>
 
     <section class="card">

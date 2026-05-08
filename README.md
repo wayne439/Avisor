@@ -36,6 +36,8 @@ npm run dev
 | `npm run dev` | Local web dev server |
 | `npm run dev:lan` | LAN access for phone testing |
 | `npm run build` | Production build |
+| `npm run stamp:version` | Write `public/build-meta.json` version stamp |
+| `npm run verify:deploy` | Verify deployed `build-meta.json` matches local |
 | `npm run tunnel` | Tunnelmole public URL |
 | `npm run cap:sync` | Capacitor mobile sync |
 | `npm run desktop:dev` | Tauri desktop window |
@@ -65,6 +67,12 @@ avisor/
 ├── src-tauri/      # Tauri desktop
 └── .github/        # CI workflows
 ```
+
+## Public quick links
+
+- `./avisor.html` — full planner UI
+- `./airport-brief.html` — lightweight airport briefing page (runways, frequencies, METAR/TAF)
+- `./build-meta.json` — deployed build stamp for release verification
 
 ---
 

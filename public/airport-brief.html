@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PilotAvisor Airport Brief</title>
+  <style>
+    :root { --bg:#0a0c12; --card:#121826; --txt:#dde5f5; --muted:#7a8aa8; --ac:#00c8f0; --bd:#2a3350; --ok:#00e878; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,Segoe UI,sans-serif; background:var(--bg); color:var(--txt); padding:18px; max-width:980px; margin-inline:auto; }
+    .card { background:var(--card); border:1px solid var(--bd); border-radius:10px; padding:14px; margin-bottom:12px; }
+    h1,h2 { margin:0 0 8px; }
+    h1 { font-size:21px; }
+    h2 { font-size:15px; }
+    .lead { color:var(--muted); margin:0 0 10px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:end; }
+    label { display:flex; flex-direction:column; gap:4px; color:var(--muted); font-size:12px; }
+    input { background:#0d1018; color:var(--txt); border:1px solid var(--bd); border-radius:6px; padding:9px 10px; min-width:160px; font-family:ui-monospace,monospace; }
+    button { background:var(--ac); color:#001018; border:none; border-radius:6px; padding:10px 14px; font-weight:700; cursor:pointer; }
+    .muted { color:var(--muted); font-size:12px; }
+    .mono { font-family:ui-monospace,monospace; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th,td { border-bottom:1px solid var(--bd); padding:7px 6px; text-align:left; }
+    .pill { border:1px solid var(--bd); border-radius:99px; padding:3px 9px; font-size:11px; color:var(--muted); }
+    .ok { color:var(--ok); }
+  </style>
+</head>
+<body>
+  <section class="card">
+    <h1>Airport Brief (Public)</h1>
+    <p class="lead">Pilot-first quick brief for runway/wind/frequencies/weather. Data sources: local FAA datasets + AviationWeather API.</p>
+    <div class="row">
+      <label>ICAO
+        <input id="icao" maxlength="5" value="KSDL" />
+      </label>
+      <button id="load-btn">Load Brief</button>
+      <a class="pill mono" href="./avisor.html">Open full planner</a>
+      <span id="build-meta" class="pill mono">Build: loading…</span>
+    </div>
+    <p id="status" class="muted"></p>
+  </section>
+
+  <section class="card">
+    <h2>Airport Summary</h2>
+    <div id="airport-summary" class="muted">Enter ICAO and load.</div>
+  </section>
+
+  <section class="card">
+    <h2>Favored Runway (Current Wind)</h2>
+    <div id="runway-pick" class="muted">Awaiting weather and runway data.</div>
+  </section>
+
+  <section class="card">
+    <h2>Runways</h2>
+    <div id="runways" class="muted">No runway rows yet.</div>
+  </section>
+
+  <section class="card">
+    <h2>Frequencies</h2>
+    <div id="freqs" class="muted">No frequencies available.</div>
+  </section>
+
+  <section class="card">
+    <h2>Live METAR / TAF</h2>
+    <div id="wx" class="muted">No weather yet.</div>
+  </section>
+
+  <script src="./airport-brief.js"></script>
+</body>
+</html>
