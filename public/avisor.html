@@ -116,6 +116,8 @@ body.simple-ui .adv-section{display:none}
 .map-subbar{display:flex;gap:6px;align-items:center;padding:5px 10px;background:#060810;border-bottom:2px solid #1e2a3a;flex-shrink:0;flex-wrap:wrap}
 .map-menu-btn{padding:4px 9px;background:#0a1525;border:1px solid #334455;color:#7acfff;font-family:monospace;font-size:9px;cursor:pointer}
 .map-menu-btn:hover{border-color:#7acfff;color:#bfe8ff}
+.map-exit-fab{position:absolute;top:8px;left:8px;z-index:920;background:rgba(6,11,20,.92);border:1px solid #4c6f92;color:#bfe8ff;font-family:var(--mono);font-size:10px;padding:6px 9px;cursor:pointer}
+.map-exit-fab:hover{border-color:#7acfff;color:#fff}
 
 /* ═══ EMPTY STATE ═══════════════════════════════════════════════ */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px;color:var(--txt3);gap:8px}
@@ -922,7 +924,7 @@ canvas#cgc{display:block;width:100%;height:auto}
   <!-- SECTIONAL MAP -->
   <div class="panel" id="p-map">
     <div id="e-map" class="empty"><div class="ei">//</div><div class="et">BUILD PLAN TO PREVIEW SECTIONAL ROUTE</div></div>
-    <div id="d-map" style="display:none;flex-direction:column;flex:1;min-height:0">
+    <div id="d-map" style="display:none;flex-direction:column;flex:1;min-height:0;position:relative">
       <div class="map-subbar">
         <button type="button" class="map-menu-btn" onclick="backToMenuFromMap()">☰ MENU</button>
         <div style="font-family:monospace;font-size:11px;font-weight:bold;color:#ff00ff;flex-shrink:0" id="map-route-label">SECTIONAL PREVIEW</div>
@@ -934,6 +936,7 @@ canvas#cgc{display:block;width:100%;height:auto}
           <button type="button" onclick="openFFApp&&openFFApp()" style="padding:4px 9px;background:#001a00;border:1px solid #00aa44;color:#00e878;font-family:monospace;font-size:9px;cursor:pointer">&#9992; FF</button>
         </div>
       </div>
+      <button type="button" class="map-exit-fab" onclick="backToMenuFromMap()">← BACK</button>
       <div id="map-container"></div>
       <div id="map-navlog" style="background:#080b12;border-top:2px solid #ff00ff;flex-shrink:0;max-height:140px;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
     </div>
@@ -1644,7 +1647,10 @@ async function buildWaypoints(plan){
     var along=alongTrackNmDepArr(depLat,depLon,arrLat,arrLon,w.lat,w.lon);
     var xtk=crossTrackDist(depLat,depLon,arrLat,arrLon,w.lat,w.lon);
     var withinAlong=(along>=-15&&along<=totalDist+15);
-    var withinXtk=(xtk<=Math.max(28,Math.min(95,totalDist*0.14)));
+    var xtkCap=(rulesNorm==='VFR')
+      ?Math.max(24,Math.min(50,totalDist*0.085))
+      :Math.max(28,Math.min(58,totalDist*0.095));
+    var withinXtk=(xtk<=xtkCap);
     if(!withinAlong||!withinXtk){ dropped++; return false; }
     return true;
   });
