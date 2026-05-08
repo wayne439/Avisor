@@ -439,12 +439,12 @@ canvas#cgc{display:block;width:100%;height:auto}
     <div class="row2">
       <div class="field">
         <label>From ICAO</label>
-        <input id="dep" value="KSDL" maxlength="8" spellcheck="false" autocomplete="off" oninput="onRouteIcaoInput('dep')" onblur="onRouteIcaoBlur('dep')">
+        <input id="dep" value="" maxlength="8" spellcheck="false" autocomplete="off" oninput="onRouteIcaoInput('dep')" onblur="onRouteIcaoBlur('dep')">
         <div id="dep-icao-msg" class="icao-msg" aria-live="polite"></div>
       </div>
       <div class="field">
         <label>To ICAO</label>
-        <input id="arr" value="KASE" maxlength="8" spellcheck="false" autocomplete="off" oninput="onRouteIcaoInput('arr')" onblur="onRouteIcaoBlur('arr')">
+        <input id="arr" value="" maxlength="8" spellcheck="false" autocomplete="off" oninput="onRouteIcaoInput('arr')" onblur="onRouteIcaoBlur('arr')">
         <div id="arr-icao-msg" class="icao-msg" aria-live="polite"></div>
       </div>
     </div>
@@ -488,7 +488,7 @@ canvas#cgc{display:block;width:100%;height:auto}
       <div class="field"><label>Priority</label><select id="pri"><option value="fastest">Fastest</option><option value="fuel">Fuel Save</option><option value="smooth">Smoothest</option><option value="safe">Safest Wx</option></select></div>
     </div>
     <div class="row2">
-      <div class="field"><label>Reserve (min)</label><input id="reserve" type="number" value="45" min="30" max="120"></div>
+      <div class="field"><label>Reserve (min)</label><input id="reserve" type="number" value="" min="30" max="120" placeholder="e.g. 45"></div>
       <div class="field"><label>Tail #</label><input id="tail" placeholder="N12345" oninput="this.value=this.value.toUpperCase()"></div>
     </div>
     <div class="field" style="margin-top:4px">
@@ -3820,13 +3820,6 @@ function tab(id){
 // ══════════════════════════════════════════════════════════════════
 loadWB();
 (function(){
-  var d=document.getElementById('flt-date');
-  if(d&&!d.value){
-    var t=new Date();
-    d.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
-  }
-})();
-(function(){
   if(location.protocol!=='file:')return;
   var bar=document.createElement('div');
   bar.id='file-protocol-banner';
@@ -5187,8 +5180,7 @@ function saveAvisorRoutePrefs(){
       proxApproach:!!document.getElementById('opt-prox-approach')?.checked,
       proxNm:parseInt(document.getElementById('opt-prox-nm')?.value,10)||25,
       wpSpacing:(document.getElementById('opt-wp-spacing')||{}).value||'auto',
-      apchPref:(document.getElementById('apch-pref')||{}).value||'auto',
-      planAlt:String((document.getElementById('plan-alt')||{}).value||'').trim()
+      apchPref:(document.getElementById('apch-pref')||{}).value||'auto'
     };
     localStorage.setItem(AVISOR_ROUTE_PREFS_KEY,JSON.stringify(o));
   }catch(_e){}
@@ -5238,8 +5230,6 @@ function loadAvisorRoutePrefs(){
     if(ws&&o.wpSpacing){ for(var wi=0;wi<ws.options.length;wi++){ if(ws.options[wi].value===o.wpSpacing){ ws.selectedIndex=wi; break; } } }
     var ap=document.getElementById('apch-pref');
     if(ap&&o.apchPref){ for(var ai=0;ai<ap.options.length;ai++){ if(ap.options[ai].value===o.apchPref){ ap.selectedIndex=ai; break; } } }
-    var pa=document.getElementById('plan-alt');
-    if(pa&&typeof o.planAlt==='string') pa.value=o.planAlt;
     if(document.getElementById('opt-prox-approach')&&document.getElementById('opt-prox-approach').checked&&typeof syncProximityApproachWatch==='function') syncProximityApproachWatch();
   }catch(_e){}
 }
@@ -5296,9 +5286,18 @@ function toggleSimpleUi(){
   var on=!document.body.classList.contains('simple-ui');
   setSimpleUiMode(on);
 }
+function clearPlannerStartupFields(){
+  ['dep','arr','flt-date','plan-alt','reserve','tail'].forEach(function(id){
+    var e=document.getElementById(id);
+    if(e&&'value' in e) e.value='';
+  });
+  var wx=document.getElementById('pre-wx-snap');
+  if(wx) wx.innerHTML='';
+}
 window.addEventListener("load",function(){
   initSafetyCheck();
   initSimpleUi();
+  clearPlannerStartupFields();
   if(typeof loadAvisorRoutePrefs==='function') loadAvisorRoutePrefs();
   if(typeof syncGpsDirectUiWithVfrVisual==='function') syncGpsDirectUiWithVfrVisual({persist:true});
   if(typeof wireAvisorPrefsPersistence==='function') wireAvisorPrefsPersistence();
