@@ -118,6 +118,8 @@ body.simple-ui .adv-section{display:none}
 .map-menu-btn:hover{border-color:#7acfff;color:#bfe8ff}
 .map-exit-fab{position:absolute;top:8px;left:8px;z-index:920;background:rgba(6,11,20,.92);border:1px solid #4c6f92;color:#bfe8ff;font-family:var(--mono);font-size:10px;padding:6px 9px;cursor:pointer}
 .map-exit-fab:hover{border-color:#7acfff;color:#fff}
+#global-map-exit{position:fixed;top:66px;left:8px;z-index:22000;display:none;background:rgba(6,11,20,.96);border:1px solid #58a7ff;color:#d7ecff;font-family:var(--mono);font-size:11px;padding:8px 10px;cursor:pointer}
+#global-map-exit:hover{border-color:#8dc7ff;color:#fff}
 
 /* ═══ EMPTY STATE ═══════════════════════════════════════════════ */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px;color:var(--txt3);gap:8px}
@@ -433,6 +435,7 @@ canvas#cgc{display:block;width:100%;height:auto}
     <div class="pill" id="hdr-status" style="color:var(--txt2)">NO PLAN</div>
   </div>
 </div>
+<button id="global-map-exit" type="button" onclick="backToMenuFromMap()">← BACK TO MENU</button>
 
 <div class="body">
 <!-- ═══ LEFT SIDEBAR ═══════════════════════════════════════════════ -->
@@ -3277,6 +3280,10 @@ function showPatternOnMap(){
 function backToMenuFromMap(){
   if(typeof tab==='function') tab('brief');
   try{
+    var gmb=document.getElementById('global-map-exit');
+    if(gmb) gmb.style.display='none';
+  }catch(_e){}
+  try{
     var left=document.querySelector('.left');
     if(left&&left.scrollTo) left.scrollTo({top:0,behavior:'smooth'});
   }catch(_e){}
@@ -3799,6 +3806,8 @@ function tab(id){
     document.getElementById('t-'+i)?.classList.toggle('on',i===id);
     document.getElementById('p-'+i)?.classList.toggle('on',i===id);
   });
+  var gmb=document.getElementById('global-map-exit');
+  if(gmb) gmb.style.display=(id==='map')?'block':'none';
 
   if(id==='map'){
     /* Show map chrome immediately so flex can assign height before any async init */
@@ -4353,10 +4362,12 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
   var target=(isFinite(tn)&&tn>=25&&tn<=140)?tn:55;
   var needBase=Math.max(1,Math.round(direct/(target*1.38))-1);
   // Keep meaningful enroute references on longer flights (user preference: 3-4+ mids by distance).
-  var minNeedByDistance=direct>=520?4:direct>=260?3:direct>=195?2:1;
+  var minNeedByDistance=(rules==='VFR')
+    ?(direct>=700?3:direct>=320?2:direct>=180?1:0)
+    :(direct>=520?4:direct>=260?3:direct>=195?2:1);
   var need=Math.max(needBase,minNeedByDistance);
   var conus=isConusCoord(dep.lat,dep.lon)&&isConusCoord(arr.lat,arr.lon);
-  var xtkMax=(rules==='VFR')?(direct>320?42:direct>160?34:28):48;
+  var xtkMax=(rules==='VFR')?(direct>320?32:direct>160?28:24):48;
   var airwayBias=rules==='IFR'?airwayBiasSetForCorridor(dep,arr):{};
   var routeHints=rules==='VFR'&&vfrVisualOn?buildVfrEnrouteHintSets(dep,arr):{victor:{},metro:{}};
   var cands=[];
@@ -4426,7 +4437,7 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
     for(var j=0;j<cands.length;j++){
       var c=cands[j],cid=String(c.id).toUpperCase();
       if(used[cid]) continue;
-      var score=Math.abs(c.along-tgt)+(c.xtk*4.25);
+      var score=Math.abs(c.along-tgt)+(c.xtk*(rules==='VFR'?6.2:4.25));
       if(rules==='VFR'){
         if(routeHints.victor[cid]) score-=28;
         if(routeHints.metro[cid]) score-=18;
@@ -4482,7 +4493,7 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
     var t=0;for(var i=1;i<pts.length;i++)t+=gcDist(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon);
     return t;
   }
-  var maxRatio=(rules==='VFR')?1.09:1.18;
+  var maxRatio=(rules==='VFR')?1.06:1.18;
   if(routeLen(route)>direct*maxRatio&&need>1){
     var sparseNeed=Math.max(minNeedByDistance,Math.floor(need*0.78));
     var sparse=[dep.ident];
