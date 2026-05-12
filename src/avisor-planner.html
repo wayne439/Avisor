@@ -812,7 +812,7 @@ canvas#cgc{display:block;width:100%;height:auto}
   <!-- ATC LIVE -->
   <div class="panel" id="p-atc">
     <div class="offline-note">
-      ✓ ATC Transcription runs <b>on-device</b> using the Web Speech API — no data sent to any server. Works offline once the browser engine is cached. For aviation-grade accuracy, connect in areas with good signal during the learning period.
+      <b>SpeechRecognition (browser):</b> Chrome / Edge / Android typically send audio to the vendor speech service — <b>network usually required</b>; not the same as fully offline native ATC models (e.g. PilotGPT’s on-device pipeline). Safari on Apple devices may behave differently by OS. <b>Always verify clearances by ear.</b> After <b>Build</b>, frequency/airport fields can be edited.
     </div>
     <div class="card c-r">
       <div class="card-h"><span class="card-title">Live ATC Transcriber</span><span class="badge b-r" id="atc-status-badge">STOPPED</span></div>
@@ -2959,7 +2959,7 @@ function findRelPOH(q,txt,max){
 }
 
 // ══════════════════════════════════════════════════════════════════
-// ATC TRANSCRIBER — Web Speech API (on-device, offline capable)
+// ATC TRANSCRIBER — Web Speech API (browser engine; often cloud in Chrome)
 // ══════════════════════════════════════════════════════════════════
 const ATC_KEYWORDS=['runway','go around','hold short','traffic','wind shear','turbulence','pirep','airmet','sigmet','clear','cleared','descend','climb','contact','squawk','ident','cancel','emergency'];
 
@@ -2989,7 +2989,14 @@ function startATC(){
     }
     if(final){addATCLine(final.trim());}
   };
-  rec.onerror=e=>{if(e.error!=='no-speech')addATCLine('[Error: '+e.error+']',true);};
+  rec.onerror=e=>{
+    if(e.error==='no-speech') return;
+    if(e.error==='network'){
+      addATCLine('[Error: network — speech recognition in this browser usually needs internet (Chrome/Edge). Reconnect, try Safari on Apple devices, or use a native offline ASR app for no-network ATC.]',true);
+      return;
+    }
+    addATCLine('[Error: '+e.error+']',true);
+  };
   rec.onend=()=>{if(STATE.atcActive)rec.start();};
   rec.start();
 }
@@ -3075,7 +3082,7 @@ async function sendChat(){
     else if(lo.includes('weather')||lo.includes('metar'))r=`Dep (${p.depIcao}): ${p.depWind}, ${skyFmt(p.dm)}\nArr (${p.arrIcao}): ${p.arrWind}, ${skyFmt(p.am)}\nFull METARs in WEATHER tab.`;
     else if(lo.includes('weight')||lo.includes('balance')||lo.includes('wb'))r=`W&B profile for ${p.ac.name} is in ⚖ W&B tab. Enter station weights to compute CG and see the envelope diagram.`;
     else if(lo.includes('poh'))r=`Upload your aircraft POH PDF in 📖 POH AI tab — ask any question and get answers referenced to your exact manual pages.`;
-    else if(lo.includes('atc'))r=`ATC Transcription is in 🎙 ATC LIVE tab. Tap the big red button, speak or pipe ATC audio — it transcribes on-device using Web Speech API.`;
+    else if(lo.includes('atc'))r=`ATC Transcription is in 🎙 ATC LIVE tab. It uses your browser’s SpeechRecognition engine (often **requires network** in Chrome; differs from fully offline native apps). Tap START and feed mic or wired audio from your radio — **verify clearances by ear.**`;
     else r=`**${p.primary}** | Alt: **${p.alt.toLocaleString()} ft** | **${p.eteMin} min** | **${p.totalFuel} gal** | **${STATE.waypoints.length} waypoints in .fpl**\n\nAdd Anthropic API key for full AI responses to any aviation question.`;
     STATE.hist.push({role:'assistant',content:r});addChatMsg('ai',r);document.getElementById('chat-send').disabled=false;return;
   }

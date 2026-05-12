@@ -10,6 +10,9 @@
 <link rel="icon" href="./app-icon.svg" type="image/svg+xml"><link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./pwa-192.png">
 <title>PilotAvisor — AI Flight Advisor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
 /* Skip SW on Vite dev (5173): avoids cache/intercept quirks; LAN http://10.x is not a secure SW context anyway. */
 window.addEventListener('load',function(){var p=location.port;if(p==='5173')return;if(!('serviceWorker'in navigator))return;navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(function(){});});
@@ -18,38 +21,48 @@ window.addEventListener('load',function(){var p=location.port;if(p==='5173')retu
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --sky:#0d1829;--sky2:#101e32;--sky3:#162440;--sky4:#1c2d50;
-  --line:#243458;--line2:#2e4070;
+  --sky:#0a1220;--sky2:#0e1628;--sky3:#141f36;--sky4:#1a2744;
+  --line:rgba(56,190,255,.14);--line2:rgba(90,120,160,.35);
   --blu:#38beff;--blu2:#1a8fcf;--blu3:#0d4a70;
   --grn:#00e57a;--grn2:#00a855;--grn3:#003d20;
   --amb:#ffaa00;--amb2:#c07800;
   --red:#ff3d3d;--red2:#aa1010;
   --pur:#b87aff;--pur2:#7040d0;
-  --txt:#d8e8ff;--txt2:#7090b8;--txt3:#384860;
+  --txt:#e8f0fc;--txt2:#8fa6c4;--txt3:#5c6d88;
+  --radius:10px;--radius-sm:6px;
+  --shadow-card:0 4px 24px rgba(0,0,0,.22);
   /* Legacy alias variables used by inline styles */
   --tx:var(--txt);--tx2:var(--txt2);--tx3:var(--txt3);
   --ac:var(--blu);--am:var(--amb);--gn:var(--grn);--rd:var(--red);
   --a3:var(--blu3);--b1:var(--line);--bg2:var(--sky3);
-  --mono:'Courier New',monospace;
-  --sans:'Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono','SF Mono','Consolas','Courier New',monospace;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
 }
 html,body{height:100%;overflow:hidden;background:var(--sky)}
-body{color:var(--txt);font-family:var(--sans);font-size:13px;user-select:none}
+body{
+  color:var(--txt);font-family:var(--sans);font-size:14px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+  user-select:none;
+}
+/* Readable copy in main panels — map stays non-selectable for pan/zoom */
+.right .panel.on{user-select:text;-webkit-user-select:text}
+#p-map.panel.on,#p-map.panel.on #map-container,#p-map.panel.on .leaflet-container,#p-map.panel.on canvas{user-select:none!important;-webkit-user-select:none!important}
+.left input,.left select,.left textarea{user-select:text;-webkit-user-select:text}
 
 /* ═══ LAYOUT ═══════════════════════════════════════════════════ */
 .app{display:flex;flex-direction:column;height:100vh}
 
 /* ═══ TOPBAR ════════════════════════════════════════════════════ */
-.topbar{height:50px;background:var(--sky2);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;position:relative}
-.topbar::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--blu),transparent)}
+.topbar{height:52px;background:linear-gradient(180deg,var(--sky2) 0%,#0c1424 100%);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 18px;gap:14px;flex-shrink:0;position:relative;backdrop-filter:blur(8px)}
+.topbar::after{display:none}
 .logo-mark{width:32px;height:32px;border:2px solid var(--blu);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .logo-mark svg{width:18px;height:18px}
-.logo-text{font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:3px;color:var(--blu)}
-.logo-text span{color:var(--txt3);font-size:9px;letter-spacing:1px;margin-left:6px;vertical-align:middle}
-.topbar-pills{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
-.topbar-if-btn{font-family:var(--mono);font-size:9px;padding:4px 10px;border:1px solid var(--amb2);background:rgba(255,170,0,.08);color:var(--amb);letter-spacing:1px;cursor:pointer;border-radius:3px;flex-shrink:0}
-.topbar-if-btn:hover{background:rgba(255,170,0,.18);border-color:var(--amb);color:#ffd080}
-.pill{font-family:var(--mono);font-size:9px;padding:2px 7px;border:1px solid var(--line2);color:var(--txt2);letter-spacing:1px;display:flex;align-items:center;gap:4px}
+.logo-text{font-family:var(--sans);font-size:17px;font-weight:700;letter-spacing:-0.02em;color:var(--txt)}
+.logo-text span{color:var(--txt3);font-size:11px;font-weight:500;letter-spacing:0;margin-left:8px;vertical-align:middle}
+.topbar-pills{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.topbar-if-btn{font-family:var(--sans);font-size:11px;font-weight:600;padding:6px 12px;border:1px solid rgba(255,170,0,.35);background:rgba(255,170,0,.06);color:var(--amb);letter-spacing:0;cursor:pointer;border-radius:var(--radius-sm);flex-shrink:0;transition:background .15s,border-color .15s}
+.topbar-if-btn:hover{background:rgba(255,170,0,.14);border-color:rgba(255,170,0,.55);color:#ffc966}
+.pill{font-family:var(--sans);font-size:10px;font-weight:500;padding:4px 9px;border:1px solid var(--line);color:var(--txt2);letter-spacing:0;display:flex;align-items:center;gap:5px;border-radius:999px;background:rgba(255,255,255,.03)}
 .live{background:var(--grn);width:5px;height:5px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px var(--grn);animation:blink 2s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
@@ -57,16 +70,16 @@ body{color:var(--txt);font-family:var(--sans);font-size:13px;user-select:none}
 .body{display:flex;flex:1;overflow:hidden;min-height:0}
 
 /* ═══ LEFT PANEL (controls) ════════════════════════════════════ */
-.left{width:260px;background:var(--sky2);border-right:1px solid var(--line);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
-.section{padding:11px 13px;border-bottom:1px solid var(--line)}
-.section-title{font-family:var(--mono);font-size:9px;color:var(--blu);letter-spacing:2px;text-transform:uppercase;margin-bottom:9px}
+.left{width:272px;background:linear-gradient(180deg,var(--sky2),#0a111d);border-right:1px solid var(--line);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.section{padding:14px 16px;border-bottom:1px solid var(--line)}
+.section-title{font-family:var(--sans);font-size:11px;font-weight:600;color:#b8cce8;letter-spacing:0.04em;text-transform:none;margin-bottom:11px}
 body.simple-ui .adv-section{display:none}
 #ui-simple-toggle{width:100%;padding:7px 9px;background:transparent;border:1px solid var(--line2);color:var(--txt2);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer}
 #ui-simple-toggle:hover{border-color:var(--blu3);color:var(--blu)}
 .field{margin-bottom:8px}
-.field label{display:block;font-family:var(--mono);font-size:9px;color:var(--txt2);letter-spacing:1px;margin-bottom:3px;text-transform:uppercase}
-.field input,.field select{width:100%;background:var(--sky3);border:1px solid var(--line);color:var(--txt);font-family:var(--mono);font-size:12px;padding:6px 8px;outline:none;transition:border-color .15s}
-.field input:focus,.field select:focus{border-color:var(--blu)}
+.field label{display:block;font-family:var(--sans);font-size:11px;font-weight:500;color:var(--txt2);letter-spacing:0;margin-bottom:5px;text-transform:none}
+.field input,.field select{width:100%;background:var(--sky3);border:1px solid var(--line);color:var(--txt);font-family:var(--mono);font-size:13px;padding:8px 10px;outline:none;transition:border-color .15s,box-shadow .15s;border-radius:var(--radius-sm)}
+.field input:focus,.field select:focus{border-color:rgba(56,190,255,.55);box-shadow:0 0 0 3px rgba(56,190,255,.12)}
 .field input.icao-inv{border-color:var(--red)!important}
 .field input.icao-ok{border-color:var(--grn)!important}
 .icao-msg{font-family:var(--mono);font-size:8px;margin-top:3px;min-height:14px;line-height:1.35;color:var(--txt2)}
@@ -80,12 +93,12 @@ body.simple-ui .adv-section{display:none}
 .tog input:checked+.tog-tr{background:var(--blu3);border-color:var(--blu)}
 .tog-th{position:absolute;top:2px;left:2px;width:11px;height:11px;background:var(--txt3);transition:.15s;pointer-events:none}
 .tog input:checked~.tog-th{left:17px;background:var(--blu)}
-.go-btn{width:100%;padding:11px;background:linear-gradient(135deg,var(--blu3),var(--blu2));border:1px solid var(--blu);color:#fff;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
-.go-btn:hover:not(:disabled){background:var(--blu);box-shadow:0 0 20px rgba(56,190,255,.3)}
+.go-btn{width:100%;padding:13px 14px;background:linear-gradient(135deg,#1a6a9a,var(--blu2));border:1px solid rgba(56,190,255,.45);color:#fff;font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:0.02em;text-transform:none;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:var(--radius)}
+.go-btn:hover:not(:disabled){background:var(--blu);box-shadow:0 6px 28px rgba(56,190,255,.28)}
 .go-btn:disabled{opacity:.35;cursor:not-allowed}
 .go-btn svg{width:14px;height:14px}
-.btn-inflight{width:100%;padding:9px;background:transparent;border:1px solid var(--amb);color:var(--amb);font-family:var(--mono);font-size:10px;letter-spacing:2px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px}
-.btn-inflight:hover{background:var(--amb);color:var(--sky)}
+.btn-inflight{width:100%;padding:10px 12px;background:transparent;border:1px solid rgba(255,170,0,.4);color:var(--amb);font-family:var(--sans);font-size:12px;font-weight:600;letter-spacing:0;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:var(--radius-sm)}
+.btn-inflight:hover{background:rgba(255,170,0,.12);color:#ffd699;border-color:rgba(255,170,0,.55)}
 .left-footer{padding:12px;background:var(--sky2);border-top:1px solid var(--line)}
 #file-protocol-banner{position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#a65c00,#c87800);color:#fff;padding:9px 14px;font-family:var(--mono);font-size:11px;text-align:center;line-height:1.5;box-shadow:0 3px 14px rgba(0,0,0,.45)}
 #file-protocol-banner code{background:rgba(0,0,0,.2);padding:2px 6px;border-radius:3px}
@@ -97,22 +110,22 @@ body.simple-ui .adv-section{display:none}
 .right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 
 /* ═══ TAB BAR (full width under topbar — stays visible on sectional map) ═══ */
-#main-tabbar.tabbar{height:40px;background:var(--sky2);border-bottom:1px solid var(--line);display:flex;flex-shrink:0;overflow-x:auto;width:100%;z-index:40;-webkit-overflow-scrolling:touch}
-.tabbar::-webkit-scrollbar{height:2px;background:var(--sky3)}
-.tabbar::-webkit-scrollbar-thumb{background:var(--line2)}
-.t{height:100%;padding:0 14px;font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--txt3);cursor:pointer;border-bottom:2px solid transparent;transition:all .12s;text-transform:uppercase;white-space:nowrap;display:flex;align-items:center;gap:5px;flex-shrink:0}
+#main-tabbar.tabbar{height:44px;background:rgba(14,22,40,.92);border-bottom:1px solid var(--line);display:flex;flex-shrink:0;overflow-x:auto;width:100%;z-index:40;-webkit-overflow-scrolling:touch;backdrop-filter:blur(10px);padding:0 4px}
+.tabbar::-webkit-scrollbar{height:3px;background:transparent}
+.tabbar::-webkit-scrollbar-thumb{background:rgba(56,190,255,.25);border-radius:3px}
+.t{height:100%;padding:0 12px;font-family:var(--sans);font-size:11px;font-weight:500;letter-spacing:0;color:var(--txt3);cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;white-space:nowrap;display:flex;align-items:center;gap:6px;flex-shrink:0}
 .t:hover{color:var(--txt2)}
-.t.on{color:var(--blu);border-bottom-color:var(--blu)}
+.t.on{color:var(--blu);border-bottom-color:var(--blu);font-weight:600}
 .t.t-wb.on{color:var(--grn);border-bottom-color:var(--grn)}
 .t.t-poh.on{color:var(--pur);border-bottom-color:var(--pur)}
 .t.t-fpl.on{color:var(--amb);border-bottom-color:var(--amb)}
 .t.t-atc.on{color:var(--red);border-bottom-color:var(--red)}
 
 /* ═══ PANELS ════════════════════════════════════════════════════ */
-.panel{display:none;padding:14px}
-.panel.on{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
+.panel{display:none;padding:18px 20px}
+.panel.on{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;background:linear-gradient(165deg,rgba(10,18,32,.4) 0%,transparent 55%)}
 /* Map tab: flex fills .right — no position:absolute (was blocking full-area pan/zoom under “lost” tabs) */
-#p-map.panel.on{display:flex;flex-direction:column;flex:1;min-height:0;padding:0;overflow:hidden;position:relative}
+#p-map.panel.on{display:flex;flex-direction:column;flex:1;min-height:0;padding:0;overflow:hidden;position:relative;background:transparent!important}
 #p-map.panel.on #d-map{flex:1 1 auto;display:flex!important;flex-direction:column;min-height:0;overflow:hidden}
 #p-map #map-container{flex:1 1 auto;width:100%;min-height:min(280px,40vh);height:auto!important;position:relative;background:#0a0e1a;z-index:0;touch-action:pan-x pan-y pinch-zoom}
 .map-subbar{display:flex;gap:6px;align-items:center;padding:5px 10px;background:#060810;border-bottom:2px solid #1e2a3a;flex-shrink:0;flex-wrap:wrap}
@@ -126,19 +139,19 @@ body.simple-ui .adv-section{display:none}
 /* ═══ EMPTY STATE ═══════════════════════════════════════════════ */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px;color:var(--txt3);gap:8px}
 .empty svg{width:36px;height:36px;opacity:.2}
-.empty-msg{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-align:center;line-height:1.8}
+.empty-msg{font-family:var(--sans);font-size:13px;font-weight:500;letter-spacing:0;text-align:center;line-height:1.65;color:var(--txt2);max-width:280px}
 
 /* ═══ CARDS ═════════════════════════════════════════════════════ */
-.card{background:var(--sky2);border:1px solid var(--line);margin-bottom:10px;position:relative;overflow:hidden}
-.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.card{background:rgba(16,26,44,.85);border:1px solid var(--line);margin-bottom:12px;position:relative;overflow:hidden;border-radius:var(--radius);box-shadow:var(--shadow-card)}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;opacity:.85;border-radius:var(--radius) var(--radius) 0 0}
 .c-b::before{background:linear-gradient(90deg,var(--blu3),var(--blu))}
 .c-g::before{background:linear-gradient(90deg,var(--grn2),var(--grn))}
 .c-a::before{background:linear-gradient(90deg,var(--amb2),var(--amb))}
 .c-r::before{background:linear-gradient(90deg,var(--red2),var(--red))}
 .c-p::before{background:linear-gradient(90deg,var(--pur2),var(--pur))}
-.card-h{padding:9px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
-.card-title{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--txt)}
-.card-b{padding:11px 12px}
+.card-h{padding:11px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+.card-title{font-family:var(--sans);font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--txt)}
+.card-b{padding:14px 16px}
 .badge{font-family:var(--mono);font-size:8px;padding:2px 6px;letter-spacing:1px;text-transform:uppercase;flex-shrink:0}
 .b-b{background:rgba(56,190,255,.1);border:1px solid var(--blu2);color:var(--blu)}
 .b-g{background:rgba(0,229,122,.1);border:1px solid var(--grn2);color:var(--grn)}
@@ -366,6 +379,88 @@ canvas#cgc{display:block;width:100%;height:auto}
 .tog-row.tog-disabled .tog-lbl{opacity:0.58}
 .tog-row.tog-disabled label.tog{opacity:0.48}
 
+/* ── Must come AFTER SHELL-GPS-INJECT. Mobile sectional: full-viewport chart while map tab is active (see tab() → html/body.avisor-map-tab). ── */
+@media(max-width:600px){
+  .body{overflow:visible!important}
+  .right{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+  /* Non–map-tab: generous map area when sidebar still visible */
+  html:not(.avisor-map-tab) #p-map.panel.on #d-map{display:flex!important;flex-direction:column;min-height:0;}
+  html:not(.avisor-map-tab) #p-map #map-container{
+    flex:1 1 auto!important;
+    min-height:min(360px,52svh)!important;
+    -webkit-overflow-scrolling:touch;
+    transform:translateZ(0);
+  }
+  /* Sectional tab: hide sidebar + lock scroll so the chart fills iPhone screen.
+     Use :has(#p-map.panel.on) so layout still works if html/body class toggles miss (WebKit). */
+  html.avisor-map-tab,html.avisor-map-tab body,
+  html:has(#p-map.panel.on),body:has(#p-map.panel.on){
+    height:100%!important;
+    overflow:hidden!important;
+    touch-action:pan-x pan-y;
+  }
+  html.avisor-map-tab .app,html:has(#p-map.panel.on) .app{
+    height:100dvh!important;
+    max-height:100dvh!important;
+    min-height:100dvh!important;
+    overflow:hidden!important;
+  }
+  html.avisor-map-tab .body,html:has(#p-map.panel.on) .body{
+    flex:1!important;
+    min-height:0!important;
+    overflow:hidden!important;
+    max-height:none!important;
+  }
+  html.avisor-map-tab .left,html:has(#p-map.panel.on) .left{display:none!important;}
+  html.avisor-map-tab .right,html:has(#p-map.panel.on) .right{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow:hidden!important;
+    width:100%!important;
+    max-height:none!important;
+  }
+  html.avisor-map-tab #p-map.panel.on,html:has(#p-map.panel.on) #p-map.panel.on{
+    flex:1!important;
+    min-height:0!important;
+    padding:0!important;
+    overflow:hidden!important;
+  }
+  html.avisor-map-tab #p-map.panel.on #d-map,html:has(#p-map.panel.on) #p-map.panel.on #d-map{
+    flex:1!important;
+    min-height:0!important;
+    height:100%!important;
+    max-height:100%!important;
+    overflow:hidden!important;
+  }
+  html.avisor-map-tab #p-map #map-container,html:has(#p-map.panel.on) #p-map #map-container{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    height:100%!important;
+    max-height:none!important;
+    width:100%!important;
+    border-radius:0!important;
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    -webkit-overflow-scrolling:touch;
+  }
+  html.avisor-map-tab .map-subbar,html:has(#p-map.panel.on) .map-subbar{
+    padding:6px 10px!important;
+    padding-left:max(10px,env(safe-area-inset-left))!important;
+    padding-right:max(10px,env(safe-area-inset-right))!important;
+    flex-shrink:0!important;
+  }
+  html.avisor-map-tab .map-exit-fab,html:has(#p-map.panel.on) .map-exit-fab{
+    top:max(10px,calc(env(safe-area-inset-top,0px) + 6px))!important;
+    left:max(10px,env(safe-area-inset-left))!important;
+  }
+  html.avisor-map-tab #map-navlog,html:has(#p-map.panel.on) #map-navlog{
+    max-height:min(88px,22dvh)!important;
+    flex-shrink:0!important;
+    padding-bottom:calc(6px + env(safe-area-inset-bottom,0px))!important;
+  }
+  /* In-map ← BACK exists; hide duplicate fixed “BACK TO MENU” on phone (was floating mid-screen). */
+  html:has(#p-map.panel.on) #global-map-exit{display:none!important;}
+}
+
 </style>
 <link rel="stylesheet" href="./vendor/leaflet/leaflet.min.css">
 <script src="./vendor/leaflet/leaflet.min.js"></script>
@@ -573,7 +668,7 @@ canvas#cgc{display:block;width:100%;height:auto}
   </div>
   <div class="section adv-section">
     <div class="section-title">FAA NOTAM API key</div>
-    <div class="apikey-note">Free key from <a href="https://api.faa.gov/" target="_blank" rel="noopener noreferrer">api.faa.gov</a> (register → NOTAM API). Without it, NOTAM list stays empty.</div>
+    <div class="apikey-note">Free key from <a href="https://api.faa.gov/" target="_blank" rel="noopener noreferrer">api.faa.gov</a> (NOTAM API). Without it, NOTAM list stays empty. Run via dev server or Netlify so requests use the <code>/faa-api</code> proxy — direct calls sometimes receive FAA portal HTML instead of JSON.</div>
     <div class="field" style="margin-top:7px"><input id="faa-notam-key" type="password" placeholder="FAA API key"></div>
   </div>
 
@@ -878,7 +973,7 @@ canvas#cgc{display:block;width:100%;height:auto}
   <!-- ATC LIVE -->
   <div class="panel" id="p-atc">
     <div class="offline-note">
-      ✓ ATC Transcription runs <b>on-device</b> using the Web Speech API — no data sent to any server. Works offline once the browser engine is cached. For aviation-grade accuracy, connect in areas with good signal during the learning period.
+      <b>SpeechRecognition (browser):</b> Chrome / Edge / Android typically send audio to the vendor speech service — <b>network usually required</b>; not the same as fully offline native ATC models (e.g. PilotGPT’s on-device pipeline). Safari on Apple devices may behave differently by OS. <b>Always verify clearances by ear.</b> Conversation-tuned engines often mis-hear tail numbers and phraseology; mic or wired audio from your radio helps. After <b>Build</b>, destination ICAO and tower frequency fill from your route (editable).
     </div>
     <div class="card c-r">
       <div class="card-h"><span class="card-title">Live ATC Transcriber</span><span class="badge b-r" id="atc-status-badge">STOPPED</span></div>
@@ -892,7 +987,7 @@ canvas#cgc{display:block;width:100%;height:auto}
         </button>
         <div style="font-family:var(--mono);font-size:9px;color:var(--txt2);margin-bottom:8px;line-height:1.7">
           FREQUENCY: <input id="atc-freq" value="123.45" style="background:var(--sky3);border:1px solid var(--line);color:var(--amb);font-family:var(--mono);font-size:11px;padding:2px 6px;width:70px;outline:none"> MHz &nbsp;|&nbsp;
-          AIRPORT: <input id="atc-apt" placeholder="KASE" oninput="this.value=this.value.toUpperCase()" style="background:var(--sky3);border:1px solid var(--line);color:var(--blu);font-family:var(--mono);font-size:11px;padding:2px 6px;width:55px;outline:none">
+          AIRPORT: <input id="atc-apt" placeholder="→ ICAO" title="Filled from destination after Build; edit if monitoring another sector." oninput="this.value=this.value.toUpperCase()" style="background:var(--sky3);border:1px solid var(--line);color:var(--blu);font-family:var(--mono);font-size:11px;padding:2px 6px;width:58px;outline:none">
         </div>
         <div class="atc-transcript" id="atc-transcript">
           <div style="color:var(--txt3);font-family:var(--mono);font-size:9px">Transcript will appear here...<br><br>Tip: Speak clearly into your device microphone. ATC audio piped through a headset jack works best.</div>
@@ -925,11 +1020,7 @@ canvas#cgc{display:block;width:100%;height:auto}
     </div>
   </div>
 
-</div><!-- /right -->
-</div><!-- /body -->
-</div><!-- /app -->
-
-  <!-- RADIO FREQUENCIES -->
+  <!-- RADIO FREQUENCIES (must stay inside .right for desktop flex height) -->
   <div class="panel" id="p-radio">
     <div id="e-radio" class="empty"><div class="ei">&#128250;</div><div class="et">BUILD PLAN</div></div>
     <div id="d-radio" style="display:none">
@@ -940,7 +1031,7 @@ canvas#cgc{display:block;width:100%;height:auto}
       <div class="card"><div class="ch"><span class="ct">VOR Corridor / Victor Airways</span></div><div class="cb" id="vor-airways-body"></div></div>
     </div>
   </div>
-  <!-- SECTIONAL MAP -->
+  <!-- SECTIONAL MAP (must stay inside .right — Leaflet needs flex parent chain + min-height) -->
   <div class="panel" id="p-map">
     <div id="e-map" class="empty"><div class="ei">//</div><div class="et">BUILD PLAN TO PREVIEW SECTIONAL ROUTE</div></div>
     <div id="d-map" style="display:none;flex-direction:column;flex:1;min-height:0;position:relative">
@@ -961,6 +1052,10 @@ canvas#cgc{display:block;width:100%;height:auto}
       <div id="map-navlog" style="background:#080b12;border-top:2px solid #ff00ff;flex-shrink:0;max-height:140px;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
     </div>
   </div>
+
+</div><!-- /right -->
+</div><!-- /body -->
+</div><!-- /app -->
 
 <script>
 // ── OPTIONAL FUEL STOP ────────────────────────────────────────────────────────
@@ -1293,7 +1388,7 @@ let STATE={
   fplXML:'',
   pohText:'', pohFile:'', pohPages:0,
   wbProfile:null, customStations:[],
-  atcActive:false, atcRecognition:null, atcLines:[],
+  atcActive:false, atcRecognition:null, atcLines:[], atcMergeBuf:'', atcMergeTimer:null,
   updates:[],
 };
 
@@ -1490,30 +1585,72 @@ function normalizeAwMetarTaf(ob){
   }
   return o;
 }
+/** Normalize AWC JSON body to a METAR/TAF row array (handles occasional wrapped shapes). */
+function coerceAwcRowArray(j){
+  if(Array.isArray(j)) return j;
+  if(j&&typeof j==='object'){
+    if(Array.isArray(j.data)) return j.data;
+    if(Array.isArray(j.DATA)) return j.DATA;
+    if(Array.isArray(j.metars)) return j.metars;
+    if(Array.isArray(j.tafs)) return j.tafs;
+  }
+  return null;
+}
+/** Prefer the row matching requested ICAO when AWC returns multiple stations. */
+function pickAwcRow(rows,wantIcao){
+  if(!rows||!rows.length) return null;
+  var want=normalizeFormIcao(wantIcao||'');
+  if(!want) return rows[0];
+  for(var i=0;i<rows.length;i++){
+    var row=rows[i];
+    if(!row||typeof row!=='object') continue;
+    var rid=row.icaoId!=null?normalizeFormIcao(String(row.icaoId)):'';
+    if(rid&&rid===want) return row;
+  }
+  return rows[0];
+}
 async function fMetar(icao){
-  try{
-    var rows=await fetchAwcJson('/data/metar?ids='+encodeURIComponent(icao)+'&format=json');
-    var row=(rows&&rows[0])||null;
-    return row?normalizeAwMetarTaf(row):null;
-  }catch(e){console.warn('METAR',icao,e&&e.message);return null;}
+  var id=normalizeFormIcao(icao||'');
+  if(!id) return null;
+  for(var attempt=0;attempt<3;attempt++){
+    try{
+      if(attempt) await new Promise(function(res){setTimeout(res,350*attempt);});
+      var rows=await fetchAwcJson('/data/metar?ids='+encodeURIComponent(id)+'&format=json');
+      if(rows===null) continue;
+      var row=pickAwcRow(rows,id);
+      return row?normalizeAwMetarTaf(row):null;
+    }catch(e){console.warn('METAR',id,e&&e.message);}
+  }
+  return null;
 }
 async function fTaf(icao){
-  try{
-    var rows=await fetchAwcJson('/data/taf?ids='+encodeURIComponent(icao)+'&format=json');
-    var row=(rows&&rows[0])||null;
-    return row?normalizeAwMetarTaf(row):null;
-  }catch(e){console.warn('TAF',icao,e&&e.message);return null;}
+  var id=normalizeFormIcao(icao||'');
+  if(!id) return null;
+  for(var attempt=0;attempt<3;attempt++){
+    try{
+      if(attempt) await new Promise(function(res){setTimeout(res,350*attempt);});
+      var rows=await fetchAwcJson('/data/taf?ids='+encodeURIComponent(id)+'&format=json');
+      if(rows===null) continue;
+      var row=pickAwcRow(rows,id);
+      return row?normalizeAwMetarTaf(row):null;
+    }catch(e){console.warn('TAF',id,e&&e.message);}
+  }
+  return null;
 }
 async function fetchAwcJson(path){
   var p=String(path||'');
   if(p.charAt(0)!=='/') p='/'+p;
-  var urls=['/awc-api'+p,'https://aviationweather.gov/awc-api'+p];
+  /** Same host Vite/Netlify map `/awc-api/*` → `https://aviationweather.gov/api/*` — NOT `/awc-api` on origin (404). */
+  var urls=['/awc-api'+p,'https://aviationweather.gov/api'+p];
   for(var i=0;i<urls.length;i++){
     try{
       var r=await fetchJSONTimeout(urls[i],null,9000);
       if(!r||!r.ok) continue;
       var j=await r.json();
-      if(Array.isArray(j)) return j;
+      var rows=coerceAwcRowArray(j);
+      if(rows==null) continue;
+      if(!rows.length) return [];
+      return rows;
     }catch(_e){}
   }
   return null;
@@ -1534,21 +1671,34 @@ async function fNotam(icao){
     console.warn('NOTAM: add FAA API key in sidebar (api.faa.gov)');
     return[];
   }
-  try{
-    var url='https://api.faa.gov/faa-api/v1/notams?icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key);
-    const r=await fetchJSONTimeout(url,{headers:{accept:'application/json'}},12000);
-    if(!r.ok){
-      console.warn('NOTAM HTTP',icao,r.status);
+  var q='icaoLocation='+encodeURIComponent(icao)+'&pageSize=15&api_key='+encodeURIComponent(key);
+  /** Prefer same-origin proxy (`vite` / Netlify) — avoids browser CORS and matches hosted deploys. */
+  var bases=['/faa-api/faa-api/v1/notams?','https://api.faa.gov/faa-api/v1/notams?'];
+  for(var bi=0;bi<bases.length;bi++){
+    try{
+      var url=bases[bi]+q;
+      const r=await fetchJSONTimeout(url,{headers:{accept:'application/json'}},12000);
+      if(!r.ok){
+        console.warn('NOTAM HTTP',icao,r.status,bases[bi].slice(0,24)+'…');
+        continue;
+      }
+      var ct=(r.headers.get('content-type')||'').toLowerCase();
+      var txt=await r.text();
+      var trimmed=(txt||'').trim();
+      var fc=trimmed.charAt(0);
+      var looksJson=fc==='{'||fc==='[';
+      if(!fc||fc==='<'||(ct.indexOf('json')<0&&!looksJson)){
+        console.warn('NOTAM: FAA returned HTML or non-JSON for '+icao+' — api.faa.gov often redirects to the developer portal. Use this app via dev server/Netlify (/faa-api proxy) and confirm your NOTAM subscription at api.faa.gov / APIC4E.');
+        continue;
+      }
+      const j=JSON.parse(trimmed);
+      if(j&&Array.isArray(j.items)&&j.items.length) return j.items;
+      if(j&&Array.isArray(j.features)&&j.features.length) return j.features;
+      if(j&&Array.isArray(j.items)) return j.items;
       return[];
-    }
-    var ct=r.headers.get('content-type')||'';
-    if(ct.indexOf('json')<0){
-      console.warn('NOTAM: non-JSON response (wrong API key or outage)');
-      return[];
-    }
-    const j=await r.json();
-    return j&&j.items?j.items:[];
-  }catch(e){console.warn('NOTAM',icao,e&&e.message);return[];}
+    }catch(e){console.warn('NOTAM',icao,e&&e.message);}
+  }
+  return[];
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2596,7 +2746,9 @@ async function buildPlan(){
   const inboundToArr=Math.round(course(dep,arr));
   dep=synthesizeRunways(dep,inboundToArr);
   arr=synthesizeRunways(arr,inboundToArr);
-    const[dm,am,dt,at,dn,an]=await Promise.all([fMetar(depIcao),fMetar(arrIcao),fTaf(depIcao),fTaf(arrIcao),fNotam(depIcao),fNotam(arrIcao)]);
+    const depWx=nearestWxIcaoFor(depIcao);
+    const arrWx=nearestWxIcaoFor(arrIcao);
+    const[dm,am,dt,at,dn,an]=await Promise.all([fMetar(depWx),fMetar(arrWx),fTaf(depWx),fTaf(arrWx),fNotam(depIcao),fNotam(arrIcao)]);
     const dist=Math.round(gc(dep,arr));
     const crs=Math.round(course(dep,arr));
     const tkey=`${depIcao}-${arrIcao}`;
@@ -2632,7 +2784,7 @@ async function buildPlan(){
     if(!dm&&!am)hazards.push('METAR/TAF did not load — check internet, CORS (use http server), or AviationWeather.gov status.');
     if((!dn||!dn.length)&&(!an||!an.length)){
       if(!getFaaNotamApiKey())hazards.push('NOTAMs empty — add your free FAA NOTAM API key in the sidebar (api.faa.gov).');
-      else hazards.push('NOTAMs empty with key set — verify key at api.faa.gov or FAA outage.');
+      else hazards.push('NOTAMs empty with key set — FAA often redirects api.faa.gov browser calls to the portal HTML; use dev server/Netlify (/faa-api proxy), confirm NOTAM API subscription, or brief via 1800wxbrief.com.');
     }
     const fltDate=document.getElementById('flt-date')&&document.getElementById('flt-date').value||new Date().toISOString().slice(0,10);
     const plan={depIcao,arrIcao,dep,arr,ac,acid,pri,fltDate,rules,res,dist,crs,alt,eteMin,gs,hw,tripFuel,resFuel,totalFuel,primary,altRoute,dm,am,dt,at,dn,an,favRwy,tfloor,twarn,hazards,depWind:wfmt(dm),arrWind:wfmt(am),cruiseAltSource:altPick.source,cruiseAltRequested:altPick.requested!=null?altPick.requested:null};
@@ -2694,10 +2846,24 @@ function syncAC(){const v=document.getElementById('aircraft').value;const w=docu
 // RENDER ALL
 // ══════════════════════════════════════════════════════════════════
 function show(id){var e=document.getElementById('e-'+id),d=document.getElementById('d-'+id);if(e)e.style.display='none';if(d){if(id==='map'){d.style.display='flex';d.style.flex='1';}else d.style.display='block';}}
+function syncATCFieldsFromPlan(p){
+  if(!p||!p.arrIcao) return;
+  var aptEl=document.getElementById('atc-apt');
+  var freqEl=document.getElementById('atc-freq');
+  if(aptEl) aptEl.value=normalizeFormIcao(p.arrIcao);
+  if(freqEl&&typeof APTS!=='undefined'){
+    var row=APTS[p.arrIcao];
+    if(row&&row.twr){
+      var m=String(row.twr).match(/(\d{3}\.\d{1,3}|\d{2,3})/);
+      if(m) freqEl.value=m[1];
+    }
+  }
+}
 function renderAll(p){
   function safeRender(name,fn){
     try{fn();}catch(err){console.error('Render error ['+name+']',err);}
   }
+  safeRender('atcFields',function(){syncATCFieldsFromPlan(p);});
   safeRender('brief',function(){renderBrief(p);});
   safeRender('waypoints',function(){renderWaypoints();});
   safeRender('weather',function(){renderWx(p);});
@@ -3896,9 +4062,24 @@ function findRelPOH(q,txt,max){
 }
 
 // ══════════════════════════════════════════════════════════════════
-// ATC TRANSCRIBER — Web Speech API (on-device, offline capable)
+// ATC TRANSCRIBER — Web Speech API (browser engine; often cloud in Chrome)
 // ══════════════════════════════════════════════════════════════════
 const ATC_KEYWORDS=['runway','go around','hold short','traffic','wind shear','turbulence','pirep','airmet','sigmet','clear','cleared','descend','climb','contact','squawk','ident','cancel','emergency'];
+
+function flushATCMergeBuffer(){
+  if(STATE.atcMergeTimer){clearTimeout(STATE.atcMergeTimer); STATE.atcMergeTimer=null;}
+  var buf=(STATE.atcMergeBuf||'').replace(/\s+/g,' ').trim();
+  STATE.atcMergeBuf='';
+  if(buf) addATCLine(buf);
+}
+/** Web Speech often emits several short finals in a row; merge within ~1s so phrases stay on one line when possible. */
+function queueATCFinalSpeech(chunk){
+  var t=String(chunk||'').replace(/\s+/g,' ').trim();
+  if(!t) return;
+  STATE.atcMergeBuf=(STATE.atcMergeBuf?STATE.atcMergeBuf+' ':'')+t;
+  if(STATE.atcMergeTimer) clearTimeout(STATE.atcMergeTimer);
+  STATE.atcMergeTimer=setTimeout(flushATCMergeBuffer,920);
+}
 
 function toggleATC(){
   if(STATE.atcActive){stopATC();}else{startATC();}
@@ -3919,18 +4100,26 @@ function startATC(){
     document.getElementById('atc-status-txt').textContent='RECORDING — speak or pipe ATC audio through microphone';
   };
   rec.onresult=e=>{
-    let interim='',final='';
+    let final='';
     for(let i=e.resultIndex;i<e.results.length;i++){
       if(e.results[i].isFinal){final+=e.results[i][0].transcript;}
-      else{interim+=e.results[i][0].transcript;}
     }
-    if(final){addATCLine(final.trim());}
+    if(final.trim()){queueATCFinalSpeech(final);}
   };
-  rec.onerror=e=>{if(e.error!=='no-speech')addATCLine('[Error: '+e.error+']',true);};
+  rec.onerror=e=>{
+    if(e.error==='no-speech') return;
+    if(e.error==='network'){
+      addATCLine('[Error: network — speech recognition in this browser usually needs internet (Chrome/Edge). Reconnect, try Safari on Apple devices, or use a native offline ASR app for no-network ATC.]',true);
+      try{showToast('Speech recognition hit a network error — see transcript note.');}catch(_x){}
+      return;
+    }
+    addATCLine('[Error: '+e.error+']',true);
+  };
   rec.onend=()=>{if(STATE.atcActive)rec.start();};
   rec.start();
 }
 function stopATC(){
+  flushATCMergeBuffer();
   STATE.atcActive=false;
   if(STATE.atcRecognition){STATE.atcRecognition.onend=null;STATE.atcRecognition.stop();STATE.atcRecognition=null;}
   document.getElementById('atc-btn').className='atc-big-btn atc-start';
@@ -3972,7 +4161,7 @@ function addATCLine(txt,isError=false){
     alerts.appendChild(a);
   }
 }
-function clearATC(){STATE.atcLines=[];document.getElementById('atc-transcript').innerHTML='<div style="color:var(--txt3);font-family:var(--mono);font-size:9px">Transcript cleared.</div>';document.getElementById('atc-alerts').innerHTML='';}
+function clearATC(){STATE.atcMergeBuf='';if(STATE.atcMergeTimer){clearTimeout(STATE.atcMergeTimer);STATE.atcMergeTimer=null;}STATE.atcLines=[];document.getElementById('atc-transcript').innerHTML='<div style="color:var(--txt3);font-family:var(--mono);font-size:9px">Transcript cleared.</div>';document.getElementById('atc-alerts').innerHTML='';}
 function copyATC(){const txt=STATE.atcLines.map(l=>`${l.ts} ${l.txt}`).join('\n');navigator.clipboard.writeText(txt).then(()=>toast('TRANSCRIPT COPIED'));}
 async function analyzeATC(){
   const key=document.getElementById('apikey').value.trim();
@@ -4012,7 +4201,7 @@ async function sendChat(){
     else if(lo.includes('weather')||lo.includes('metar'))r=`Dep (${p.depIcao}): ${p.depWind}, ${skyFmt(p.dm)}\nArr (${p.arrIcao}): ${p.arrWind}, ${skyFmt(p.am)}\nFull METARs in WEATHER tab.`;
     else if(lo.includes('weight')||lo.includes('balance')||lo.includes('wb'))r=`W&B profile for ${p.ac.name} is in ⚖ W&B tab. Enter station weights to compute CG and see the envelope diagram.`;
     else if(lo.includes('poh'))r=`Upload your aircraft POH PDF in 📖 POH AI tab — ask any question and get answers referenced to your exact manual pages.`;
-    else if(lo.includes('atc'))r=`ATC Transcription is in 🎙 ATC LIVE tab. Tap the big red button, speak or pipe ATC audio — it transcribes on-device using Web Speech API.`;
+    else if(lo.includes('atc'))r=`ATC Transcription is in 🎙 ATC LIVE tab. It uses your browser’s SpeechRecognition engine (often **requires network** in Chrome; differs from fully offline native apps). Tap START and feed mic or wired audio from your radio — **verify clearances by ear.**`;
     else r=`**${p.primary}** | Alt: **${p.alt.toLocaleString()} ft** | **${p.eteMin} min** | **${p.totalFuel} gal** | **${STATE.waypoints.length} waypoints in .fpl**\n\nAdd Anthropic API key for full AI responses to any aviation question.`;
     STATE.hist.push({role:'assistant',content:r});addChatMsg('ai',r);document.getElementById('chat-send').disabled=false;return;
   }
@@ -4028,6 +4217,14 @@ async function sendChat(){
 // TABS
 // ══════════════════════════════════════════════════════════════════
 function tab(id){
+  try{
+    document.documentElement.classList.toggle('avisor-map-tab',id==='map');
+    document.body.classList.toggle('avisor-map-tab',id==='map');
+    if(id==='map'&&typeof window.matchMedia==='function'&&window.matchMedia('(max-width:600px)').matches){
+      window.scrollTo(0,0);
+      try{document.body.scrollTop=0;document.documentElement.scrollTop=0;}catch(_s){}
+    }
+  }catch(_e){}
   const ids=['brief','route','wx','notams','approach','wb','poh','fpl','atc','chat','radio','map'];
   ids.forEach(i=>{
     document.getElementById('t-'+i)?.classList.toggle('on',i===id);
@@ -4046,6 +4243,7 @@ function tab(id){
         revealMapUI();
         function mapKick(){
           if(!_map) initMap();
+          if(typeof avisorClearMapContainerInlineSize==='function') avisorClearMapContainerInlineSize();
           if(_map){
             _map.invalidateSize(true);
             renderMap();
@@ -4058,6 +4256,7 @@ function tab(id){
             setTimeout(function(){if(_map)_map.invalidateSize(true);},200);
             setTimeout(function(){if(_map){_map.invalidateSize(true);renderMap();}},550);
             setTimeout(function(){if(_map)_map.invalidateSize(true);},1200);
+            setTimeout(function(){if(_map){_map.invalidateSize(true);if(typeof renderMap==='function')renderMap();}},2400);
           });
         });
       }catch(e){
@@ -5182,6 +5381,18 @@ function revealMapUI(){
   if(e)e.style.display='none';
   if(d){d.style.display='flex';d.style.flex='1';}
 }
+/** Drop fixed px height from #map-container so flex + html:has(#p-map.panel.on) CSS can fill iPhone viewport after Leaflet boot. */
+function avisorClearMapContainerInlineSize(){
+  try{
+    var c=document.getElementById('map-container');
+    if(!c||typeof window.matchMedia!=='function'||!window.matchMedia('(max-width:600px)').matches)return;
+    var pm=document.getElementById('p-map');
+    if(!pm||!pm.classList.contains('on'))return;
+    c.style.removeProperty('height');
+    c.style.removeProperty('min-height');
+    if(window._map) window._map.invalidateSize(true);
+  }catch(_e){}
+}
 /* FAA AIS caches only publish LOD ranges (Sectional 8–12, IFR Low 7–12). Below that, tile URLs 404 and esri-leaflet fires tileerror. */
 function avisorActiveAisChartMinZ(){
   if(!_map)return 0;
@@ -5302,9 +5513,18 @@ function initMap(){
   revealMapUI();
   show('map');
   var ch=c.clientHeight,cw=c.clientWidth;
-  if(!ch||ch<48||!cw||cw<48){
-    var mh=Math.round(Math.max(320,Math.min(window.innerHeight*0.55,640)));
+  /* iPhone WebKit: container often reports tiny height until explicit px min-height (flex + overflow:hidden parents).
+     Do NOT cap sectional map to ~52vh on narrow screens — that caused a huge empty gap above a short map strip. */
+  if(!cw||cw<48||!ch||ch<100){
+    var vh=window.innerHeight||(document.documentElement&&document.documentElement.clientHeight)||640;
+    var narrow=(typeof window.matchMedia==='function'&&window.matchMedia('(max-width:600px)').matches);
+    var mapFull=narrow&&(document.documentElement.classList.contains('avisor-map-tab')||(document.getElementById('p-map')&&document.getElementById('p-map').classList.contains('on')));
+    var reserved=mapFull?188:160;
+    var mh=mapFull
+      ?Math.round(Math.max(280,vh-reserved))
+      :Math.round(Math.max(300,Math.min(vh*0.52,vh-160)));
     c.style.minHeight=mh+'px';
+    if(!c.style.height||c.style.height==='auto') c.style.height=mh+'px';
     ch=c.clientHeight;
     cw=c.clientWidth;
   }
@@ -5392,16 +5612,37 @@ function initMap(){
   _map.setView([35.5,-98],faaSec?8:5);
   setTimeout(function(){
     if(!_map)return;
+    avisorClearMapContainerInlineSize();
     _map.invalidateSize(true);
     if(S.wpts&&S.wpts.length)renderMap();
     else if(STATE.plan&&STATE.plan.arr) _map.setView([STATE.plan.arr.lat,STATE.plan.arr.lon],avisorClampZoomForAisCharts(9));
   },80);
-  setTimeout(function(){if(_map)_map.invalidateSize(true);},320);
-  setTimeout(function(){if(_map)_map.invalidateSize(true);},700);
+  setTimeout(function(){if(_map){avisorClearMapContainerInlineSize();_map.invalidateSize(true);}},320);
+  setTimeout(function(){if(_map){avisorClearMapContainerInlineSize();_map.invalidateSize(true);}},700);
   setTimeout(function(){refreshMapContextLayers();},180);
   setTimeout(function(){updateMapBasemapChip();},50);
   setTimeout(function(){updateMapBasemapChip();},400);
 }
+/** iOS Safari: URL bar + flex layout often wrong-sizes the map until a late invalidate or rotation. */
+(function avisorMapViewportListeners(){
+  var t=null,vv=typeof window!=='undefined'?window.visualViewport:null;
+  function kick(){
+    clearTimeout(t);
+    t=setTimeout(function(){
+      if(!window._map) return;
+      try{
+        if(typeof avisorClearMapContainerInlineSize==='function') avisorClearMapContainerInlineSize();
+        _map.invalidateSize(true);
+        if(STATE&&STATE.waypoints&&STATE.waypoints.length&&typeof renderMap==='function') renderMap();
+      }catch(_e){}
+    },120);
+  }
+  if(typeof window!=='undefined'){
+    window.addEventListener('orientationchange',function(){ setTimeout(kick,350); });
+    window.addEventListener('resize',kick);
+    try{ if(vv&&vv.addEventListener) vv.addEventListener('resize',kick); }catch(_e){}
+  }
+})();
 function mapFitRoute(){
   if(!_map)return;
   if(!S.wpts||!S.wpts.length){
