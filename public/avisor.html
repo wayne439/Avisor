@@ -474,6 +474,22 @@ canvas#cgc{display:block;width:100%;height:auto}
 <div id="toast"></div>
 
 <!-- IN-FLIGHT UPDATE MODAL -->
+<div id="ac-picker-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.88);z-index:9998;align-items:center;justify-content:center">
+  <div style="background:var(--sky2);border:2px solid var(--blu2);border-radius:10px;width:min(480px,96vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);flex-shrink:0">
+      <span id="ac-picker-hdr" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blu);letter-spacing:2px;flex:1">SELECT YOUR AIRCRAFT</span>
+      <button type="button" onclick="closeAcPicker()" style="background:none;border:none;color:var(--txt2);font-size:18px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="padding:10px 12px;flex-shrink:0">
+      <input id="ac-search" type="text" placeholder="Search make or model (e.g. Cessna, SR22, TBM)…" oninput="renderAcPickerList(this.value)" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:8px 10px;font-family:var(--mono);font-size:11px">
+      <div style="font-size:9px;color:var(--txt3);margin-top:4px;font-family:var(--mono)">★ = precise POH data available · showing up to 80 results</div>
+    </div>
+    <div id="ac-list" style="flex:1;overflow-y:auto;border-top:1px solid var(--line)">
+      <div style="color:var(--txt3);font-family:var(--mono);font-size:11px;padding:16px;text-align:center">Loading aircraft database…</div>
+    </div>
+    <div id="ac-perf-panel" style="display:none;border-top:2px solid var(--blu2);background:var(--sky3);overflow-y:auto;max-height:55vh"></div>
+  </div>
+</div>
 <div class="modal-bg" id="if-modal">
   <div class="modal">
     <div class="modal-head">
@@ -595,15 +611,11 @@ canvas#cgc{display:block;width:100%;height:auto}
     </div>
     <div class="field">
       <label>Aircraft</label>
-      <select id="aircraft" onchange="syncAC()">
-        <option value="sr22t">Cirrus SR22T</option>
-        <option value="bonanza">Bonanza G36</option>
-        <option value="tbm940">Daher TBM 940</option>
-        <option value="c172sp">Cessna 172SP</option>
-        <option value="pa28">Piper PA-28-181</option>
-        <option value="c182t">Cessna 182T</option>
-        <option value="da40">Diamond DA40 NG</option>
-      </select>
+      <div style="display:flex;align-items:center;gap:8px;background:var(--sky3);border:1px solid var(--line);padding:7px 9px;min-height:34px">
+        <span id="ac-display-name" style="flex:1;font-family:var(--mono);font-size:12px;color:var(--txt)">— tap Change to select —</span>
+        <button type="button" class="bsm" onclick="openAcPicker()">Change</button>
+      </div>
+      <select id="aircraft" style="display:none" onchange="syncAC()"></select>
     </div>
     <div class="row2">
       <div class="field"><label>Rules</label><select id="rules"><option value="VFR" selected>VFR</option></select></div>
@@ -850,6 +862,7 @@ canvas#cgc{display:block;width:100%;height:auto}
             <option value="c182t">Cessna 182T</option>
             <option value="da40">Diamond DA40 NG</option>
           </select>
+          <div id="wb-no-data-msg" style="display:none;font-family:var(--mono);font-size:9px;color:var(--txt3);margin-top:5px;line-height:1.5">W&amp;B data not available for this aircraft — use the profiles above for reference or enter station weights manually.</div>
         </div>
         <div id="wb-profile-info" style="background:var(--sky3);border:1px solid var(--line);padding:8px;margin-bottom:9px;font-family:var(--mono);font-size:9px;color:var(--txt2);line-height:1.7"></div>
 
@@ -2795,6 +2808,7 @@ async function buildPlan(){
   const terrainOn=document.getElementById('opt-terrain').checked;
   const fuelStopIcao = getFuelStop ? getFuelStop() : '';
   if(!depIcao||!arrIcao){showToast('Enter departure and destination ICAO codes.');return;}
+  if(!acid||!ACPERF[acid]){showToast('Select and save your aircraft first.');openAcPicker();return;}
   if(!isKnownAirportIcao(depIcao)){
     if(typeof toast==='function') toast('Departure is not a known airport: '+depIcao);
     else showToast('Departure is not a known airport: '+depIcao);
@@ -2932,6 +2946,175 @@ async function buildPlan(){
   finally{btns.forEach(function(b){ b.disabled=false; });setOv(false);}
 }
 function syncAC(){const v=document.getElementById('aircraft').value;const w=document.getElementById('wb-ac');if(w&&WBDATA[v])w.value=v;loadWB();}
+
+// ══════════════════════════════════════════════════════════════════
+// AIRCRAFT PICKER — 388-plane FAA database with save to localStorage
+// ══════════════════════════════════════════════════════════════════
+var _faaAircraftDb=null;
+// FAA ICAO code → existing ACPERF key so precise POH data is used when available
+var FAA_ICAO_TO_ACPERF={'S22T':'sr22t','SR22':'sr22t','BE36':'bonanza','BE35':'bonanza','BE33':'bonanza','TBM9':'tbm940','TBM8':'tbm940','TBM7':'tbm940','C172':'c172sp','C72R':'c172sp','P28A':'pa28','C182':'c182t','DA40':'da40'};
+
+async function loadFaaAircraftDb(){
+  if(_faaAircraftDb)return _faaAircraftDb;
+  try{
+    var base=(typeof import_meta_url!=='undefined'?import_meta_url:'')+'';
+    var r=await fetch('data/faa-aircraft-db.json',{cache:'force-cache'});
+    if(!r.ok)return null;
+    _faaAircraftDb=await r.json();
+    return _faaAircraftDb;
+  }catch(e){return null;}
+}
+
+function openAcPicker(){
+  var m=document.getElementById('ac-picker-modal');
+  if(!m)return;
+  m.style.display='flex';
+  var list=document.getElementById('ac-list');
+  var search=document.getElementById('ac-search');
+  var panel=document.getElementById('ac-perf-panel');
+  if(search){search.value='';search.style.display='';}
+  if(panel)panel.style.display='none';
+  if(list)list.style.display='';
+  loadFaaAircraftDb().then(function(){renderAcPickerList('');});
+  setTimeout(function(){if(search)search.focus();},120);
+}
+
+function closeAcPicker(){
+  var m=document.getElementById('ac-picker-modal');
+  if(m)m.style.display='none';
+}
+
+function renderAcPickerList(filter){
+  var el=document.getElementById('ac-list');
+  if(!el)return;
+  var db=_faaAircraftDb;
+  if(!db){el.innerHTML='<div style="color:var(--txt3);font-family:var(--mono);font-size:11px;padding:16px;text-align:center">Loading…</div>';return;}
+  var q=(filter||'').toLowerCase().trim();
+  var items=q?db.filter(function(r){return(r.make+' '+r.model+' '+r.icao).toLowerCase().includes(q);}):db;
+  if(!items.length){el.innerHTML='<div style="color:var(--txt3);font-family:var(--mono);font-size:11px;padding:16px">No matches.</div>';return;}
+  el.innerHTML=items.slice(0,80).map(function(r){
+    var star=FAA_ICAO_TO_ACPERF[r.icao]?'<span style="color:var(--grn);margin-right:4px">★</span>':'';
+    var make=r.make.charAt(0).toUpperCase()+r.make.slice(1).toLowerCase();
+    return'<div onclick="selectFaaAircraftByIcao(\''+escHtml(r.icao)+'\')" style="padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;align-items:center;gap:10px">'
+      +'<span style="font-family:var(--mono);font-size:9px;color:var(--blu2);min-width:38px;flex-shrink:0">'+escHtml(r.icao)+'</span>'
+      +'<span style="flex:1;font-size:12px;color:var(--txt)">'+star+escHtml(make)+' '+escHtml(r.model)+'</span>'
+      +'<span style="font-family:var(--mono);font-size:9px;color:var(--txt3);flex-shrink:0">'+escHtml(r.engine||'')+'</span>'
+      +'</div>';
+  }).join('');
+}
+
+function selectFaaAircraftByIcao(icao){
+  var db=_faaAircraftDb;
+  var entry=db&&db.find(function(r){return r.icao===icao;});
+  if(!entry)return;
+  // Resolve performance: use precise POH if available, else FAA-estimated values
+  var perfKey=FAA_ICAO_TO_ACPERF[icao]||null;
+  var known=perfKey&&ACPERF[perfKey];
+  var tas=known?known.tas:entry.tas;
+  var gph=known?known.gph:entry.gph;
+  var climb=known?known.climb:entry.climb;
+  var alts=known?known.alts.slice():entry.alts.slice();
+  var altsStr=alts.map(function(a){return(a/1000)+'K';}).join(', ');
+  var make=entry.make.charAt(0).toUpperCase()+entry.make.slice(1).toLowerCase();
+  var acKey=perfKey||('_faa_'+icao.toLowerCase());
+  var list=document.getElementById('ac-list');
+  var search=document.getElementById('ac-search');
+  var panel=document.getElementById('ac-perf-panel');
+  if(list)list.style.display='none';
+  if(search)search.style.display='none';
+  panel.dataset.icao=icao;
+  panel.dataset.key=acKey;
+  panel.innerHTML='<div style="padding:14px">'
+    +'<div style="font-family:var(--mono);font-size:9px;color:var(--blu);margin-bottom:6px;letter-spacing:1px">'+escHtml(icao)+' · '+escHtml(make+' '+entry.model)+'</div>'
+    +(known?'<div style="font-size:10px;color:var(--grn);margin-bottom:10px">★ Precise POH performance data — verify against your POH</div>':'<div style="font-size:10px;color:var(--txt3);margin-bottom:10px">Estimated values — adjust to match your POH</div>')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
+    +'<label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Cruise TAS (kts)</span><input id="acp-tas" type="number" value="'+tas+'" min="50" max="600" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky);border:1px solid var(--line);color:var(--txt);padding:6px;font-family:var(--mono);font-size:12px"></label>'
+    +'<label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Fuel Burn (GPH)</span><input id="acp-gph" type="number" value="'+gph+'" min="2" max="600" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky);border:1px solid var(--line);color:var(--txt);padding:6px;font-family:var(--mono);font-size:12px"></label>'
+    +'<label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Climb Rate (FPM)</span><input id="acp-climb" type="number" value="'+climb+'" min="100" max="8000" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky);border:1px solid var(--line);color:var(--txt);padding:6px;font-family:var(--mono);font-size:12px"></label>'
+    +'<label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Cruise Alts (e.g. 8K, 10K)</span><input id="acp-alts" value="'+escHtml(altsStr)+'" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky);border:1px solid var(--line);color:var(--txt);padding:6px;font-family:var(--mono);font-size:11px"></label>'
+    +'</div>'
+    +'<button type="button" onclick="confirmSaveAircraft()" style="width:100%;padding:11px;background:#003d1a;border:2px solid var(--grn);color:var(--grn);font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:4px">SAVE MY AIRCRAFT</button>'
+    +'<button type="button" onclick="backToAcList()" style="width:100%;padding:7px;background:none;border:none;color:var(--txt3);font-family:var(--mono);font-size:10px;cursor:pointer;margin-top:6px">← Back to list</button>'
+    +'</div>';
+  panel.style.display='block';
+}
+
+function backToAcList(){
+  var list=document.getElementById('ac-list');
+  var search=document.getElementById('ac-search');
+  var panel=document.getElementById('ac-perf-panel');
+  if(list)list.style.display='';
+  if(search)search.style.display='';
+  if(panel)panel.style.display='none';
+}
+
+function confirmSaveAircraft(){
+  var panel=document.getElementById('ac-perf-panel');
+  if(!panel)return;
+  var icao=panel.dataset.icao;
+  var key=panel.dataset.key;
+  var tas=parseInt(document.getElementById('acp-tas').value)||120;
+  var gph=parseFloat(document.getElementById('acp-gph').value)||10;
+  var climb=parseInt(document.getElementById('acp-climb').value)||800;
+  var altsRaw=document.getElementById('acp-alts').value||'';
+  var alts=altsRaw.split(/[\s,]+/).map(function(s){
+    var n=parseFloat(s);
+    return /[Kk]$/.test(s)?Math.round(n*1000):Math.round(n);
+  }).filter(function(n){return n>=1000&&n<=60000;});
+  if(!alts.length)alts=[6000,8000,10000];
+  var db=_faaAircraftDb||[];
+  var entry=db.find(function(r){return r.icao===icao;})||{icao:icao,make:'',model:icao};
+  var make=entry.make.charAt(0).toUpperCase()+entry.make.slice(1).toLowerCase();
+  var name=make+' '+entry.model;
+  applyAndSaveAircraft(key,name,tas,gph,climb,alts,icao);
+}
+
+function applyAndSaveAircraft(key,name,tas,gph,climb,alts,icao){
+  // Extend ACPERF at runtime
+  ACPERF[key]={name:name,tas:tas,gph:gph,climb:climb,alts:alts};
+  // Update hidden select
+  var sel=document.getElementById('aircraft');
+  if(sel){
+    var prev=sel.querySelector('[data-dynamic]');
+    if(prev)prev.remove();
+    var opt=document.createElement('option');
+    opt.value=key;
+    opt.textContent=name;
+    opt.setAttribute('data-dynamic','1');
+    opt.selected=true;
+    sel.appendChild(opt);
+  }
+  // Update display label
+  var disp=document.getElementById('ac-display-name');
+  if(disp)disp.textContent=name;
+  // Sync W&B selector
+  var wbSel=document.getElementById('wb-ac');
+  var wbMsg=document.getElementById('wb-no-data-msg');
+  if(wbSel&&WBDATA[key]){wbSel.value=key;if(wbMsg)wbMsg.style.display='none';}
+  else if(wbMsg){wbMsg.style.display='block';}
+  loadWB();
+  // Persist
+  try{localStorage.setItem('avisor_saved_aircraft',JSON.stringify({key:key,name:name,tas:tas,gph:gph,climb:climb,alts:alts,icao:icao||key}));}catch(e){}
+  closeAcPicker();
+  showToast(name+' saved.','info');
+}
+
+function loadSavedAircraftOnBoot(){
+  try{
+    var raw=localStorage.getItem('avisor_saved_aircraft');
+    if(!raw){openAcPickerFirstTime();return;}
+    var d=JSON.parse(raw);
+    if(!d||!d.key||!d.name){openAcPickerFirstTime();return;}
+    applyAndSaveAircraft(d.key,d.name,d.tas||120,d.gph||10,d.climb||800,d.alts||[6000,8000,10000],d.icao||d.key);
+    closeAcPicker();
+  }catch(e){openAcPickerFirstTime();}
+}
+
+function openAcPickerFirstTime(){
+  var hdr=document.getElementById('ac-picker-hdr');
+  if(hdr)hdr.textContent='SET UP YOUR AIRCRAFT';
+  openAcPicker();
+}
 
 // ══════════════════════════════════════════════════════════════════
 // RENDER ALL
@@ -4447,6 +4630,7 @@ function tab(id){
 // INIT
 // ══════════════════════════════════════════════════════════════════
 loadWB();
+loadSavedAircraftOnBoot();
 (function(){
   if(location.protocol!=='file:')return;
   var bar=document.createElement('div');
