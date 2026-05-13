@@ -482,7 +482,7 @@ canvas#cgc{display:block;width:100%;height:auto}
     </div>
     <div style="padding:10px 12px;flex-shrink:0">
       <input id="ac-search" type="text" placeholder="Search make or model (e.g. Cessna, SR22, TBM)…" oninput="renderAcPickerList(this.value)" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:8px 10px;font-family:var(--mono);font-size:11px">
-      <div style="font-size:9px;color:var(--txt3);margin-top:4px;font-family:var(--mono)">★ = precise POH data available · showing up to 80 results</div>
+      <div style="font-size:9px;color:var(--txt3);margin-top:4px;font-family:var(--mono)">388 aircraft · ★ = precise POH data · up to 80 results shown</div>
     </div>
     <div id="ac-list" style="flex:1;overflow-y:auto;border-top:1px solid var(--line)">
       <div style="color:var(--txt3);font-family:var(--mono);font-size:11px;padding:16px;text-align:center">Loading aircraft database…</div>
@@ -2974,8 +2974,8 @@ function openAcPicker(){
   var panel=document.getElementById('ac-perf-panel');
   if(search){search.value='';search.style.display='';}
   if(panel)panel.style.display='none';
-  if(list)list.style.display='';
-  loadFaaAircraftDb().then(function(){renderAcPickerList('');});
+  if(list){list.style.display='';list.innerHTML='<div style="color:var(--txt3);font-family:var(--mono);font-size:11px;padding:20px;text-align:center;line-height:1.8">Start typing to search<br><span style="font-size:9px;opacity:.6">make, model, or ICAO code</span></div>';}
+  loadFaaAircraftDb();
   setTimeout(function(){if(search)search.focus();},120);
 }
 
@@ -2987,10 +2987,11 @@ function closeAcPicker(){
 function renderAcPickerList(filter){
   var el=document.getElementById('ac-list');
   if(!el)return;
-  var db=_faaAircraftDb;
-  if(!db){el.innerHTML='<div style="color:var(--txt3);font-family:var(--mono);font-size:11px;padding:16px;text-align:center">Loading…</div>';return;}
   var q=(filter||'').toLowerCase().trim();
-  var items=q?db.filter(function(r){return(r.make+' '+r.model+' '+r.icao).toLowerCase().includes(q);}):db;
+  if(!q){el.innerHTML='<div style="color:var(--txt3);font-family:var(--mono);font-size:11px;padding:20px;text-align:center;line-height:1.8">Start typing to search<br><span style="font-size:9px;opacity:.6">make, model, or ICAO code</span></div>';return;}
+  var db=_faaAircraftDb;
+  if(!db){el.innerHTML='<div style="color:var(--txt3);font-family:var(--mono);font-size:11px;padding:16px;text-align:center">Loading…</div>';loadFaaAircraftDb().then(function(){renderAcPickerList(filter);});return;}
+  var items=db.filter(function(r){return(r.make+' '+r.model+' '+r.icao).toLowerCase().includes(q);});
   if(!items.length){el.innerHTML='<div style="color:var(--txt3);font-family:var(--mono);font-size:11px;padding:16px">No matches.</div>';return;}
   el.innerHTML=items.slice(0,80).map(function(r){
     var star=FAA_ICAO_TO_ACPERF[r.icao]?'<span style="color:var(--grn);margin-right:4px">★</span>':'';
@@ -3102,18 +3103,12 @@ function applyAndSaveAircraft(key,name,tas,gph,climb,alts,icao){
 function loadSavedAircraftOnBoot(){
   try{
     var raw=localStorage.getItem('avisor_saved_aircraft');
-    if(!raw){openAcPickerFirstTime();return;}
+    if(!raw)return;
     var d=JSON.parse(raw);
-    if(!d||!d.key||!d.name){openAcPickerFirstTime();return;}
+    if(!d||!d.key||!d.name)return;
     applyAndSaveAircraft(d.key,d.name,d.tas||120,d.gph||10,d.climb||800,d.alts||[6000,8000,10000],d.icao||d.key);
     closeAcPicker();
-  }catch(e){openAcPickerFirstTime();}
-}
-
-function openAcPickerFirstTime(){
-  var hdr=document.getElementById('ac-picker-hdr');
-  if(hdr)hdr.textContent='SET UP YOUR AIRCRAFT';
-  openAcPicker();
+  }catch(e){}
 }
 
 // ══════════════════════════════════════════════════════════════════
