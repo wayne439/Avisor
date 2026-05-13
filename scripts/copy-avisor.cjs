@@ -6,10 +6,23 @@
  */
 const fs = require('fs');
 const path = require('path');
-const defaultSrc = path.join(process.env.USERPROFILE || '', 'Desktop', 'avisor_v5.html');
-const src = process.env.AVISOR_SRC || defaultSrc;
-const dest = path.join(__dirname, '..', 'public', 'avisor.html');
-if (!fs.existsSync(src)) { console.error('Source not found:', src); process.exit(1); }
+const repoRoot = path.join(__dirname, '..');
+const plannerSrc = path.join(repoRoot, 'src', 'avisor-planner.html');
+const desktopSrc = path.join(process.env.USERPROFILE || '', 'Desktop', 'avisor_v5.html');
+function firstExisting(paths) {
+  for (let i = 0; i < paths.length; i++) {
+    const p = paths[i];
+    if (p && fs.existsSync(p)) return p;
+  }
+  return null;
+}
+/** AVISOR_SRC if set; else src/avisor-planner.html; else Desktop avisor_v5.html */
+const src = firstExisting([process.env.AVISOR_SRC, plannerSrc, desktopSrc]);
+const dest = path.join(repoRoot, 'public', 'avisor.html');
+if (!src) {
+  console.error('No AVISOR HTML source found. Set AVISOR_SRC, or add src/avisor-planner.html, or put avisor_v5.html on Desktop.');
+  process.exit(1);
+}
 fs.mkdirSync(path.dirname(dest), { recursive: true });
 fs.copyFileSync(src, dest);
 console.log('Copied', src, '->', dest);

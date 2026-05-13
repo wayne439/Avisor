@@ -25,10 +25,10 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/3] Copying planner from Desktop to public\avisor.html ...
+echo [2/3] Syncing AVISOR into public\avisor.html ^(src\avisor-planner.html in this repo, else Desktop\avisor_v5.html^) ...
 call npm run sync:avisor
 if errorlevel 1 (
-  echo sync:avisor failed. Put avisor_v5.html on your Desktop, or set AVISOR_SRC to your HTML file path.
+  echo sync:avisor failed. Set AVISOR_SRC to the full path of your source HTML, or ensure src\avisor-planner.html exists.
   pause
   exit /b 1
 )
@@ -90,7 +90,7 @@ echo.
 echo iPhone/iPad web app: open the /avisor.html link in Safari, then Share ^> Add to Home Screen.
 echo.
 echo --- If testing does not work ---
-echo 1) SYNC: avisor_v5.html must be on your Desktop, or set AVISOR_SRC to the full path of your HTML file before running this BAT.
+echo 1) SYNC: Uses src\avisor-planner.html in this folder first; else Desktop\avisor_v5.html; override with set AVISOR_SRC=full\path\to.html
 echo 2) SERVER WINDOW: Leave "PilotAvisor LAN Server" open. If you see EADDRINUSE / port 5173, close other Vite terminals and run this BAT again.
 echo 3) SAME Wi-Fi: Phone and PC must use the same network; use the PC Wi-Fi IP you typed ^(not cellular on the phone^).
 echo 4) FIREWALL: Allow Node.js on Private networks when Windows asks ^(or allow TCP 5173^).

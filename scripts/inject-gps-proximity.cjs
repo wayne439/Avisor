@@ -91,7 +91,7 @@ const OLD_FREQ_BLOCK =
 
 const NEW_FREQ_BLOCK = `if(apFreqEl&&typeof buildFreqHTML==='function'){
     apFreqEl.innerHTML='<div style="color:var(--txt3);font-size:9px;font-family:var(--mono)">Loading comm frequencies…</div>';
-    ensureOurAirportsEnrichment().then(function(){
+    Promise.all([ensureOurAirportsEnrichment(),ensureFreqCommOverrides()]).then(function(){
       var el=document.getElementById('ap-freqs'),pl=STATE.plan;
       if(el&&pl&&pl.arrIcao) el.innerHTML=buildFreqHTML(pl.arrIcao,APTS[pl.arrIcao]);
     }).catch(function(){
@@ -161,10 +161,10 @@ function main() {
     }
   }
 
-  if (!html.includes("ensureOurAirportsEnrichment().catch")) {
+  if (!html.includes("ensureOurAirportsEnrichment().catch") && !html.includes("ensureFreqCommOverrides().catch")) {
     const en = html.replace(
       /(STATE\.plan\s*=\s*plan;\s*STATE\.routes\s*=\s*\{[^}]+\};\s*STATE\.updates\s*=\s*\[\];)/,
-      "$1\n    ensureOurAirportsEnrichment().catch(function(){});",
+      "$1\n    Promise.all([ensureOurAirportsEnrichment(),ensureFreqCommOverrides()]).catch(function(){});",
     );
     if (en !== html) html = en;
   }

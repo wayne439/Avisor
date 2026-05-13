@@ -17,7 +17,9 @@ const path = require('path');
 
 const DATA_DIR = path.join(__dirname, '..', 'Data');
 
-// OurAirports open data (always current, free, no auth needed)
+// Frequencies land as airport-frequencies.csv next to this package; main() copies it to
+// public/data/ourairports-airport-frequencies.csv (the filename the browser fetches).
+// OurAirports open data (free, no auth).
 const SOURCES = [
 {
       url: 'https://davidmegginson.github.io/ourairports-data/airport-frequencies.csv',
@@ -70,14 +72,29 @@ function download(url, destPath, name) {
 }
 
 async function main() {
-    console.log('\nFetching FAA and airport data...\n');
+  console.log('\nFetching FAA and airport data...\n');
   ensureDir(DATA_DIR);
 
   for (const source of SOURCES) {
-        await download(source.url, source.dest, source.name);
-    }
+    await download(source.url, source.dest, source.name);
+  }
 
-      console.log('\nData fetch complete.');
-      console.log('Run npm run build:navaids next to bundle navaids.\n');
+  const shellRoot = path.join(__dirname, '..');
+  const freqSrc = path.join(shellRoot, 'airport-frequencies.csv');
+  const freqPublic = path.join(shellRoot, 'public', 'data', 'ourairports-airport-frequencies.csv');
+  if (fs.existsSync(freqSrc)) {
+    ensureDir(path.dirname(freqPublic));
+    fs.copyFileSync(freqSrc, freqPublic);
+    console.log('  Copied → public/data/ourairports-airport-frequencies.csv (path the web app loads)\n');
+  }
+
+  console.log('Data fetch complete.');
+  console.log('Run npm run build:navaids next to bundle navaids.\n');
   console.log('Note: For full FAA 28-day NAFD cycle data, download manually from:');
-  console.log('  https://n
+  console.log('  https://nfdc.faa.gov/xwiki/bin/view/NFDC/56DaySub/56DaySubscriptionFiles/\n');
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

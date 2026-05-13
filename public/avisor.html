@@ -973,7 +973,9 @@ canvas#cgc{display:block;width:100%;height:auto}
   <!-- ATC LIVE -->
   <div class="panel" id="p-atc">
     <div class="offline-note">
-      <b>SpeechRecognition (browser):</b> Chrome / Edge / Android typically send audio to the vendor speech service — <b>network usually required</b>; not the same as fully offline native ATC models (e.g. PilotGPT’s on-device pipeline). Safari on Apple devices may behave differently by OS. <b>Always verify clearances by ear.</b> Conversation-tuned engines often mis-hear tail numbers and phraseology; mic or wired audio from your radio helps. After <b>Build</b>, destination ICAO and tower frequency fill from your route (editable).
+      <b>SpeechRecognition (browser):</b> Chrome / Edge / Android typically send audio to the vendor speech service — <b>network usually required</b>; not the same as fully offline native ATC models (e.g. PilotGPT’s on-device pipeline). Safari on Apple devices may behave differently by OS. <b>Always verify clearances by ear.</b> Conversation-tuned engines often mis-hear tail numbers and phraseology; mic or wired audio from your radio helps. <b>Captions are not FAA phraseology</b> — clause order and wording often will not read like a standard readback; use what you hear on frequency. After <b>Build</b>, destination ICAO and tower frequency fill from your route (editable).<br><br>
+      <b>Headset / ATC audio:</b> The app listens to the <b>iPad microphone input</b>, not “whatever you hear in the earcups.” Bluetooth to a Bose A20 does <b>not</b> send aircraft radio audio back into the iPad as a mic. To transcribe ATC you need audio into the iPad (e.g. panel/aux record path, aviation audio interface, or speakerphone in a quiet cabin) — confirm wiring with your avionics shop / AFM limits.<br><br>
+      <b>iPad / Safari:</b> Speech recognition needs <b>HTTPS</b> (not <code>file://</code>) and <b>Microphone</b> allowed for the site (Settings → Safari, or the address bar permission). Safari’s Web Speech support is <b>quirky</b>; if nothing appears after START, try <b>Chrome on iPad</b> if installed, or use a dedicated voice recorder and transcribe later.
     </div>
     <div class="card c-r">
       <div class="card-h"><span class="card-title">Live ATC Transcriber</span><span class="badge b-r" id="atc-status-badge">STOPPED</span></div>
@@ -990,7 +992,7 @@ canvas#cgc{display:block;width:100%;height:auto}
           AIRPORT: <input id="atc-apt" placeholder="→ ICAO" title="Filled from destination after Build; edit if monitoring another sector." oninput="this.value=this.value.toUpperCase()" style="background:var(--sky3);border:1px solid var(--line);color:var(--blu);font-family:var(--mono);font-size:11px;padding:2px 6px;width:58px;outline:none">
         </div>
         <div class="atc-transcript" id="atc-transcript">
-          <div style="color:var(--txt3);font-family:var(--mono);font-size:9px">Transcript will appear here...<br><br>Tip: Speak clearly into your device microphone. ATC audio piped through a headset jack works best.</div>
+          <div style="color:var(--txt3);font-family:var(--mono);font-size:9px">Transcript will appear here…<br><br><b>Reads rough by design:</b> speech-to-text drops words, splits lines, and shuffles clauses — it will <b>not</b> read like a clean FAA readback. Use your ears and the frequency as authority. Headset / wired radio audio into the mic works best.</div>
         </div>
         <div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
           <button class="bsm" onclick="clearATC()">CLEAR TRANSCRIPT</button>
@@ -2211,6 +2213,8 @@ function densifyWaypointsByDistance(wpts,depRef,arrRef,profile){
         if(depLat!=null&&arrLat!=null){
           var xtkDA=crossTrackDist(depLat,depLon,arrLat,arrLon,n.lat,n.lon);
           if(xtkDA>30) return;
+          var alDA=alongTrackNmDepArr(depLat,depLon,arrLat,arrLon,n.lat,n.lon);
+          if(alDA<10) return;
         }
         if(distA2Arr!=null){
           var dN=gcDist(n.lat,n.lon,arrLat,arrLon);
@@ -2281,7 +2285,7 @@ function splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,profile){
         var sc=Math.abs(along-(leg/2))+(xtk*3.5)+Math.abs(dA-dB)*0.22;
         if(depRef&&arrRef&&isFinite(Number(depRef.lat))&&isFinite(Number(arrRef.lat))){
           var al=alongTrackNmDepArr(depRef.lat,depRef.lon,arrRef.lat,arrRef.lon,n.lat,n.lon);
-          if(al<-20) sc+=180;
+          if(al<10) return;
         }
         if(sc<bs){bs=sc;best={id:uid,lat:n.lat,lon:n.lon,type:n.type||'fix',freq:n.freq||'',desc:n.desc||uid};}
       });
@@ -2300,7 +2304,11 @@ function pruneWaypointProgressToArr(depRef,arrRef,wpts){
   if(!Array.isArray(wpts)||wpts.length<3) return wpts||[];
   var dl=Number(depRef.lat),dLo=Number(depRef.lon),al=Number(arrRef.lat),aLo=Number(arrRef.lon);
   if(!isFinite(dl)||!isFinite(dLo)||!isFinite(al)||!isFinite(aLo)) return wpts;
-  var out=[wpts[0]],prevAlong=-1e9;
+  var out=[wpts[0]],prevAlong=(function(){
+    var w0=wpts[0];
+    if(!w0||!isFinite(Number(w0.lat))||!isFinite(Number(w0.lon))) return 0;
+    return alongTrackNmDepArr(dl,dLo,al,aLo,w0.lat,w0.lon);
+  })();
   for(var i=1;i<wpts.length-1;i++){
     var w=wpts[i];
     if(!w||!isFinite(Number(w.lat))||!isFinite(Number(w.lon))) continue;
@@ -2789,7 +2797,7 @@ async function buildPlan(){
     const fltDate=document.getElementById('flt-date')&&document.getElementById('flt-date').value||new Date().toISOString().slice(0,10);
     const plan={depIcao,arrIcao,dep,arr,ac,acid,pri,fltDate,rules,res,dist,crs,alt,eteMin,gs,hw,tripFuel,resFuel,totalFuel,primary,altRoute,dm,am,dt,at,dn,an,favRwy,tfloor,twarn,hazards,depWind:wfmt(dm),arrWind:wfmt(am),cruiseAltSource:altPick.source,cruiseAltRequested:altPick.requested!=null?altPick.requested:null};
     STATE.plan=plan;STATE.routes={primary,alt:altRoute};STATE.updates=[];
-    ensureOurAirportsEnrichment().catch(function(){});
+    Promise.all([ensureOurAirportsEnrichment(),ensureFreqCommOverrides()]).catch(function(){});
     // Build waypoints + FPL
     // Build waypoints — split into legs if fuel stop set
     let wpts;
@@ -3028,7 +3036,7 @@ function renderApproach(p){
   var apFreqEl=document.getElementById('ap-freqs');
   if(apFreqEl&&typeof buildFreqHTML==='function'){
     apFreqEl.innerHTML='<div style="color:var(--txt3);font-size:9px;font-family:var(--mono)">Loading comm frequencies…</div>';
-    ensureOurAirportsEnrichment().then(function(){
+    Promise.all([ensureOurAirportsEnrichment(),ensureFreqCommOverrides()]).then(function(){
       var el=document.getElementById('ap-freqs'),pl=STATE.plan;
       if(el&&pl&&pl.arrIcao) el.innerHTML=buildFreqHTML(pl.arrIcao,APTS[pl.arrIcao]);
     }).catch(function(){
@@ -4072,13 +4080,46 @@ function flushATCMergeBuffer(){
   STATE.atcMergeBuf='';
   if(buf) addATCLine(buf);
 }
+/** Longer pause after phrases where the next word is often a separate final (runway number, tail digits). */
+function atcMergeDelayMs(buf){
+  var b=(buf||'').replace(/\s+/g,' ').trim();
+  if(/\b(for\s+)?runway\s*$/i.test(b)) return 1680;
+  if(/\bnovember\s*$/i.test(b)) return 1450;
+  return 920;
+}
+function prevLineEndsAwaitingRunwayNbr(prev){
+  return /\b(for\s+)?runway\s*$/i.test(String(prev||'').replace(/\s+/g,' ').trim());
+}
+function prevLineEndsAwaitingTailFragment(prev){
+  return /\bnovember\s*$/i.test(String(prev||'').replace(/\s+/g,' ').trim());
+}
+/** Next final is often just "21", "two one", "2 1" — attach to previous "… runway". */
+function isLikelyRunwayDesignatorFragment(s){
+  var t=String(s||'').replace(/\s+/g,' ').trim();
+  if(!t||t.length>24) return false;
+  if(/^\d{1,2}[LRC]?$/i.test(t)) return true;
+  if(/^\d\s+\d$/i.test(t)) return true;
+  var tokens=t.toLowerCase().split(/\s+/).filter(Boolean);
+  if(!tokens.length||tokens.length>4) return false;
+  var dig=/^(zero|oh|one|two|tree|three|four|fower|five|fife|six|seven|eight|ait|nine|niner)$/;
+  if(tokens.every(function(w){ return dig.test(w)||/^(left|right|center)$/.test(w); })){
+    var dcount=tokens.filter(function(w){ return dig.test(w); }).length;
+    return dcount>=1&&dcount<=2;
+  }
+  return false;
+}
+/** e.g. "63 kilo Alpha" after line ending in "November". */
+function isLikelyTailSecondFragment(s){
+  var t=String(s||'').replace(/\s+/g,' ').trim();
+  return /^(\d{1,3}\s+kilo\s+alpha|\d{1,3}\s+kilo)$/i.test(t);
+}
 /** Web Speech often emits several short finals in a row; merge within ~1s so phrases stay on one line when possible. */
 function queueATCFinalSpeech(chunk){
   var t=String(chunk||'').replace(/\s+/g,' ').trim();
   if(!t) return;
   STATE.atcMergeBuf=(STATE.atcMergeBuf?STATE.atcMergeBuf+' ':'')+t;
   if(STATE.atcMergeTimer) clearTimeout(STATE.atcMergeTimer);
-  STATE.atcMergeTimer=setTimeout(flushATCMergeBuffer,920);
+  STATE.atcMergeTimer=setTimeout(flushATCMergeBuffer,atcMergeDelayMs(STATE.atcMergeBuf));
 }
 
 function toggleATC(){
@@ -4086,11 +4127,21 @@ function toggleATC(){
 }
 function startATC(){
   if(!('webkitSpeechRecognition' in window||'SpeechRecognition' in window)){
-    showToast('Speech recognition not supported in this browser. Try Chrome or Edge.');return;
+    var iosHint=(/iPad|iPhone|iPod/i.test(navigator.userAgent||'')||(navigator.maxTouchPoints>1&&/MacIntel|Macintosh/i.test(navigator.platform||'')))
+      ?' On iPad: use Safari or Chrome over HTTPS, not offline file copies.'
+      :'';
+    showToast('Speech recognition not supported in this browser. Try Safari (iOS 14.5+) or Chrome.'+iosHint);return;
   }
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   const rec=new SR();
-  rec.continuous=true;rec.interimResults=true;rec.lang='en-US';rec.maxAlternatives=1;
+  var touchApple=(/iPad|iPhone|iPod/i.test(navigator.userAgent||'')||(navigator.maxTouchPoints>1&&/MacIntel|Macintosh/i.test(navigator.platform||'')));
+  rec.continuous=true;
+  /* WebKit: interimResults true is known to break or stall recognition; finals-only is more reliable on iPad. */
+  rec.interimResults=!touchApple;
+  rec.lang='en-US';rec.maxAlternatives=1;
+  if(touchApple&&typeof showToast==='function'){
+    setTimeout(function(){try{showToast('iPad: allow Microphone for this site. Radio in headset is not auto-captured — see note above.');}catch(_t){}},400);
+  }
   rec.onstart=()=>{
     STATE.atcActive=true;STATE.atcRecognition=rec;
     document.getElementById('atc-btn').className='atc-big-btn atc-stop';
@@ -4108,6 +4159,12 @@ function startATC(){
   };
   rec.onerror=e=>{
     if(e.error==='no-speech') return;
+    if(e.error==='not-allowed'){
+      addATCLine('[Error: microphone blocked — iPad: Settings → Safari → Microphone, or tap aA in address bar → Website Settings → Microphone → Allow.]',true);
+      try{showToast('Allow Microphone for this website in Safari settings.');}catch(_x){}
+      try{stopATC();}catch(_s){}
+      return;
+    }
     if(e.error==='network'){
       addATCLine('[Error: network — speech recognition in this browser usually needs internet (Chrome/Edge). Reconnect, try Safari on Apple devices, or use a native offline ASR app for no-network ATC.]',true);
       try{showToast('Speech recognition hit a network error — see transcript note.');}catch(_x){}
@@ -4129,11 +4186,37 @@ function stopATC(){
   document.getElementById('atc-status-txt').textContent='NOT RECORDING — tap button to restart';
 }
 function addATCLine(txt,isError=false){
+  txt=String(txt||'').replace(/\s+/g,' ').trim();
+  if(!txt) return;
   const ts=new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const apt=document.getElementById('atc-apt').value||'';
   const freq=document.getElementById('atc-freq').value||'';
-  STATE.atcLines.push({ts,txt,freq,apt});
   const el=document.getElementById('atc-transcript');
+  if(!isError&&STATE.atcLines&&STATE.atcLines.length){
+    var last=STATE.atcLines[STATE.atcLines.length-1];
+    var prev=last.txt||'';
+    var append=null;
+    if(prevLineEndsAwaitingRunwayNbr(prev)&&isLikelyRunwayDesignatorFragment(txt)) append=prev+' '+txt;
+    else if(prevLineEndsAwaitingTailFragment(prev)&&isLikelyTailSecondFragment(txt)) append=prev+' '+txt;
+    if(append){
+      var merged=append.replace(/\s+/g,' ').trim();
+      last.txt=merged;
+      var lines=el.querySelectorAll('.atc-line');
+      var row=lines[lines.length-1];
+      if(row){
+        var spans=row.querySelectorAll('span');
+        if(spans.length>=2){
+          var loM=merged.toLowerCase();
+          var hitsM=ATC_KEYWORDS.filter(function(kw){ return loM.includes(kw); });
+          spans[1].textContent=merged;
+          spans[1].className=hitsM.length?'atc-alert':'atc-content';
+        }
+      }
+      el.scrollTop=el.scrollHeight;
+      return;
+    }
+  }
+  STATE.atcLines.push({ts,txt,freq,apt});
   // Check for keywords
   const lo=txt.toLowerCase();
   const hits=ATC_KEYWORDS.filter(kw=>lo.includes(kw));
@@ -4484,13 +4567,14 @@ var FREQ_DB={
   KFLG:{ctaf:'123.0',atis:'127.25',gnd:'121.9',twr:'118.1',app:'119.0',dep:'119.0'},
   KDEN:{atis:'135.3',gnd:'121.75',twr:'118.3',app:'124.3',dep:'125.0'},
   KSAF:{ctaf:'122.8',atis:'127.05',twr:'122.5',app:'124.6',dep:'124.6'},
-  "18AZ":{ctaf:'122.9'},
   KTUS:{atis:'125.2',gnd:'121.9',twr:'118.3',app:'119.0',dep:'125.2'},
   KCHD:{ctaf:'123.05',twr:'118.45',app:'124.0',awos:'135.775'}
 };
 var OURAIRPORTS_FREQ_DB={};
 var OURAIRPORTS_COMMENTS_DB={};
+var FREQ_COMM_OVERRIDES={};
 var _ourAirportsEnrichmentPromise=null;
+var _freqCommOverridesPromise=null;
 async function fetchTextFromCandidates(urls){
   for(var i=0;i<urls.length;i++){
     var u=urls[i];
@@ -4536,7 +4620,8 @@ async function ensureOurAirportsEnrichment(){
           var rec=OURAIRPORTS_FREQ_DB[ident]||(OURAIRPORTS_FREQ_DB[ident]={});
           if(kind.indexOf('ATIS')>=0) rec.atis=rec.atis||val;
           else if(kind.indexOf('AWOS')>=0||kind.indexOf('ASOS')>=0) rec.awos=rec.awos||val;
-          else if(kind.indexOf('CTAF')>=0||kind.indexOf('UNICOM')>=0) rec.ctaf=rec.ctaf||val;
+          else if(kind.indexOf('CTAF')>=0) rec.ctaf=rec.ctaf||val;
+          else if(kind.indexOf('UNICOM')>=0) rec.unicom=rec.unicom||val;
           else if(kind.indexOf('GROUND')>=0||kind==='GND') rec.gnd=rec.gnd||val;
           else if(kind.indexOf('TOWER')>=0||kind==='TWR') rec.twr=rec.twr||val;
           else if(kind.indexOf('APP')>=0||kind.indexOf('APPROACH')>=0) rec.app=rec.app||val;
@@ -4568,6 +4653,33 @@ async function ensureOurAirportsEnrichment(){
     return true;
   })();
   return _ourAirportsEnrichmentPromise;
+}
+async function ensureFreqCommOverrides(){
+  if(_freqCommOverridesPromise) return _freqCommOverridesPromise;
+  _freqCommOverridesPromise=(async function(){
+    var hostBase=(location&&location.origin&&location.origin!=='null')?location.origin:'';
+    var urls=[
+      './data/freq-comm-overrides.json',
+      '/data/freq-comm-overrides.json',
+      hostBase?hostBase+'/data/freq-comm-overrides.json':''
+    ].filter(Boolean);
+    try{
+      var txt=await fetchTextFromCandidates(urls);
+      if(txt&&txt.length>10){
+        var j=JSON.parse(txt);
+        if(j&&typeof j==='object'){
+          Object.keys(j).forEach(function(k){
+            var id=String(k).toUpperCase().trim();
+            if(!id||typeof j[k]!=='object'||!j[k]) return;
+            FREQ_COMM_OVERRIDES[id]=Object.assign(FREQ_COMM_OVERRIDES[id]||{},j[k]);
+          });
+          console.log('Freq comm overrides',Object.keys(FREQ_COMM_OVERRIDES).length,'airport(s)');
+        }
+      }
+    }catch(e){console.warn('freq-comm-overrides',e&&e.message);}
+    return true;
+  })();
+  return _freqCommOverridesPromise;
 }
 var VICTOR_AIRWAYS=[
   {id:'V105',fixes:['PHX','GUP','ABQ'],desc:'Phoenix to Albuquerque'},
@@ -4980,7 +5092,11 @@ function refineRouteIdsMonotonic(dep,arr,ids,rules){
     if(AIRPORTS_DB&&String(id).length===3&&AIRPORTS_DB['K'+id]) return {lat:AIRPORTS_DB['K'+id][1],lon:AIRPORTS_DB['K'+id][2]};
     return null;
   }
-  var keep=[ids[0]],prevAlong=-999;
+  var keep=[ids[0]],prevAlong=(function(){
+    var n0=node(ids[0]);
+    if(!n0||!isFinite(Number(n0.lat))||!isFinite(Number(n0.lon))) return 0;
+    return alongTrackNmDepArr(dep.lat,dep.lon,arr.lat,arr.lon,n0.lat,n0.lon);
+  })();
   for(var i=1;i<ids.length-1;i++){
     var id=ids[i],n=node(id);
     if(!n||!isFinite(Number(n.lat))||!isFinite(Number(n.lon))) continue;
@@ -5144,14 +5260,21 @@ async function lookupAirport(icao){
 
 // ══ FREQ DISPLAY ══════════════════════════════════════════════════
 function mergedFreqRecord(icao){
-  var b=FREQ_DB[icao]||{};
-  var o=OURAIRPORTS_FREQ_DB[icao]||OURAIRPORTS_FREQ_DB[icao.replace(/^K/,'')]||{};
-  return {atis:b.atis||o.atis,clr:b.clr||o.clr,gnd:b.gnd||o.gnd,twr:b.twr||o.twr,ctaf:b.ctaf||o.ctaf,app:b.app||o.app,dep:b.dep||o.dep,awos:b.awos||o.awos,misc:b.misc||o.misc};
+  var id=String(icao||'').toUpperCase().trim();
+  function bag(db){return db[id]||db[id.replace(/^K/,'')]||{};}
+  function pick(field){
+    var ov=bag(FREQ_COMM_OVERRIDES),o=bag(OURAIRPORTS_FREQ_DB),b=bag(FREQ_DB);
+    var v=ov[field];if(v!=null&&String(v).trim()!=='')return String(v).trim();
+    v=o[field];if(v!=null&&String(v).trim()!=='')return String(v).trim();
+    v=b[field];if(v!=null&&String(v).trim()!=='')return String(v).trim();
+    return '';
+  }
+  return {atis:pick('atis'),clr:pick('clr'),gnd:pick('gnd'),twr:pick('twr'),ctaf:pick('ctaf'),unicom:pick('unicom'),app:pick('app'),dep:pick('dep'),awos:pick('awos'),misc:pick('misc')};
 }
 function buildFreqHTML(icao,aptData){
   var db=mergedFreqRecord(icao);
   function fr(lbl,freq,col){if(!freq)return '';return '<div class="dr"><span class="dl">'+lbl+'</span><span class="dv" style="color:'+(col||'var(--tx)')+'">'+freq+' MHz</span></div>';}
-  var rows=fr('ATIS/D-ATIS',db.atis,'var(--ac)')+fr('Clearance',db.clr,'var(--am)')+fr('Ground',db.gnd,'var(--gn)')+fr('Tower',db.twr,'var(--ac)')+fr('CTAF',db.ctaf,'var(--gn)')+fr('Approach',db.app,'var(--am)')+fr('Departure',db.dep,'var(--am)')+fr('AWOS/ASOS',db.awos,'var(--ac)');
+  var rows=fr('ATIS/D-ATIS',db.atis,'var(--ac)')+fr('Clearance',db.clr,'var(--am)')+fr('Ground',db.gnd,'var(--gn)')+fr('Tower',db.twr,'var(--ac)')+fr('CTAF',db.ctaf,'var(--gn)')+fr('UNICOM',db.unicom,'var(--gn)')+fr('Approach',db.app,'var(--am)')+fr('Departure',db.dep,'var(--am)')+fr('AWOS/ASOS',db.awos,'var(--ac)');
   if(db.misc) rows+=fr('Other',db.misc,'var(--tx2)');
   var cmts=OURAIRPORTS_COMMENTS_DB[icao]||OURAIRPORTS_COMMENTS_DB[icao.replace(/^K/,'')]||[];
   if(cmts.length){
@@ -5160,12 +5283,13 @@ function buildFreqHTML(icao,aptData){
     rows+='</div>';
   }
   if(!rows) rows='<div style="color:var(--tx3);font-size:9px;font-family:var(--mono)">No stored comm plan for this airport — use official sources below.</div>';
+  rows+='<div style="margin-top:8px;font-size:8px;color:var(--tx3);line-height:1.45">Bundled comm data may be incomplete or stale — confirm with current Chart Supplement / 1800WXBrief before flight.</div>';
   rows+='<div style="margin-top:8px;font-size:9px;font-family:var(--mono);line-height:1.7"><a href="https://www.airnav.com/airport/'+icao+'" target="_blank" rel="noopener noreferrer" style="color:var(--blu)">AirNav '+icao+'</a> · <a href="https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/vfr/" target="_blank" rel="noopener noreferrer" style="color:var(--blu)">FAA VFR products</a></div>';
   if(aptData&&aptData.rwys&&aptData.rwys.length){rows+='<div style="margin-top:7px;border-top:1px solid var(--b1);padding-top:5px"><div style="font-family:var(--mono);font-size:8px;color:var(--tx3);margin-bottom:3px">RUNWAYS</div>';aptData.rwys.forEach(function(r){rows+='<div class="dr"><span class="dl">RWY '+r.id+'</span><span class="dv">'+r.len.toLocaleString()+'ft | '+(r.pat==='R'?'Right':'Left')+' traffic | '+r.hdg+'deg</span></div>';});rows+='</div>';}
   return rows;
 }
 async function renderRadio(){
-  await ensureOurAirportsEnrichment();
+  await Promise.all([ensureOurAirportsEnrichment(),ensureFreqCommOverrides()]);
   var p=S.plan;if(!p)return;show('radio');
   var aptDb=APTS;
   var db=document.getElementById('dep-freq-badge'),ab=document.getElementById('arr-freq-badge');
@@ -5195,10 +5319,11 @@ function buildFlightFollowingSequence(){
     if(aptForFreq) freqMini='<div style="margin-top:6px;padding:6px;background:#0a0c12;border:1px solid var(--b1);border-radius:4px;font-size:8px;line-height:1.45">'+buildFreqHTML(w.id,aptForFreq)+'</div>';
     else{
       if(w.type==='vor'&&w.freq) freqMini+='<div style=color:var(--am)>VOR '+escHtml(String(w.freq))+' MHz</div>';
-      if(f.ctaf||f.twr||f.app||f.atis||f.gnd||f.awos){
+      if(f.ctaf||f.unicom||f.twr||f.app||f.atis||f.gnd||f.awos){
         freqMini+='<div style="margin-top:4px;font-size:8px">'+
           (f.atis?'<div style=color:var(--ac)>ATIS '+escHtml(f.atis)+'</div>':'')+
           (f.ctaf?'<div style=color:var(--gn)>CTAF '+escHtml(f.ctaf)+'</div>':'')+
+          (f.unicom?'<div style=color:var(--gn)>UNICOM '+escHtml(f.unicom)+'</div>':'')+
           (f.gnd?'<div style=color:var(--tx2)>GND '+escHtml(f.gnd)+'</div>':'')+
           (f.twr?'<div style=color:var(--ac)>TWR '+escHtml(f.twr)+'</div>':'')+
           (f.app?'<div style=color:var(--am)>APP '+escHtml(f.app)+'</div>':'')+
