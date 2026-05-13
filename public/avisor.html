@@ -2182,8 +2182,8 @@ function pruneBearingReversals(depRef,arrRef,wpts){
     var dCur=gcDist(cur.lat,cur.lon,al,aLo);
     var dNxt=gcDist(nxt.lat,nxt.lon,al,aLo);
     var regresses=(dCur>dPrev-1&&dCur>dNxt-1);
-    // If this point creates a major reversal/backtrack and does not help closure, drop it.
-    if(turn>122&&regresses) continue;
+    // Drop any point causing a significant heading reversal that doesn't help close to destination.
+    if(turn>80&&regresses) continue;
     out.push(cur);
   }
   out.push(wpts[wpts.length-1]);
@@ -5194,7 +5194,8 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
     if(along<12||along>direct-12) return;
     var xtk=crossTrackDist(dep.lat,dep.lon,arr.lat,arr.lon,n.lat,n.lon);
     var xMax=xtkMax;
-    if(rules==='VFR'&&vfrVisualOn&&(n.type==='apt'||routeHints.metro[uid])) xMax=Math.max(xtkMax,40);
+    // Airports must be very close to the direct path to qualify as en-route waypoints.
+    if(n.type==='apt') xMax=Math.min(xMax,16);
     if(rules==='VFR'&&vfrVisualOn&&n.type==='vis') xMax=Math.max(xMax,44);
     if(xtk>xMax) return;
     candSeen[uid]=1;
@@ -5205,9 +5206,10 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
     if(!n) return;
     if(n.type==='vor'||n.type==='fix'||(rules==='VFR'&&vfrVisualOn&&n.type==='vis')) pushCand(id,n);
   });
-  // VFR visual references: allow coded airport checkpoints near corridor.
+  // VFR visual references: only K-prefix (towered/public) airports as checkpoints.
   if(rules==='VFR'&&vfrVisualOn){
     Object.keys(APTS||{}).forEach(function(id){
+      if(!/^K[A-Z0-9]{3}$/.test(id)) return; // skip private/non-towered fields
       var a=APTS[id];
       if(!a) return;
       pushCand(id,{lat:a.lat,lon:a.lon,type:'apt'});
@@ -5251,11 +5253,11 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
       var score=Math.abs(c.along-tgt)+(c.xtk*(rules==='VFR'?6.2:4.25));
       if(rules==='VFR'){
         if(routeHints.victor[cid]) score-=28;
-        if(routeHints.metro[cid]) score-=18;
-        if(c.type==='apt') score-=8;
-        else if(c.type==='vis') score-=12;
-        else if(c.type==='vor') score-=5;
-        else if(c.type==='fix') score+=1;
+        if(routeHints.metro[cid]) score-=10;
+        if(c.type==='vor') score-=22;       // VORs strongly preferred — reliable cross-country references
+        else if(c.type==='vis') score-=10;   // VFR visual checkpoints
+        else if(c.type==='fix') score+=2;
+        else if(c.type==='apt') score+=18;   // airports penalised — only fallback when nothing else fits
       }else{
         if(airwayBias[cid]) score-=6;
         if(c.type==='apt') score+=6;
@@ -5391,7 +5393,7 @@ function refineRouteIdsMonotonic(dep,arr,ids,rules){
       var withMid=gcDist(cp.lat,cp.lon,cc.lat,cc.lon)+gcDist(cc.lat,cc.lon,cn.lat,cn.lon);
       var noMid=gcDist(cp.lat,cp.lon,cn.lat,cn.lon);
       var detour=withMid-noMid;
-      if((xtkMid>xtkHard&&detour>6)||(detour>Math.max(14,noMid*0.24))||(xtkMid>xtkHard*1.25&&detour>2)){ cut=cj; break; }
+      if((xtkMid>xtkHard&&detour>4)||(detour>Math.max(10,noMid*0.14))||(xtkMid>xtkHard*1.1&&detour>2)){ cut=cj; break; }
     }
     if(cut<0) break;
     keep.splice(cut,1);
