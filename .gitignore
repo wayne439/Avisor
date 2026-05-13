@@ -3,3 +3,6 @@ dist/
 *.local
 # Large copied planner — uncomment to keep repo small; then use npm run sync:avisor locally
 # public/avisor.html
+
+# Local Netlify folder
+.netlify
