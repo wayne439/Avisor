@@ -708,6 +708,7 @@ canvas#cgc{display:block;width:100%;height:auto}
       </div>
       <div class="stat-grid" id="stat-grid"></div>
       <div id="terrain-alert"></div>
+      <div id="terrain-profile"></div>
       <div class="card c-g" id="brief-pattern-card">
         <div class="card-h"><span class="card-title">Arrival — Pattern &amp; altitude</span><span class="badge b-g">AT DEST</span></div>
         <div class="card-b" id="brief-pattern-body" style="font-size:11px;color:var(--txt2);line-height:1.65">Build a plan to see pattern altitude and 45° entry for the destination.</div>
@@ -2712,6 +2713,70 @@ async function previewBriefWx(){
 }
 
 // ══════════════════════════════════════════════════════════════════
+// TERRAIN SAMPLING (Open-Meteo elevation — planning)
+// ══════════════════════════════════════════════════════════════════
+async function sampleRouteTerrainOpenMeteo(depLat,depLon,arrLat,arrLon,n){
+  n=n||12;
+  var lats=[],lons=[];
+  for(var i=0;i<=n;i++){
+    var f=i/n;
+    lats.push((depLat+f*(arrLat-depLat)).toFixed(5));
+    lons.push((depLon+f*(arrLon-depLon)).toFixed(5));
+  }
+  var url='https://api.open-meteo.com/v1/elevation?latitude='+lats.join(',')+'&longitude='+lons.join(',');
+  try{
+    var r=await fetch(url,{signal:AbortSignal.timeout(6000)});
+    if(!r.ok)return null;
+    var j=await r.json();
+    var elevM=j.elevation;
+    if(!Array.isArray(elevM)||!elevM.length)return null;
+    var elevFt=elevM.map(function(m){return Math.round(m*3.28084);});
+    var maxElevFt=Math.max.apply(null,elevFt);
+    return{maxElevFt:maxElevFt,elevFt:elevFt};
+  }catch(e){return null;}
+}
+
+function snapToValidCruiseAlt(minAlt,crs,rules){
+  // Apply FAR 91.159 hemispherical rule then return lowest valid altitude >= minAlt.
+  var eastbound=crs>=0&&crs<180;
+  var base=Math.ceil(minAlt/1000)*1000;
+  if(rules==='IFR'){
+    // IFR: odd thousands eastbound, even thousands westbound
+    var rem=eastbound?((base/1000)%2===0?1:0):((base/1000)%2!==0?1:0);
+    if(rem)base+=1000;
+  } else {
+    // VFR above 3000 AGL: odd+500 eastbound, even+500 westbound (simplified to MSL here)
+    var rem2=eastbound?((base/1000)%2===0?1:0):((base/1000)%2!==0?1:0);
+    if(rem2)base+=1000;
+    base+=500;
+  }
+  return Math.max(base,minAlt);
+}
+
+function buildTerrainProfileHTML(elevFt,cruiseAlt,recommendedAlt){
+  if(!elevFt||!elevFt.length)return'';
+  var maxE=Math.max.apply(null,elevFt);
+  var ceil=Math.max(maxE,cruiseAlt||0,recommendedAlt||0)*1.08;
+  var w=220,h=52,pad=3;
+  var bw=Math.max(2,Math.floor((w-pad*2)/elevFt.length)-1);
+  var bars=elevFt.map(function(e,i){
+    var bh=Math.max(2,Math.round((e/ceil)*(h-pad*2)));
+    var x=pad+i*(bw+1);
+    var y=h-pad-bh;
+    var col=e>8000?'#c05050':e>4000?'#c07830':'#4a7a5a';
+    return'<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" fill="'+col+'" rx="1"/>';
+  }).join('');
+  var cruiseY=cruiseAlt?Math.round(h-pad-(cruiseAlt/ceil)*(h-pad*2)):null;
+  var recY=recommendedAlt?Math.round(h-pad-(recommendedAlt/ceil)*(h-pad*2)):null;
+  var lines='';
+  if(recY!=null&&recY>0&&recY<h)lines+='<line x1="'+pad+'" y1="'+recY+'" x2="'+(w-pad)+'" y2="'+recY+'" stroke="#7ab8ff" stroke-width="1" stroke-dasharray="4,2"/><text x="'+(w-pad-2)+'" y="'+(recY-2)+'" fill="#7ab8ff" font-size="7" text-anchor="end">REC '+recommendedAlt.toLocaleString()+'</text>';
+  if(cruiseY!=null&&cruiseY>0&&cruiseY<h&&cruiseAlt!==recommendedAlt)lines+='<line x1="'+pad+'" y1="'+cruiseY+'" x2="'+(w-pad)+'" y2="'+cruiseY+'" stroke="#ffd080" stroke-width="1" stroke-dasharray="3,2"/><text x="'+(w-pad-2)+'" y="'+(cruiseY-2)+'" fill="#ffd080" font-size="7" text-anchor="end">PLN '+cruiseAlt.toLocaleString()+'</text>';
+  return'<div style="margin-top:6px"><div style="font-family:var(--mono);font-size:8px;color:#7ab098;margin-bottom:3px">⛰ TERRAIN PROFILE — Max '+maxE.toLocaleString()+' ft MSL</div>'
+    +'<svg width="'+w+'" height="'+h+'" style="display:block">'+bars+lines+'</svg>'
+    +'<div style="font-family:var(--mono);font-size:7px;color:var(--txt3);margin-top:3px;line-height:1.4">Open-Meteo DEM · planning aid only — verify with ForeFlight Profile</div></div>';
+}
+
+// ══════════════════════════════════════════════════════════════════
 // BUILD PLAN
 // ══════════════════════════════════════════════════════════════════
 async function buildPlan(){
@@ -2760,11 +2825,28 @@ async function buildPlan(){
     const dist=Math.round(gc(dep,arr));
     const crs=Math.round(course(dep,arr));
     const tkey=`${depIcao}-${arrIcao}`;
-    const tfloor=terrainOn?(TERRAIN_FLOORS[tkey]||0):0;
+    // Sample live terrain from Open-Meteo; fall back to hardcoded TERRAIN_FLOORS if offline/failed.
+    var terrainSample=null,terrainSource='none';
+    if(terrainOn){
+      setOv(true,'SAMPLING TERRAIN');
+      terrainSample=await sampleRouteTerrainOpenMeteo(dep.lat,dep.lon,arr.lat,arr.lon,12);
+      setOv(true,'COMPUTING PLAN');
+    }
+    var liveTfloor=terrainSample?terrainSample.maxElevFt:0;
+    var staticTfloor=terrainOn?(TERRAIN_FLOORS[tkey]||0):0;
+    var tfloor=terrainOn?Math.max(liveTfloor,staticTfloor):0;
+    if(terrainSample){terrainSource='open-meteo';}
+    else if(staticTfloor>0){terrainSource='static';}
     const altPick=resolvePlanAltitude(ac,pri,icing,tfloor,terrainOn);
     var alt=altPick.alt;
     const icingLowCap=pickAlt(ac,pri,true,tfloor);
     const twarn=terrainOn&&tfloor>0&&alt<tfloor+1000;
+    // Terrain-based recommended altitude: max terrain + 2000 ft buffer, snapped to hemispherical rule.
+    var terrainRecommendedAlt=null;
+    if(terrainOn&&liveTfloor>0){
+      var minSafe=liveTfloor+2000;
+      terrainRecommendedAlt=snapToValidCruiseAlt(minSafe,crs,rules);
+    }
     const hw=Math.round(5+Math.random()*18);
     const gs=Math.max(80,ac.tas-hw);
     const eteH=dist/gs;const eteMin=Math.round(eteH*60);
@@ -2777,6 +2859,7 @@ async function buildPlan(){
     const hazards=[];
     if(tfloor>0)hazards.push(`Terrain floor ${tfloor.toLocaleString()} ft MSL — altitude set to ${alt.toLocaleString()} ft.`);
     if(twarn)hazards.push('⚠ TERRAIN: Altitude may be below safe clearance. Verify MEAs and ForeFlight profile view before departure.');
+    if(terrainRecommendedAlt&&alt<terrainRecommendedAlt)hazards.push(`⛰ Terrain recommends ${terrainRecommendedAlt.toLocaleString()} ft MSL minimum (max terrain + 2000 ft + hemispherical rule).`);
     if(arr.mtn)hazards.push('Mountain airport — verify arrival procedures. RNAV (RNP) requires aircraft authorization.');
     if(icing&&altPick.source==='auto')hazards.push('Icing avoidance preference active — altitude adjusted.');
     if(altPick.source==='user'){
@@ -2795,7 +2878,7 @@ async function buildPlan(){
       else hazards.push('NOTAMs empty with key set — FAA often redirects api.faa.gov browser calls to the portal HTML; use dev server/Netlify (/faa-api proxy), confirm NOTAM API subscription, or brief via 1800wxbrief.com.');
     }
     const fltDate=document.getElementById('flt-date')&&document.getElementById('flt-date').value||new Date().toISOString().slice(0,10);
-    const plan={depIcao,arrIcao,dep,arr,ac,acid,pri,fltDate,rules,res,dist,crs,alt,eteMin,gs,hw,tripFuel,resFuel,totalFuel,primary,altRoute,dm,am,dt,at,dn,an,favRwy,tfloor,twarn,hazards,depWind:wfmt(dm),arrWind:wfmt(am),cruiseAltSource:altPick.source,cruiseAltRequested:altPick.requested!=null?altPick.requested:null};
+    const plan={depIcao,arrIcao,dep,arr,ac,acid,pri,fltDate,rules,res,dist,crs,alt,eteMin,gs,hw,tripFuel,resFuel,totalFuel,primary,altRoute,dm,am,dt,at,dn,an,favRwy,tfloor,twarn,hazards,depWind:wfmt(dm),arrWind:wfmt(am),cruiseAltSource:altPick.source,cruiseAltRequested:altPick.requested!=null?altPick.requested:null,terrainSample,terrainSource,terrainRecommendedAlt};
     STATE.plan=plan;STATE.routes={primary,alt:altRoute};STATE.updates=[];
     Promise.all([ensureOurAirportsEnrichment(),ensureFreqCommOverrides()]).catch(function(){});
     // Build waypoints + FPL
@@ -2921,14 +3004,24 @@ function renderBrief(p){
     }
   }
   const ta=document.getElementById('terrain-alert');
+  const tp=document.getElementById('terrain-profile');
   if(p.twarn)ta.innerHTML=`<div class="warn"><b>⚠</b><div>TERRAIN ADVISORY: Route floor ${p.tfloor.toLocaleString()} ft. Altitude may be insufficient. Verify in ForeFlight profile view.</div></div>`;
+  else if(p.terrainRecommendedAlt&&p.alt>=p.terrainRecommendedAlt)ta.innerHTML=`<div class="warn info"><b>⛰</b><div>Terrain-aware: planned ${p.alt.toLocaleString()} ft ✓ clears recommended ${p.terrainRecommendedAlt.toLocaleString()} ft (max terrain + 2000 ft buffer).</div></div>`;
+  else if(p.terrainRecommendedAlt)ta.innerHTML=`<div class="warn"><b>⛰</b><div>TERRAIN: Recommended minimum ${p.terrainRecommendedAlt.toLocaleString()} ft MSL (max terrain + 2000 ft + hemispherical rule). Planned cruise is ${p.alt.toLocaleString()} ft — consider raising altitude.</div></div>`;
   else if(p.tfloor>0)ta.innerHTML=`<div class="warn info"><b>ℹ</b><div>Terrain-aware: ${p.alt.toLocaleString()} ft clears route floor of ${p.tfloor.toLocaleString()} ft.</div></div>`;
   else ta.innerHTML='';
+  if(tp){
+    if(p.terrainSample&&p.terrainSample.elevFt){
+      tp.innerHTML=buildTerrainProfileHTML(p.terrainSample.elevFt,p.alt,p.terrainRecommendedAlt);
+    } else {
+      tp.innerHTML='';
+    }
+  }
   document.getElementById('best-route').textContent=p.primary;
   const rsk=p.hazards.length>2?'b-r':p.hazards.length>0?'b-a':'b-g';
   const rb=document.getElementById('risk-badge');rb.className=`badge ${rsk}`;rb.textContent=p.hazards.length>2?'ELEVATED':p.hazards.length?'REVIEW':'LOW RISK';
   document.getElementById('best-details').innerHTML=dr('Altitude',`${p.alt.toLocaleString()} ft MSL`,'b')+dr('Groundspeed',`${p.gs} KTAS`)+dr('Headwind est.',`${p.hw} kt`)+dr('ETE',`${p.eteMin} min`)+dr('Trip fuel',`${p.tripFuel} gal`)+dr(`Reserve (${p.res}min @ 75%)`,`${p.resFuel} gal`)+dr('Total fuel',`${p.totalFuel} gal`,'g')+dr('Course',`${p.crs}°`)+dr('Waypoints in .fpl',`${STATE.waypoints.length} fixes`,'p');
-  document.getElementById('best-why').innerHTML=`<div style="font-family:var(--mono);font-size:9px;color:var(--blu);margin-bottom:4px">RATIONALE</div><div style="font-size:11px;color:var(--txt2);line-height:1.7">${p.tfloor>0?`• Terrain floor ${p.tfloor.toLocaleString()} ft — altitude includes buffer<br>`:''}• ${p.ac.name} profile, ${p.pri} priority<br>• Reserve at 75% power per FAR 91.151</div>`;
+  document.getElementById('best-why').innerHTML=`<div style="font-family:var(--mono);font-size:9px;color:var(--blu);margin-bottom:4px">RATIONALE</div><div style="font-size:11px;color:var(--txt2);line-height:1.7">${p.terrainRecommendedAlt?`• ⛰ Terrain recommends ${p.terrainRecommendedAlt.toLocaleString()} ft min (max terrain + 2000 ft buffer, ${p.crs}° course hemispherical rule)<br>`:''}${p.tfloor>0&&!p.terrainRecommendedAlt?`• Terrain floor ${p.tfloor.toLocaleString()} ft — altitude includes buffer<br>`:''}• ${p.ac.name} profile, ${p.pri} priority<br>• Reserve at 75% power per FAR 91.151</div>`;
   document.getElementById('alt-route').textContent=p.altRoute;
   document.getElementById('alt-details').innerHTML=dr('Altitude',`${Math.max(Math.min(...p.ac.alts),p.alt-2000).toLocaleString()} ft MSL`)+dr('Via','DRK — IFR route diversity');
   const hc=document.getElementById('haz-ct');hc.textContent=p.hazards.length;hc.className=`badge ${p.hazards.length?'b-a':'b-g'}`;
