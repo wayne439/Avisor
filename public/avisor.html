@@ -802,6 +802,14 @@ canvas#cgc{display:block;width:100%;height:auto}
           <button type="button" class="bsm" onclick="tab('approach')" style="width:100%;margin-top:2px">Open full Approach &amp; Pattern tab →</button>
         </div>
       </div>
+      <div class="card" id="brief-dep-comms-card" style="display:none">
+        <div class="card-h"><span class="card-title">Departure Airport Comms</span><span class="badge b-b" id="brief-dep-comms-badge">—</span></div>
+        <div class="card-b" id="brief-dep-comms"></div>
+      </div>
+      <div class="card c-g" id="brief-arr-comms-card" style="display:none">
+        <div class="card-h"><span class="card-title">Arrival Airport Comms</span><span class="badge b-g" id="brief-arr-comms-badge">—</span></div>
+        <div class="card-b" id="brief-arr-comms"></div>
+      </div>
       <div class="card c-b">
         <div class="card-h"><span class="card-title">Recommended Route</span><span class="badge b-b" id="risk-badge">LOW RISK</span></div>
         <div class="card-b">
@@ -901,7 +909,8 @@ canvas#cgc{display:block;width:100%;height:auto}
       <div class="card c-b"><div class="card-h"><span class="card-title">Traffic Pattern</span></div><div class="card-b" id="ap-pat-body"></div></div>
       <div class="card c-p"><div class="card-h"><span class="card-title">Approach Fixes (exported to FPL)</span><span class="badge b-p">IN FPL FILE</span></div><div class="card-b" id="ap-fixes-body"></div></div>
       <div class="card c-a"><div class="card-h"><span class="card-title">Available Procedures</span></div><div class="card-b" id="ap-proc-body"></div></div>
-      <div class="card"><div class="card-h"><span class="card-title">Airport Frequencies</span></div><div class="card-b" id="ap-freqs"></div></div>
+      <div class="card"><div class="card-h"><span class="card-title">Departure Airport Comms</span><span class="badge b-b" id="ap-dep-badge">DEP</span></div><div class="card-b" id="ap-dep-freqs"></div></div>
+      <div class="card c-g"><div class="card-h"><span class="card-title">Arrival Airport Comms</span><span class="badge b-g" id="ap-arr-badge">ARR</span></div><div class="card-b" id="ap-freqs"></div></div>
       <div class="card c-p">
         <div class="card-h"><span class="card-title">Traffic Pattern Diagram</span><span class="badge b-p">LIVE</span></div>
         <div class="card-b">
@@ -3548,6 +3557,30 @@ function renderBrief(p){
   document.getElementById('alt-details').innerHTML=dr('Altitude',`${Math.max(Math.min(...p.ac.alts),p.alt-2000).toLocaleString()} ft MSL`)+dr('Via','DRK — IFR route diversity');
   const hc=document.getElementById('haz-ct');hc.textContent=p.hazards.length;hc.className=`badge ${p.hazards.length?'b-a':'b-g'}`;
   document.getElementById('haz-list').innerHTML=p.hazards.length?p.hazards.map(h=>`<div class="haz"><span style="color:var(--amb)">△</span><span>${h}</span></div>`).join(''):'<div style="color:var(--grn);font-family:var(--mono);font-size:10px">✓ No hazards flagged</div>';
+  // Airport comms cards
+  var depCard=document.getElementById('brief-dep-comms-card');
+  var arrCard=document.getElementById('brief-arr-comms-card');
+  var depEl=document.getElementById('brief-dep-comms');
+  var arrEl=document.getElementById('brief-arr-comms');
+  var depBadge=document.getElementById('brief-dep-comms-badge');
+  var arrBadge=document.getElementById('brief-arr-comms-badge');
+  if(depBadge)depBadge.textContent=p.depIcao||'DEP';
+  if(arrBadge)arrBadge.textContent=p.arrIcao||'ARR';
+  if(depCard)depCard.style.display='block';
+  if(arrCard)arrCard.style.display='block';
+  if(depEl)depEl.innerHTML='<div style="color:var(--txt3);font-size:9px;font-family:var(--mono)">Loading comm frequencies…</div>';
+  if(arrEl)arrEl.innerHTML='<div style="color:var(--txt3);font-size:9px;font-family:var(--mono)">Loading comm frequencies…</div>';
+  Promise.all([ensureOurAirportsEnrichment(),ensureFreqCommOverrides()]).then(function(){
+    var pl=STATE.plan;if(!pl)return;
+    var de=document.getElementById('brief-dep-comms'),ae=document.getElementById('brief-arr-comms');
+    if(de)de.innerHTML=buildAirportCommsCard(pl.depIcao,APTS[pl.depIcao]);
+    if(ae)ae.innerHTML=buildAirportCommsCard(pl.arrIcao,APTS[pl.arrIcao]);
+  }).catch(function(){
+    var pl=STATE.plan;if(!pl)return;
+    var de=document.getElementById('brief-dep-comms'),ae=document.getElementById('brief-arr-comms');
+    if(de)de.innerHTML=buildAirportCommsCard(pl.depIcao,APTS[pl.depIcao]);
+    if(ae)ae.innerHTML=buildAirportCommsCard(pl.arrIcao,APTS[pl.arrIcao]);
+  });
 }
 
 function renderWaypoints(){
@@ -3647,18 +3680,27 @@ function renderApproach(p){
   const procs=filterProcsForRunway(procsAll,r);
   document.getElementById('ap-proc-body').innerHTML=procs.map(pr=>`<div class="row"><span style="font-family:var(--mono);font-size:10px;color:var(--txt)">${pr}</span></div>`).join('')+`<div style="margin-top:7px;font-family:var(--mono);font-size:9px;color:var(--txt3)"><a href="https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/dtpp/" target="_blank" rel="noopener noreferrer" style="color:var(--blu)">FAA d-TPP Terminal Procedures →</a></div>`;
   initPatternSelector();
-  // Show arrival airport frequencies
-  var apFreqEl=document.getElementById('ap-freqs');
-  if(apFreqEl&&typeof buildFreqHTML==='function'){
-    apFreqEl.innerHTML='<div style="color:var(--txt3);font-size:9px;font-family:var(--mono)">Loading comm frequencies…</div>';
-    Promise.all([ensureOurAirportsEnrichment(),ensureFreqCommOverrides()]).then(function(){
-      var el=document.getElementById('ap-freqs'),pl=STATE.plan;
-      if(el&&pl&&pl.arrIcao) el.innerHTML=buildFreqHTML(pl.arrIcao,APTS[pl.arrIcao]);
-    }).catch(function(){
-      var el=document.getElementById('ap-freqs'),pl=STATE.plan;
-      if(el&&pl&&pl.arrIcao) el.innerHTML=buildFreqHTML(pl.arrIcao,APTS[pl.arrIcao]);
-    });
-  }
+  // Show dep and arr airport comms
+  var apDepBadge=document.getElementById('ap-dep-badge');
+  var apArrBadge=document.getElementById('ap-arr-badge');
+  if(apDepBadge)apDepBadge.textContent=p.depIcao||'DEP';
+  if(apArrBadge)apArrBadge.textContent=p.arrIcao||'ARR';
+  var apDepEl=document.getElementById('ap-dep-freqs');
+  var apArrEl=document.getElementById('ap-freqs');
+  var loadingMsg='<div style="color:var(--txt3);font-size:9px;font-family:var(--mono)">Loading comm frequencies…</div>';
+  if(apDepEl)apDepEl.innerHTML=loadingMsg;
+  if(apArrEl)apArrEl.innerHTML=loadingMsg;
+  Promise.all([ensureOurAirportsEnrichment(),ensureFreqCommOverrides()]).then(function(){
+    var pl=STATE.plan;if(!pl)return;
+    var de=document.getElementById('ap-dep-freqs'),ae=document.getElementById('ap-freqs');
+    if(de&&pl.depIcao)de.innerHTML=buildAirportCommsCard(pl.depIcao,APTS[pl.depIcao]);
+    if(ae&&pl.arrIcao)ae.innerHTML=buildAirportCommsCard(pl.arrIcao,APTS[pl.arrIcao]);
+  }).catch(function(){
+    var pl=STATE.plan;if(!pl)return;
+    var de=document.getElementById('ap-dep-freqs'),ae=document.getElementById('ap-freqs');
+    if(de&&pl.depIcao)de.innerHTML=buildAirportCommsCard(pl.depIcao,APTS[pl.depIcao]);
+    if(ae&&pl.arrIcao)ae.innerHTML=buildAirportCommsCard(pl.arrIcao,APTS[pl.arrIcao]);
+  });
 }
 
 function renderFPLPanel(){
@@ -5890,6 +5932,75 @@ function mergedFreqRecord(icao){
   }
   return {atis:pick('atis'),clr:pick('clr'),gnd:pick('gnd'),twr:pick('twr'),ctaf:pick('ctaf'),unicom:pick('unicom'),app:pick('app'),dep:pick('dep'),awos:pick('awos'),misc:pick('misc')};
 }
+function buildAirportCommsCard(icao,aptData){
+  var id=String(icao||'').toUpperCase().trim();
+  var db=mergedFreqRecord(id);
+  var name=(aptData&&aptData.name)?aptData.name:id;
+  var elev=(aptData&&aptData.elev)?aptData.elev.toLocaleString()+' ft MSL':null;
+  var rwys=(aptData&&aptData.rwys&&aptData.rwys.length)?aptData.rwys:null;
+
+  function secHdr(label){
+    return '<div style="background:rgba(255,255,255,.04);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:5px 10px;margin:0 -12px;font-family:var(--mono);font-size:8px;font-weight:700;letter-spacing:1.5px;color:var(--txt3)">'+label+'</div>';
+  }
+  function commRow(label,val,sub,col){
+    if(!val)return '';
+    return '<div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05)">'
+      +'<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--txt)">'+label+'</div>'
+      +(sub?'<div style="font-size:10px;color:var(--txt3);margin-top:1px">'+sub+'</div>':'')
+      +'</div>'
+      +'<div style="font-family:var(--mono);font-size:14px;font-weight:700;color:'+(col||'var(--txt)')+'">'+val+'</div>'
+      +'</div>';
+  }
+  var html='<div style="padding:6px 0 8px 0;margin-bottom:8px;border-bottom:1px solid var(--line)">'
+    +'<div style="font-size:15px;font-weight:700;color:var(--txt)">'+name+'</div>'
+    +(elev?'<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+id+' · Elevation: '+elev+'</div>':'<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+id+'</div>')
+    +'</div>';
+
+  var wxRows=commRow('ATIS',db.atis,'','var(--blu)')+commRow('AWOS / ASOS',db.awos,'','var(--blu)');
+  var clrRows=commRow('Clearance Delivery',db.clr,'','var(--amb)');
+  var gndRows=commRow('Ground',db.gnd,'','var(--grn)');
+  var twrRows=commRow('Tower',db.twr,'','var(--blu)');
+  var comRows=commRow('CTAF',db.ctaf,'','var(--grn)')+commRow('UNICOM',db.unicom,'','var(--grn)');
+  var appRows=commRow('Approach',db.app,'','var(--amb)')+commRow('Departure',db.dep,'','var(--amb)');
+  var othRows=commRow('Other',db.misc,'','var(--txt2)');
+
+  if(wxRows) html+=secHdr('WEATHER AND ADVISORY')+wxRows;
+  if(clrRows) html+=secHdr('CLEARANCE')+clrRows;
+  if(gndRows) html+=secHdr('GROUND')+gndRows;
+  if(twrRows) html+=secHdr('TOWER')+twrRows;
+  if(comRows) html+=secHdr('COMMON')+comRows;
+  if(appRows) html+=secHdr('APPROACH / DEPARTURE')+appRows;
+  if(othRows) html+=secHdr('OTHER')+othRows;
+
+  if(rwys){
+    html+=secHdr('RUNWAYS');
+    rwys.forEach(function(r){
+      html+='<div style="display:flex;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)">'
+        +'<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--txt)">RWY '+r.id+'</div>'
+        +'<div style="font-size:10px;color:var(--txt3);margin-top:1px">'+(r.pat==='R'?'Right traffic':'Left traffic')+'</div>'
+        +'</div>'
+        +'<div style="font-family:var(--mono);font-size:12px;color:var(--txt2)">'
+        +r.len.toLocaleString()+' ft · '+r.hdg+'°'
+        +'</div></div>';
+    });
+  }
+
+  var noData=!db.atis&&!db.awos&&!db.clr&&!db.gnd&&!db.twr&&!db.ctaf&&!db.unicom&&!db.app&&!db.dep&&!db.misc;
+  if(noData) html+='<div style="color:var(--txt3);font-size:9px;font-family:var(--mono);padding:8px 0">No stored comm data — verify via AirNav or Chart Supplement.</div>';
+
+  var cmts=OURAIRPORTS_COMMENTS_DB[id]||OURAIRPORTS_COMMENTS_DB[id.replace(/^K/,'')]||[];
+  if(cmts.length){
+    html+=secHdr('COMMUNITY NOTES');
+    cmts.forEach(function(c){html+='<div style="font-size:9px;color:var(--txt2);line-height:1.5;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)">'+escHtml(c.slice(0,240))+'</div>';});
+  }
+
+  html+='<div style="margin-top:8px;font-size:9px;color:var(--txt3);font-family:var(--mono)">Data may be stale — always confirm with current Chart Supplement or ATIS before flight.</div>';
+  html+='<div style="margin-top:6px;font-size:9px;font-family:var(--mono)">'
+    +'<a href="https://www.airnav.com/airport/'+id+'" target="_blank" rel="noopener noreferrer" style="color:var(--blu)">AirNav '+id+' →</a>'
+    +'</div>';
+  return html;
+}
+
 function buildFreqHTML(icao,aptData){
   var db=mergedFreqRecord(icao);
   function fr(lbl,freq,col){if(!freq)return '';return '<div class="dr"><span class="dl">'+lbl+'</span><span class="dv" style="color:'+(col||'var(--tx)')+'">'+freq+' MHz</span></div>';}
