@@ -474,6 +474,79 @@ canvas#cgc{display:block;width:100%;height:auto}
 <div id="toast"></div>
 
 <!-- IN-FLIGHT UPDATE MODAL -->
+<div id="profile-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.88);z-index:9997;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 0">
+  <div style="background:var(--sky2);border:2px solid #2a5070;border-radius:10px;width:min(520px,96vw);display:flex;flex-direction:column;overflow:hidden;margin:auto">
+    <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);flex-shrink:0;background:rgba(14,30,54,.7)">
+      <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:#8cd4ff;letter-spacing:2px;flex:1">👤 PILOT PROFILE</span>
+      <button type="button" onclick="closeProfileModal()" style="background:none;border:none;color:var(--txt2);font-size:18px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <!-- Tab bar -->
+    <div style="display:flex;border-bottom:1px solid var(--line);flex-shrink:0">
+      <button type="button" id="ptab-pilot" onclick="showProfileTab('pilot')" style="flex:1;padding:10px;background:rgba(56,190,255,.1);border:none;border-bottom:2px solid #38beff;color:#38beff;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer">PILOT INFO</button>
+      <button type="button" id="ptab-aircraft" onclick="showProfileTab('aircraft')" style="flex:1;padding:10px;background:none;border:none;border-bottom:2px solid transparent;color:var(--txt3);font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer">MY AIRCRAFT</button>
+    </div>
+    <!-- Pilot info tab -->
+    <div id="profile-tab-pilot" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <label style="display:block;grid-column:1/-1"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Full Name</span><input id="prf-name" type="text" placeholder="e.g. Wayne Dickert" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:7px;font-family:var(--mono);font-size:12px"></label>
+        <label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Certificate # (optional)</span><input id="prf-cert" type="text" placeholder="e.g. 1234567" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:7px;font-family:var(--mono);font-size:12px"></label>
+        <label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Medical Class</span>
+          <select id="prf-med-class" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:7px;font-family:var(--mono);font-size:12px">
+            <option value="">— select —</option>
+            <option value="1st">1st Class</option>
+            <option value="2nd">2nd Class</option>
+            <option value="3rd">3rd Class</option>
+            <option value="BasicMed">BasicMed</option>
+            <option value="Sport">Sport Pilot</option>
+          </select>
+        </label>
+        <label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Medical Expiry</span><input id="prf-med-exp" type="month" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:7px;font-family:var(--mono);font-size:12px"></label>
+      </div>
+      <button type="button" onclick="savePilotInfo()" style="padding:10px;background:#003d1a;border:2px solid var(--grn);color:var(--grn);font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:4px">SAVE PILOT INFO</button>
+      <div id="prf-pilot-msg" style="font-family:var(--mono);font-size:9px;color:var(--grn);text-align:center;min-height:14px"></div>
+    </div>
+    <!-- Aircraft list tab -->
+    <div id="profile-tab-aircraft" style="padding:16px;display:none;flex-direction:column;gap:10px">
+      <div id="prf-ac-list"></div>
+      <button type="button" id="prf-add-ac-btn" onclick="profileAddAircraft()" style="padding:10px;background:rgba(56,190,255,.08);border:1px solid var(--blu2);color:var(--blu);font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;border-radius:4px">+ ADD AIRCRAFT</button>
+    </div>
+    <!-- Aircraft edit panel (shown inside modal, replaces list) -->
+    <div id="profile-ac-edit" style="padding:16px;display:none;flex-direction:column;gap:10px">
+      <button type="button" onclick="profileShowAcList()" style="background:none;border:none;color:var(--txt3);font-family:var(--mono);font-size:10px;cursor:pointer;text-align:left;padding:0;margin-bottom:4px">← Back to My Aircraft</button>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--blu);letter-spacing:1px" id="prf-edit-hdr">AIRCRAFT PROFILE</div>
+      <div style="display:flex;align-items:center;gap:8px;background:var(--sky3);border:1px solid var(--line);padding:7px 9px">
+        <span id="prf-edit-acname" style="flex:1;font-family:var(--mono);font-size:12px;color:var(--txt)">— select type —</span>
+        <button type="button" class="bsm" onclick="profilePickAcType()">Change Type</button>
+      </div>
+      <input type="hidden" id="prf-edit-id">
+      <input type="hidden" id="prf-edit-key">
+      <input type="hidden" id="prf-edit-icao">
+      <label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Tail Number</span><input id="prf-edit-tail" type="text" placeholder="N12345" oninput="this.value=this.value.toUpperCase()" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:7px;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:2px"></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Cruise TAS (kts)</span><input id="prf-edit-tas" type="number" min="50" max="600" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:7px;font-family:var(--mono);font-size:12px"></label>
+        <label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Fuel Burn (GPH)</span><input id="prf-edit-gph" type="number" min="2" max="600" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:7px;font-family:var(--mono);font-size:12px"></label>
+        <label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Climb Rate (FPM)</span><input id="prf-edit-climb" type="number" min="100" max="8000" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:7px;font-family:var(--mono);font-size:12px"></label>
+        <label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Cruise Alts (e.g. 8K,10K)</span><input id="prf-edit-alts" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:7px;font-family:var(--mono);font-size:11px"></label>
+      </div>
+      <!-- POH upload -->
+      <div style="border:1px solid var(--line);padding:10px;border-radius:4px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--txt3);margin-bottom:7px;letter-spacing:1px">POH / AIRCRAFT DOCUMENTS</div>
+        <div id="prf-poh-status" style="font-family:var(--mono);font-size:10px;color:var(--txt2);margin-bottom:8px;line-height:1.6">No POH uploaded.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <label style="cursor:pointer"><input type="file" id="prf-poh-input" accept=".pdf,.PDF" style="display:none" onchange="profileUploadPoh(this)"><span style="padding:7px 12px;background:rgba(56,190,255,.08);border:1px solid var(--blu2);color:var(--blu);font-family:var(--mono);font-size:10px;cursor:pointer;border-radius:3px">📎 Upload POH PDF</span></label>
+          <button type="button" id="prf-poh-view-btn" onclick="profileViewPoh()" style="display:none;padding:7px 12px;background:rgba(0,200,80,.08);border:1px solid var(--grn2);color:var(--grn);font-family:var(--mono);font-size:10px;cursor:pointer;border-radius:3px">📄 View POH</button>
+          <button type="button" id="prf-poh-del-btn" onclick="profileDeletePoh()" style="display:none;padding:7px 12px;background:rgba(255,80,80,.06);border:1px solid var(--red2);color:var(--red);font-family:var(--mono);font-size:10px;cursor:pointer;border-radius:3px">✕ Remove</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+        <button type="button" onclick="profileSaveAircraft()" style="flex:1;padding:10px;background:#003d1a;border:2px solid var(--grn);color:var(--grn);font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:4px">SAVE</button>
+        <button type="button" onclick="profileFlyThis()" style="flex:1;padding:10px;background:rgba(56,190,255,.1);border:2px solid #38beff;color:#38beff;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:4px">FLY THIS ✈</button>
+        <button type="button" id="prf-delete-btn" onclick="profileDeleteAircraft()" style="padding:10px 14px;background:rgba(255,80,80,.06);border:1px solid var(--red2);color:var(--red);font-family:var(--mono);font-size:11px;cursor:pointer;border-radius:4px">DELETE</button>
+      </div>
+      <div id="prf-ac-msg" style="font-family:var(--mono);font-size:9px;color:var(--grn);text-align:center;min-height:14px"></div>
+    </div>
+  </div>
+</div>
 <div id="ac-picker-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.88);z-index:9998;align-items:center;justify-content:center">
   <div style="background:var(--sky2);border:2px solid var(--blu2);border-radius:10px;width:min(480px,96vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);flex-shrink:0">
@@ -542,6 +615,7 @@ canvas#cgc{display:block;width:100%;height:auto}
   </div>
   <div class="logo-text">PilotAvisor <span>AI FLIGHT ADVISOR</span></div>
   <button type="button" class="topbar-if-btn" id="topbar-if-btn" onclick="openInFlightFromHeader()" title="Mid-flight: runway, ATIS, weather, fuel — then re-download .fpl">⚡ IN FLIGHT</button>
+  <button type="button" class="topbar-if-btn" onclick="openProfileModal()" title="Pilot profile &amp; aircraft" style="border-color:rgba(100,200,255,.35);color:#8cd4ff">👤 PROFILE</button>
   <div class="topbar-pills">
     <div class="pill"><div class="live"></div>NOAA LIVE</div>
     <div class="pill"><div class="live" style="background:var(--amb);box-shadow:0 0 5px var(--amb)"></div>FAA NOTAMs</div>
@@ -3033,6 +3107,7 @@ function selectFaaAircraftByIcao(icao){
     +'<label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Fuel Burn (GPH)</span><input id="acp-gph" type="number" value="'+gph+'" min="2" max="600" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky);border:1px solid var(--line);color:var(--txt);padding:6px;font-family:var(--mono);font-size:12px"></label>'
     +'<label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Climb Rate (FPM)</span><input id="acp-climb" type="number" value="'+climb+'" min="100" max="8000" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky);border:1px solid var(--line);color:var(--txt);padding:6px;font-family:var(--mono);font-size:12px"></label>'
     +'<label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Cruise Alts (e.g. 8K, 10K)</span><input id="acp-alts" value="'+escHtml(altsStr)+'" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky);border:1px solid var(--line);color:var(--txt);padding:6px;font-family:var(--mono);font-size:11px"></label>'
+    +'<label style="display:block;grid-column:1/-1"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Tail Number (optional)</span><input id="acp-tail" type="text" placeholder="e.g. N63KA" oninput="this.value=this.value.toUpperCase()" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky);border:1px solid var(--line);color:var(--txt);padding:6px;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:2px"></label>'
     +'</div>'
     +'<button type="button" onclick="confirmSaveAircraft()" style="width:100%;padding:11px;background:#003d1a;border:2px solid var(--grn);color:var(--grn);font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:4px">SAVE MY AIRCRAFT</button>'
     +'<button type="button" onclick="backToAcList()" style="width:100%;padding:7px;background:none;border:none;color:var(--txt3);font-family:var(--mono);font-size:10px;cursor:pointer;margin-top:6px">← Back to list</button>'
@@ -3067,10 +3142,11 @@ function confirmSaveAircraft(){
   var entry=db.find(function(r){return r.icao===icao;})||{icao:icao,make:'',model:icao};
   var make=entry.make.charAt(0).toUpperCase()+entry.make.slice(1).toLowerCase();
   var name=make+' '+entry.model;
-  applyAndSaveAircraft(key,name,tas,gph,climb,alts,icao);
+  var tail=(document.getElementById('acp-tail')&&document.getElementById('acp-tail').value||'').trim().toUpperCase();
+  applyAndSaveAircraft(key,name,tas,gph,climb,alts,icao,tail);
 }
 
-function applyAndSaveAircraft(key,name,tas,gph,climb,alts,icao){
+function applyAndSaveAircraft(key,name,tas,gph,climb,alts,icao,tail){
   // Extend ACPERF at runtime
   ACPERF[key]={name:name,tas:tas,gph:gph,climb:climb,alts:alts};
   // Update hidden select
@@ -3094,10 +3170,15 @@ function applyAndSaveAircraft(key,name,tas,gph,climb,alts,icao){
   if(wbSel&&WBDATA[key]){wbSel.value=key;if(wbMsg)wbMsg.style.display='none';}
   else if(wbMsg){wbMsg.style.display='block';}
   loadWB();
-  // Persist
-  try{localStorage.setItem('avisor_saved_aircraft',JSON.stringify({key:key,name:name,tas:tas,gph:gph,climb:climb,alts:alts,icao:icao||key}));}catch(e){}
+  // Auto-fill tail number field from profile if provided
+  if(tail){var tf=document.getElementById('tail');if(tf&&!tf.value)tf.value=tail;}
+  // Persist active aircraft (backward-compat key)
+  var saved={key:key,name:name,tas:tas,gph:gph,climb:climb,alts:alts,icao:icao||key,tail:tail||''};
+  try{localStorage.setItem('avisor_saved_aircraft',JSON.stringify(saved));}catch(e){}
+  // Sync into profile aircraft list
+  profileUpsertAircraft(saved);
   closeAcPicker();
-  showToast(name+' saved.','info');
+  showToast(name+(tail?' ('+tail+')':'')+' saved.','info');
 }
 
 function loadSavedAircraftOnBoot(){
@@ -3106,9 +3187,272 @@ function loadSavedAircraftOnBoot(){
     if(!raw)return;
     var d=JSON.parse(raw);
     if(!d||!d.key||!d.name)return;
-    applyAndSaveAircraft(d.key,d.name,d.tas||120,d.gph||10,d.climb||800,d.alts||[6000,8000,10000],d.icao||d.key);
+    applyAndSaveAircraft(d.key,d.name,d.tas||120,d.gph||10,d.climb||800,d.alts||[6000,8000,10000],d.icao||d.key,d.tail||'');
     closeAcPicker();
   }catch(e){}
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PILOT PROFILE SYSTEM
+// ══════════════════════════════════════════════════════════════════
+var PROF_KEY='avisor_profile';
+var _editingAcIdx=-1;
+function _loadProfile(){try{var r=localStorage.getItem(PROF_KEY);return r?JSON.parse(r):{pilot:{},aircraft:[],activeAcIdx:0};}catch(e){return{pilot:{},aircraft:[],activeAcIdx:0};}}
+function _saveProfile(p){try{localStorage.setItem(PROF_KEY,JSON.stringify(p));}catch(e){}}
+
+function _openAvisorDb(){
+  return new Promise(function(resolve,reject){
+    var req=indexedDB.open('avisor-poh-v1',1);
+    req.onupgradeneeded=function(){req.result.createObjectStore('poh');};
+    req.onsuccess=function(){resolve(req.result);};
+    req.onerror=function(){reject(req.error);};
+  });
+}
+
+function profileUpsertAircraft(saved){
+  if(!saved||!saved.key)return;
+  var p=_loadProfile();
+  var idx=p.aircraft.findIndex(function(a){return a.key===saved.key&&(a.tail||'')===(saved.tail||'');});
+  if(idx>=0)p.aircraft[idx]=Object.assign(p.aircraft[idx],saved);
+  else{p.aircraft.push(saved);idx=p.aircraft.length-1;}
+  p.activeAcIdx=idx;
+  _saveProfile(p);
+}
+
+function openProfileModal(){
+  var p=_loadProfile();
+  var pil=p.pilot||{};
+  var nf=document.getElementById('prf-pilot-name');
+  var cf=document.getElementById('prf-pilot-cert');
+  var mf=document.getElementById('prf-pilot-med');
+  var mxf=document.getElementById('prf-pilot-medexp');
+  if(nf)nf.value=pil.name||'';
+  if(cf)cf.value=pil.cert||'';
+  if(mf)mf.value=pil.medClass||'3rd Class';
+  if(mxf)mxf.value=pil.medExp||'';
+  profileShowAcList();
+  showProfileTab('pilot');
+  document.getElementById('profile-modal').style.display='flex';
+}
+function closeProfileModal(){document.getElementById('profile-modal').style.display='none';}
+function showProfileTab(tab){
+  ['pilot','aircraft'].forEach(function(t){
+    var btn=document.getElementById('prf-tab-'+t);
+    var pane=document.getElementById('prf-pane-'+t);
+    if(btn)btn.style.background=t===tab?'rgba(100,200,255,.18)':'transparent';
+    if(pane)pane.style.display=t===tab?'block':'none';
+  });
+}
+
+function renderProfileAcList(){
+  var p=_loadProfile();
+  var el=document.getElementById('prf-ac-list');
+  if(!el)return;
+  if(!p.aircraft.length){el.innerHTML='<p style="color:#aaa;font-size:13px;margin:8px 0">No aircraft saved yet. Tap + ADD AIRCRAFT to get started.</p>';return;}
+  el.innerHTML=p.aircraft.map(function(ac,i){
+    var isActive=i===p.activeAcIdx;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.08)">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-weight:600;color:'+(isActive?'#8cd4ff':'#e8f4ff')+';font-size:14px">'
+      +(ac.tail?'['+ac.tail+'] ':'')+ac.name+'</div>'
+      +'<div style="font-size:11px;color:#aaa">'+(ac.tas||'?')+' ktas · '+(ac.gph||'?')+' gph</div>'
+      +'</div>'
+      +(isActive?'<span style="font-size:11px;color:#8cd4ff;font-weight:600">ACTIVE</span>':'<button type="button" onclick="profileSetActive('+i+')" style="font-size:11px;padding:3px 8px;background:rgba(100,200,255,.12);color:#8cd4ff;border:1px solid rgba(100,200,255,.3);border-radius:4px;cursor:pointer">FLY</button>')
+      +' <button type="button" onclick="profileEditAircraft('+i+')" style="font-size:11px;padding:3px 8px;background:rgba(255,255,255,.06);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;cursor:pointer">Edit</button>'
+      +'</div>';
+  }).join('');
+}
+
+function profileSetActive(idx){
+  var p=_loadProfile();
+  if(idx<0||idx>=p.aircraft.length)return;
+  p.activeAcIdx=idx;
+  _saveProfile(p);
+  var ac=p.aircraft[idx];
+  applyAndSaveAircraft(ac.key,ac.name,ac.tas||120,ac.gph||10,ac.climb||800,ac.alts||[6000,8000,10000],ac.icao||ac.key,ac.tail||'');
+  renderProfileAcList();
+  showToast('Flying '+ac.name+(ac.tail?' ('+ac.tail+')':''),'info');
+}
+
+function profileEditAircraft(idx){
+  var p=_loadProfile();
+  var ac=p.aircraft[idx];
+  if(!ac)return;
+  _editingAcIdx=idx;
+  var nameEl=document.getElementById('prf-edit-acname');
+  if(nameEl)nameEl.textContent=ac.name;
+  var tailEl=document.getElementById('prf-edit-tail');if(tailEl)tailEl.value=ac.tail||'';
+  var tasEl=document.getElementById('prf-edit-tas');if(tasEl)tasEl.value=ac.tas||120;
+  var gphEl=document.getElementById('prf-edit-gph');if(gphEl)gphEl.value=ac.gph||10;
+  var climbEl=document.getElementById('prf-edit-climb');if(climbEl)climbEl.value=ac.climb||800;
+  var altsEl=document.getElementById('prf-edit-alts');if(altsEl)altsEl.value=(ac.alts||[6000,8000,10000]).join(',');
+  profileRefreshPohStatus(idx);
+  var listDiv=document.getElementById('prf-ac-list');
+  var editDiv=document.getElementById('profile-ac-edit');
+  if(listDiv)listDiv.style.display='none';
+  if(editDiv)editDiv.style.display='block';
+  var addBtn=document.getElementById('prf-add-ac-btn');
+  if(addBtn)addBtn.style.display='none';
+}
+
+function profileShowAcList(){
+  var listDiv=document.getElementById('prf-ac-list');
+  var editDiv=document.getElementById('profile-ac-edit');
+  if(listDiv)listDiv.style.display='block';
+  if(editDiv)editDiv.style.display='none';
+  var addBtn=document.getElementById('prf-add-ac-btn');
+  if(addBtn)addBtn.style.display='block';
+  _editingAcIdx=-1;
+  renderProfileAcList();
+}
+
+function profileAddAircraft(){
+  closeProfileModal();
+  setTimeout(function(){openAcPicker();},100);
+}
+
+function profilePickAcType(){
+  closeProfileModal();
+  setTimeout(function(){openAcPicker();},100);
+}
+
+function profileSaveAircraft(){
+  var idx=_editingAcIdx;
+  var p=_loadProfile();
+  if(idx<0||idx>=p.aircraft.length)return;
+  var ac=p.aircraft[idx];
+  var tailEl=document.getElementById('prf-edit-tail');
+  var tasEl=document.getElementById('prf-edit-tas');
+  var gphEl=document.getElementById('prf-edit-gph');
+  var climbEl=document.getElementById('prf-edit-climb');
+  var altsEl=document.getElementById('prf-edit-alts');
+  if(tailEl)ac.tail=tailEl.value.trim().toUpperCase();
+  if(tasEl)ac.tas=parseFloat(tasEl.value)||120;
+  if(gphEl)ac.gph=parseFloat(gphEl.value)||10;
+  if(climbEl)ac.climb=parseFloat(climbEl.value)||800;
+  if(altsEl){try{ac.alts=altsEl.value.split(',').map(function(s){return parseInt(s.trim());}).filter(function(n){return!isNaN(n);});}catch(e){}}
+  _saveProfile(p);
+  if(idx===p.activeAcIdx){
+    applyAndSaveAircraft(ac.key,ac.name,ac.tas,ac.gph,ac.climb,ac.alts,ac.icao||ac.key,ac.tail||'');
+  }
+  showToast('Aircraft saved.','info');
+  profileShowAcList();
+}
+
+function profileFlyThis(){
+  var idx=_editingAcIdx;
+  if(idx<0)return;
+  profileSaveAircraft();
+  profileSetActive(idx);
+  closeProfileModal();
+}
+
+function profileDeleteAircraft(){
+  var idx=_editingAcIdx;
+  var p=_loadProfile();
+  if(idx<0||idx>=p.aircraft.length)return;
+  var name=p.aircraft[idx].name;
+  if(!confirm('Remove '+name+' from your profile?'))return;
+  p.aircraft.splice(idx,1);
+  if(p.activeAcIdx>=p.aircraft.length)p.activeAcIdx=Math.max(0,p.aircraft.length-1);
+  _saveProfile(p);
+  showToast(name+' removed.','info');
+  profileShowAcList();
+}
+
+function savePilotInfo(){
+  var p=_loadProfile();
+  p.pilot=p.pilot||{};
+  var nf=document.getElementById('prf-pilot-name');
+  var cf=document.getElementById('prf-pilot-cert');
+  var mf=document.getElementById('prf-pilot-med');
+  var mxf=document.getElementById('prf-pilot-medexp');
+  p.pilot.name=(nf?nf.value:'').trim();
+  p.pilot.cert=(cf?cf.value:'').trim();
+  p.pilot.medClass=(mf?mf.value:'3rd Class').trim();
+  p.pilot.medExp=(mxf?mxf.value:'').trim();
+  _saveProfile(p);
+  showToast('Pilot info saved.','info');
+}
+
+function profileUploadPoh(inputEl){
+  var idx=_editingAcIdx;
+  if(idx<0)return;
+  var file=inputEl.files&&inputEl.files[0];
+  if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    _openAvisorDb().then(function(db){
+      var tx=db.transaction('poh','readwrite');
+      tx.objectStore('poh').put({name:file.name,size:file.size,type:file.type,data:ev.target.result,savedAt:new Date().toISOString()},'poh_'+idx);
+      tx.oncomplete=function(){
+        showToast(file.name+' saved to device.','info');
+        profileRefreshPohStatus(idx);
+      };
+    }).catch(function(){showToast('Could not save POH.','warn');});
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function profileViewPoh(){
+  var idx=_editingAcIdx;
+  if(idx<0)return;
+  _openAvisorDb().then(function(db){
+    var tx=db.transaction('poh','readonly');
+    var req=tx.objectStore('poh').get('poh_'+idx);
+    req.onsuccess=function(){
+      var r=req.result;
+      if(!r){showToast('No POH stored.','warn');return;}
+      var blob=new Blob([r.data],{type:r.type||'application/pdf'});
+      var url=URL.createObjectURL(blob);
+      window.open(url,'_blank');
+    };
+  });
+}
+
+function profileDeletePoh(){
+  var idx=_editingAcIdx;
+  if(idx<0)return;
+  if(!confirm('Remove stored POH for this aircraft?'))return;
+  _openAvisorDb().then(function(db){
+    var tx=db.transaction('poh','readwrite');
+    tx.objectStore('poh').delete('poh_'+idx);
+    tx.oncomplete=function(){showToast('POH removed.','info');profileRefreshPohStatus(idx);};
+  });
+}
+
+function profileRefreshPohStatus(idx){
+  var statusEl=document.getElementById('prf-poh-status');
+  var viewBtn=document.getElementById('prf-poh-view-btn');
+  var delBtn=document.getElementById('prf-poh-del-btn');
+  if(!statusEl)return;
+  _openAvisorDb().then(function(db){
+    var tx=db.transaction('poh','readonly');
+    var req=tx.objectStore('poh').get('poh_'+idx);
+    req.onsuccess=function(){
+      var r=req.result;
+      if(r){
+        statusEl.textContent=r.name+' ('+Math.round(r.size/1024)+'KB)';
+        if(viewBtn)viewBtn.style.display='inline-block';
+        if(delBtn)delBtn.style.display='inline-block';
+      }else{
+        statusEl.textContent='No POH stored';
+        if(viewBtn)viewBtn.style.display='none';
+        if(delBtn)delBtn.style.display='none';
+      }
+    };
+  }).catch(function(){if(statusEl)statusEl.textContent='Storage unavailable';});
+}
+
+function loadProfileOnBoot(){
+  var p=_loadProfile();
+  if(!p.aircraft.length)return;
+  var idx=p.activeAcIdx||0;
+  if(idx>=p.aircraft.length)idx=0;
+  var ac=p.aircraft[idx];
+  if(ac&&ac.key){
+    applyAndSaveAircraft(ac.key,ac.name,ac.tas||120,ac.gph||10,ac.climb||800,ac.alts||[6000,8000,10000],ac.icao||ac.key,ac.tail||'');
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -4626,6 +4970,7 @@ function tab(id){
 // ══════════════════════════════════════════════════════════════════
 loadWB();
 loadSavedAircraftOnBoot();
+loadProfileOnBoot();
 (function(){
   if(location.protocol!=='file:')return;
   var bar=document.createElement('div');
