@@ -467,7 +467,53 @@ canvas#cgc{display:block;width:100%;height:auto}
 <script src="./vendor/esri-leaflet.js"></script>
 <script>function showToast(msg,type){type=type||"warn";var el=document.createElement("div");var bg={info:"#1a3a5c",warn:"#6b3900",error:"#6b1a1a"};el.style.cssText="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:"+(bg[type]||bg.warn)+";color:#fff;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.45);z-index:99999;max-width:88vw;text-align:center;pointer-events:none;transition:opacity .4s";el.textContent=msg;document.body.appendChild(el);setTimeout(function(){el.style.opacity="0";setTimeout(function(){el.remove();},400);},3400);}</script>
 </head>
-<body><div id="safety-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center"><div style="background:#0d1829;border:1px solid #38beff;border-radius:12px;padding:32px;max-width:480px;margin:20px;font-family:monospace"><div style="color:#38beff;font-size:13px;font-weight:bold;letter-spacing:2px;margin-bottom:16px">⚠ SAFETY NOTICE</div><div style="color:#d8e8ff;font-size:12px;line-height:1.8;margin-bottom:20px">PilotAvisor is a <strong style="color:#ffaa00">flight planning aid only</strong>.<br><br>It is <strong style="color:#ff5555">NOT approved</strong> for navigation and does not replace:<br>• Official FAA charts and publications<br>• A proper preflight weather briefing<br>• ATC clearances and NOTAMs<br>• Your pilot-in-command judgment<br><br>Always file a flight plan and brief via <strong style="color:#38beff">1800wxbrief.com</strong> before flight.</div><label style="display:flex;align-items:center;gap:10px;color:#a0b8cc;font-size:11px;margin-bottom:20px;cursor:pointer"><input type="checkbox" id="disclaimer-check" style="width:16px;height:16px"> I understand this is a planning aid only and not certified navigation software.</label><button onclick="acknowledgeSafety()" id="disclaimer-btn" style="width:100%;padding:12px;background:#003d1a;border:1px solid #00e57a;border-radius:6px;color:#00e57a;font-family:monospace;font-size:12px;letter-spacing:1px;cursor:pointer;opacity:0.5" disabled>ACKNOWLEDGE &amp; CONTINUE</button></div></div>
+<body>
+<!-- AUTH GATE — full-screen landing; hidden once logged in or guest -->
+<div id="auth-gate" style="position:fixed;top:0;left:0;right:0;bottom:0;background:var(--sky);z-index:11000;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow-y:auto;padding:24px 16px">
+  <div style="width:100%;max-width:420px;display:flex;flex-direction:column;align-items:center">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <div style="width:44px;height:44px;border:2px solid #38beff;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38beff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      </div>
+      <div style="font-family:var(--sans);font-size:28px;font-weight:700;color:var(--txt);letter-spacing:-0.02em">PilotAvisor</div>
+    </div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--txt3);letter-spacing:3px;margin-bottom:28px">AI FLIGHT ADVISOR</div>
+    <div style="width:100%;background:var(--sky2);border:1.5px solid rgba(56,190,255,.2);border-radius:12px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.45)">
+      <div style="display:flex;border-bottom:1px solid var(--line)">
+        <button type="button" id="gate-tab-login" onclick="gateShowTab('login')" style="flex:1;padding:13px;background:rgba(100,200,255,.1);border:none;border-bottom:2px solid #8cd4ff;color:#8cd4ff;font-family:var(--mono);font-size:10px;letter-spacing:1.5px;cursor:pointer">SIGN IN</button>
+        <button type="button" id="gate-tab-register" onclick="gateShowTab('register')" style="flex:1;padding:13px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--txt3);font-family:var(--mono);font-size:10px;letter-spacing:1.5px;cursor:pointer">CREATE ACCOUNT</button>
+      </div>
+      <div id="gate-pane-login" style="padding:24px">
+        <div style="font-size:12px;color:var(--txt2);margin-bottom:20px;line-height:1.6">Sign in to sync your pilot profile and aircraft across all your devices.</div>
+        <label style="display:block;margin-bottom:14px"><div style="font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:5px;letter-spacing:1px">EMAIL</div><input id="gate-email" type="email" autocomplete="email" placeholder="pilot@email.com" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:11px 12px;font-family:var(--mono);font-size:13px;border-radius:6px;outline:none"></label>
+        <label style="display:block;margin-bottom:8px"><div style="font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:5px;letter-spacing:1px">PASSWORD</div><input id="gate-pass" type="password" autocomplete="current-password" placeholder="••••••••" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:11px 12px;font-family:var(--mono);font-size:13px;border-radius:6px;outline:none"></label>
+        <div id="gate-login-err" style="font-size:10px;color:var(--red);margin-bottom:12px;min-height:14px;font-family:var(--mono);word-break:break-all;line-height:1.5"></div>
+        <button type="button" onclick="gateLogin()" style="width:100%;padding:13px;background:#003d1a;border:2px solid var(--grn);color:var(--grn);font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:6px;margin-bottom:12px">SIGN IN →</button>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <button type="button" onclick="gateForgotPassword()" style="background:none;border:none;color:var(--txt3);font-size:10px;cursor:pointer;font-family:var(--mono);text-decoration:underline;padding:0">Forgot password?</button>
+          <button type="button" onclick="gateTestConnection()" style="background:none;border:none;color:var(--txt3);font-size:9px;cursor:pointer;font-family:var(--mono);text-decoration:underline;padding:0">test connection</button>
+        </div>
+      </div>
+      <div id="gate-pane-register" style="padding:24px;display:none">
+        <div style="font-size:12px;color:var(--txt2);margin-bottom:20px;line-height:1.6">Free account — your pilot profile &amp; aircraft sync across all your devices.</div>
+        <label style="display:block;margin-bottom:14px"><div style="font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:5px;letter-spacing:1px">EMAIL</div><input id="gate-reg-email" type="email" autocomplete="email" placeholder="pilot@email.com" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:11px 12px;font-family:var(--mono);font-size:13px;border-radius:6px;outline:none"></label>
+        <label style="display:block;margin-bottom:14px"><div style="font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:5px;letter-spacing:1px">PASSWORD (6+ CHARACTERS)</div><input id="gate-reg-pass" type="password" autocomplete="new-password" placeholder="••••••••" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:11px 12px;font-family:var(--mono);font-size:13px;border-radius:6px;outline:none"></label>
+        <label style="display:block;margin-bottom:8px"><div style="font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:5px;letter-spacing:1px">CONFIRM PASSWORD</div><input id="gate-reg-confirm" type="password" autocomplete="new-password" placeholder="••••••••" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:11px 12px;font-family:var(--mono);font-size:13px;border-radius:6px;outline:none"></label>
+        <div id="gate-reg-err" style="font-size:10px;color:var(--red);margin-bottom:12px;min-height:14px;font-family:var(--mono);word-break:break-all;line-height:1.5"></div>
+        <button type="button" onclick="gateRegister()" style="width:100%;padding:13px;background:rgba(56,190,255,.1);border:2px solid #38beff;color:#38beff;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:6px">CREATE ACCOUNT →</button>
+      </div>
+      <div style="padding:14px 24px;border-top:1px solid var(--line);text-align:center;background:rgba(0,0,0,.2)">
+        <button type="button" onclick="authContinueAsGuest()" style="background:none;border:1px solid rgba(100,120,160,.3);color:var(--txt3);font-family:var(--mono);font-size:9px;padding:9px 20px;cursor:pointer;border-radius:4px;letter-spacing:1px;width:100%">CONTINUE AS GUEST — local storage only</button>
+      </div>
+    </div>
+    <div style="margin-top:22px;display:flex;gap:20px;justify-content:center;flex-wrap:wrap">
+      <div style="font-size:10px;color:var(--txt3);font-family:var(--mono);display:flex;align-items:center;gap:6px"><span style="color:var(--grn)">✓</span>Live weather &amp; NOTAMs</div>
+      <div style="font-size:10px;color:var(--txt3);font-family:var(--mono);display:flex;align-items:center;gap:6px"><span style="color:var(--grn)">✓</span>FAA offline database</div>
+      <div style="font-size:10px;color:var(--txt3);font-family:var(--mono);display:flex;align-items:center;gap:6px"><span style="color:var(--grn)">✓</span>Profile synced to cloud</div>
+    </div>
+  </div>
+</div>
+<div id="safety-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center"><div style="background:#0d1829;border:1px solid #38beff;border-radius:12px;padding:32px;max-width:480px;margin:20px;font-family:monospace"><div style="color:#38beff;font-size:13px;font-weight:bold;letter-spacing:2px;margin-bottom:16px">⚠ SAFETY NOTICE</div><div style="color:#d8e8ff;font-size:12px;line-height:1.8;margin-bottom:20px">PilotAvisor is a <strong style="color:#ffaa00">flight planning aid only</strong>.<br><br>It is <strong style="color:#ff5555">NOT approved</strong> for navigation and does not replace:<br>• Official FAA charts and publications<br>• A proper preflight weather briefing<br>• ATC clearances and NOTAMs<br>• Your pilot-in-command judgment<br><br>Always file a flight plan and brief via <strong style="color:#38beff">1800wxbrief.com</strong> before flight.</div><label style="display:flex;align-items:center;gap:10px;color:#a0b8cc;font-size:11px;margin-bottom:20px;cursor:pointer"><input type="checkbox" id="disclaimer-check" style="width:16px;height:16px"> I understand this is a planning aid only and not certified navigation software.</label><button onclick="acknowledgeSafety()" id="disclaimer-btn" style="width:100%;padding:12px;background:#003d1a;border:1px solid #00e57a;border-radius:6px;color:#00e57a;font-family:monospace;font-size:12px;letter-spacing:1px;cursor:pointer;opacity:0.5" disabled>ACKNOWLEDGE &amp; CONTINUE</button></div></div>
 
 <!-- LOADING -->
 <div id="ov"><div class="ov-txt" id="ov-msg">COMPUTING</div><div class="ov-bar"></div></div>
@@ -3803,6 +3849,7 @@ async function authLogout(){
   updateAuthUI();
   _updateProfileSyncBadge();
   showToast('Signed out.','info');
+  _showGate();
 }
 
 async function authForgotPassword(){
@@ -3815,8 +3862,109 @@ async function authForgotPassword(){
   showToast('Password reset email sent to '+email,'info');
 }
 
+// ── AUTH GATE ────────────────────────────────────────────────────
+function _enterApp(){
+  var gate=document.getElementById('auth-gate');
+  if(gate)gate.style.display='none';
+  // Safety modal: show if not yet acknowledged
+  var sm=document.getElementById('safety-modal');
+  if(sm){sm.style.display=localStorage.getItem('avisor_safety_ack')?'none':'flex';}
+}
+function _showGate(){
+  var gate=document.getElementById('auth-gate');
+  if(gate)gate.style.display='flex';
+  gateShowTab('login');
+}
+function gateShowTab(tab){
+  var tabs=['login','register'];
+  tabs.forEach(function(t){
+    var btn=document.getElementById('gate-tab-'+t);
+    var pane=document.getElementById('gate-pane-'+t);
+    var active=t===tab;
+    if(btn){
+      btn.style.background=active?'rgba(100,200,255,.1)':'transparent';
+      btn.style.borderBottomColor=active?'#8cd4ff':'transparent';
+      btn.style.color=active?'#8cd4ff':'var(--txt3)';
+    }
+    if(pane)pane.style.display=active?'block':'none';
+  });
+  // clear errors on tab switch
+  var errIds=['gate-login-err','gate-reg-err'];
+  errIds.forEach(function(id){var e=document.getElementById(id);if(e){e.textContent='';e.style.color='var(--red)';}});
+}
+async function gateLogin(){
+  var email=(document.getElementById('gate-email').value||'').trim();
+  var pass=document.getElementById('gate-pass').value||'';
+  var errEl=document.getElementById('gate-login-err');
+  if(!email||!pass){errEl.textContent='Email and password required.';return;}
+  errEl.style.color='var(--txt3)';errEl.textContent='Signing in…';
+  var sb=await _sbInit();
+  if(!sb){errEl.style.color='var(--red)';errEl.textContent='Auth service not configured.';return;}
+  var r;
+  try{r=await sb.auth.signInWithPassword({email:email,password:pass});}
+  catch(e){errEl.style.color='var(--red)';errEl.textContent='Network error: '+(e&&e.message?e.message:String(e));return;}
+  if(r.error){errEl.style.color='var(--red)';errEl.textContent=r.error.message+(r.error.status?' ('+r.error.status+')':'');return;}
+  _enterApp();
+  showToast('Welcome back, '+(r.data.user.email||'pilot')+'!','info');
+}
+async function gateRegister(){
+  var email=(document.getElementById('gate-reg-email').value||'').trim();
+  var pass=document.getElementById('gate-reg-pass').value||'';
+  var confirm=document.getElementById('gate-reg-confirm').value||'';
+  var errEl=document.getElementById('gate-reg-err');
+  if(!email||!pass){errEl.textContent='Email and password required.';return;}
+  if(pass!==confirm){errEl.textContent='Passwords do not match.';return;}
+  if(pass.length<6){errEl.textContent='Password must be at least 6 characters.';return;}
+  errEl.style.color='var(--txt3)';errEl.textContent='Creating account…';
+  var sb=await _sbInit();
+  if(!sb){errEl.style.color='var(--red)';errEl.textContent='Auth service not configured.';return;}
+  var r;
+  try{r=await sb.auth.signUp({email:email,password:pass});}
+  catch(e){errEl.style.color='var(--red)';errEl.textContent='Network error: '+(e&&e.message?e.message:String(e));return;}
+  if(r.error){errEl.style.color='var(--red)';errEl.textContent=r.error.message+(r.error.status?' ('+r.error.status+')':'');return;}
+  if(r.data.user&&!r.data.session){
+    errEl.style.color='var(--grn)';
+    errEl.textContent='Check your email to confirm your account, then sign in here.';
+    gateShowTab('login');
+  }else{
+    _enterApp();
+    showToast('Account created! Welcome, '+email,'info');
+    syncProfileToCloud().catch(function(){});
+  }
+}
+async function gateForgotPassword(){
+  var email=(document.getElementById('gate-email').value||'').trim();
+  var errEl=document.getElementById('gate-login-err');
+  if(!email){errEl.style.color='var(--red)';errEl.textContent='Enter your email above first.';return;}
+  var sb=await _sbInit();if(!sb)return;
+  var r=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.href});
+  if(r.error){errEl.style.color='var(--red)';errEl.textContent=r.error.message;return;}
+  errEl.style.color='var(--grn)';errEl.textContent='Password reset email sent to '+email;
+}
+async function gateTestConnection(){
+  var errEl=document.getElementById('gate-login-err');
+  errEl.style.color='var(--txt3)';errEl.textContent='Pinging…';
+  var ref='nbhitgjpqimzxsqzvhsj';
+  var candidates=[SUPABASE_URL,'https://'+ref+'.supabase.com','https://'+ref+'.supabase.co'];
+  for(var i=0;i<candidates.length;i++){
+    var url=candidates[i];
+    try{
+      await fetch(url,{method:'GET',mode:'no-cors',cache:'no-store'});
+      try{
+        var res=await fetch(url+'/auth/v1/health',{method:'GET',cache:'no-store',headers:{'apikey':SUPABASE_ANON_KEY,'Content-Type':'application/json'}});
+        errEl.style.color=res.ok?'var(--grn)':'#f90';
+        errEl.textContent='Server reachable ('+url+') · HTTP '+res.status+(res.ok?' ✓':' — check key');
+      }catch(e2){errEl.style.color='#f90';errEl.textContent='Host UP at '+url+' but auth CORS blocked: '+e2.message;}
+      return;
+    }catch(e){}
+  }
+  errEl.style.color='var(--red)';errEl.textContent='Server unreachable — check Settings → API in Supabase dashboard.';
+}
+// ─────────────────────────────────────────────────────────────────
+
 function authContinueAsGuest(){
   closeAuthModal();
+  _enterApp();
   showToast('Using local storage — profile saved on this device only.','info');
 }
 
@@ -3829,12 +3977,14 @@ function closeHeadsetModal(){
   if(m)m.style.display='none';
 }
 
-// Boot: init Supabase silently and restore session
+// Boot: init Supabase silently and restore session; skip gate if already logged in
 (function(){
   if(_sbConfigured()){
-    _sbInit().then(function(){updateAuthUI();_updateProfileSyncBadge();}).catch(function(){});
+    _sbInit().then(function(){
+      updateAuthUI();_updateProfileSyncBadge();
+      if(_sbUser){_enterApp();}
+    }).catch(function(){});
   }else{
-    // run after DOM ready so elements exist
     setTimeout(function(){updateAuthUI();},200);
   }
 })();
@@ -7278,9 +7428,11 @@ function initSafetyCheck(){
       btn.disabled=!this.checked;
     });
   }
+  var m=document.getElementById("safety-modal");
   if(!localStorage.getItem("avisor_safety_ack")){
-    var m=document.getElementById("safety-modal");
     if(m)m.style.display="flex";
+  } else {
+    if(m)m.style.display="none";
   }
 }
 function setSimpleUiMode(on){
