@@ -3731,25 +3731,29 @@ async function authTestConnection(){
   var errEl=document.getElementById('auth-login-err');
   errEl.style.color='var(--txt3)';
   errEl.textContent='Pinging…';
-  // Step 1: no-cors — tells us if the host resolves and accepts a TCP connection at all
-  try{
-    await fetch(SUPABASE_URL,{method:'GET',mode:'no-cors',cache:'no-store'});
-    // If we get here the host is UP — now try the real auth endpoint with headers
+  var ref='nbhitgjpqimzxsqzvhs';
+  var candidates=[SUPABASE_URL,'https://'+ref+'.supabase.com','https://'+ref+'.supabase.co'];
+  for(var i=0;i<candidates.length;i++){
+    var url=candidates[i];
     try{
-      var res=await fetch(SUPABASE_URL+'/auth/v1/health',{
-        method:'GET',cache:'no-store',
-        headers:{'apikey':SUPABASE_ANON_KEY,'Content-Type':'application/json'}
-      });
-      errEl.style.color=res.ok?'var(--grn)':'#f90';
-      errEl.textContent='Host UP · auth/v1/health HTTP '+res.status+(res.ok?' ✓':' — check project settings');
-    }catch(e2){
-      errEl.style.color='#f90';
-      errEl.textContent='Host UP but CORS blocked auth endpoint: '+e2.message;
-    }
-  }catch(e){
-    errEl.style.color='var(--red)';
-    errEl.textContent='Host UNREACHABLE — project may be paused. Go to supabase.com/dashboard and click Resume. ('+e.message+')';
+      await fetch(url,{method:'GET',mode:'no-cors',cache:'no-store'});
+      // host responded — now try auth health with key
+      try{
+        var res=await fetch(url+'/auth/v1/health',{
+          method:'GET',cache:'no-store',
+          headers:{'apikey':SUPABASE_ANON_KEY,'Content-Type':'application/json'}
+        });
+        errEl.style.color=res.ok?'var(--grn)':'#f90';
+        errEl.textContent='WORKING URL: '+url+' · HTTP '+res.status+(res.ok?' ✓':' — check key');
+      }catch(e2){
+        errEl.style.color='#f90';
+        errEl.textContent='Host UP at '+url+' but auth CORS blocked: '+e2.message;
+      }
+      return;
+    }catch(e){}
   }
+  errEl.style.color='var(--red)';
+  errEl.textContent='All URLs unreachable. Check Settings → API in Supabase dashboard for the correct Project URL.';
 }
 
 async function authLogin(){
