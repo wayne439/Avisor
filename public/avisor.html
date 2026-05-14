@@ -474,6 +474,99 @@ canvas#cgc{display:block;width:100%;height:auto}
 <div id="toast"></div>
 
 <!-- IN-FLIGHT UPDATE MODAL -->
+<!-- AUTH MODAL -->
+<div id="auth-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.93);z-index:10001;align-items:center;justify-content:center">
+  <div style="background:var(--sky2);border:2px solid #2a5070;border-radius:10px;width:min(420px,96vw);display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);background:rgba(14,30,54,.7)">
+      <div style="flex:1"><div style="font-family:var(--mono);font-size:9px;color:var(--blu);letter-spacing:2px;margin-bottom:2px">PILOT ACCOUNT</div><div style="font-size:17px;font-weight:700;color:var(--txt)">PilotAvisor</div></div>
+      <button type="button" onclick="closeAuthModal()" style="background:none;border:none;color:var(--txt2);font-size:18px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="display:flex;border-bottom:1px solid var(--line)">
+      <button type="button" id="auth-tab-login" onclick="showAuthTab('login')" style="flex:1;padding:11px;background:rgba(100,200,255,.12);border:none;border-bottom:2px solid #8cd4ff;color:#8cd4ff;font-family:var(--mono);font-size:10px;letter-spacing:1px;cursor:pointer">SIGN IN</button>
+      <button type="button" id="auth-tab-register" onclick="showAuthTab('register')" style="flex:1;padding:11px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--txt3);font-family:var(--mono);font-size:10px;letter-spacing:1px;cursor:pointer">CREATE ACCOUNT</button>
+    </div>
+    <div id="auth-pane-login" style="padding:20px;display:block">
+      <div style="font-size:12px;color:var(--txt2);margin-bottom:16px;line-height:1.6">Sync your pilot profile and saved aircraft across all devices.</div>
+      <label style="display:block;margin-bottom:12px"><div style="font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:4px">EMAIL</div><input id="auth-login-email" type="email" autocomplete="email" placeholder="pilot@email.com" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:9px;font-family:var(--mono);font-size:12px"></label>
+      <label style="display:block;margin-bottom:16px"><div style="font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:4px">PASSWORD</div><input id="auth-login-pass" type="password" autocomplete="current-password" placeholder="••••••••" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:9px;font-family:var(--mono);font-size:12px"></label>
+      <div id="auth-login-err" style="font-size:10px;color:var(--red);margin-bottom:10px;min-height:14px;font-family:var(--mono)"></div>
+      <button type="button" onclick="authLogin()" style="width:100%;padding:12px;background:#003d1a;border:2px solid var(--grn);color:var(--grn);font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:4px">SIGN IN</button>
+      <div style="margin-top:10px;text-align:center"><button type="button" onclick="authForgotPassword()" style="background:none;border:none;color:var(--txt3);font-size:10px;cursor:pointer;font-family:var(--mono);text-decoration:underline">Forgot password?</button></div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);text-align:center"><button type="button" onclick="authContinueAsGuest()" style="background:none;border:1px solid var(--line);color:var(--txt3);font-family:var(--mono);font-size:9px;padding:8px 16px;cursor:pointer;border-radius:4px;letter-spacing:1px">CONTINUE AS GUEST — local storage only</button></div>
+    </div>
+    <div id="auth-pane-register" style="padding:20px;display:none">
+      <div style="font-size:12px;color:var(--txt2);margin-bottom:16px;line-height:1.6">Free account — sync profile &amp; aircraft across all devices. No flight data leaves your device.</div>
+      <label style="display:block;margin-bottom:12px"><div style="font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:4px">EMAIL</div><input id="auth-reg-email" type="email" autocomplete="email" placeholder="pilot@email.com" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:9px;font-family:var(--mono);font-size:12px"></label>
+      <label style="display:block;margin-bottom:12px"><div style="font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:4px">PASSWORD (6+ characters)</div><input id="auth-reg-pass" type="password" autocomplete="new-password" placeholder="••••••••" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:9px;font-family:var(--mono);font-size:12px"></label>
+      <label style="display:block;margin-bottom:16px"><div style="font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:4px">CONFIRM PASSWORD</div><input id="auth-reg-confirm" type="password" autocomplete="new-password" placeholder="••••••••" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:9px;font-family:var(--mono);font-size:12px"></label>
+      <div id="auth-reg-err" style="font-size:10px;color:var(--red);margin-bottom:10px;min-height:14px;font-family:var(--mono)"></div>
+      <button type="button" onclick="authRegister()" style="width:100%;padding:12px;background:rgba(56,190,255,.1);border:2px solid #38beff;color:#38beff;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:4px">CREATE ACCOUNT</button>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);text-align:center"><button type="button" onclick="authContinueAsGuest()" style="background:none;border:1px solid var(--line);color:var(--txt3);font-family:var(--mono);font-size:9px;padding:8px 16px;cursor:pointer;border-radius:4px;letter-spacing:1px">CONTINUE AS GUEST — local storage only</button></div>
+    </div>
+    <div style="padding:10px 16px;border-top:1px solid var(--line);font-size:9px;color:var(--txt3);font-family:var(--mono);line-height:1.5;background:rgba(0,0,0,.25)">Pilot profile and aircraft data only. Secured by Supabase with row-level security.</div>
+  </div>
+</div>
+
+<!-- HEADSET SETUP MODAL -->
+<div id="headset-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.88);z-index:10000;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 0">
+  <div style="background:var(--sky2);border:2px solid rgba(0,200,80,.35);border-radius:10px;width:min(520px,96vw);display:flex;flex-direction:column;overflow:hidden;margin:auto">
+    <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);background:rgba(14,30,54,.7)">
+      <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:#8cff9c;letter-spacing:2px;flex:1">🎧 HEADSET &amp; READ-ALOUD SETUP</span>
+      <button type="button" onclick="closeHeadsetModal()" style="background:none;border:none;color:var(--txt2);font-size:18px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:12px;color:var(--txt2);line-height:1.7">PilotAvisor can <b style="color:var(--txt)">speak frequencies, ATIS, and waypoint data aloud</b> through your connected headset. Tap <b>🔊</b> next to any frequency to hear it read in standard ATC format.</div>
+
+      <div style="background:rgba(0,200,80,.06);border:1px solid rgba(0,200,80,.25);border-radius:6px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--grn);letter-spacing:1px;margin-bottom:10px">STEP 1 — PAIR YOUR HEADSET TO IPHONE</div>
+        <ol style="font-size:12px;color:var(--txt2);line-height:2;margin:0;padding-left:18px">
+          <li>Power on your Bluetooth headset</li>
+          <li>Open iPhone <b style="color:var(--txt)">Settings → Bluetooth</b></li>
+          <li>Tap your headset in "Other Devices" to pair</li>
+          <li>Confirm it appears under "My Devices" as Connected</li>
+        </ol>
+      </div>
+
+      <div style="background:rgba(56,190,255,.06);border:1px solid rgba(56,190,255,.2);border-radius:6px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--blu);letter-spacing:1px;margin-bottom:10px">STEP 2 — AUDIO ROUTING (iPhone only)</div>
+        <div style="font-size:12px;color:var(--txt2);line-height:1.8">
+          Once paired, iPhone automatically routes app audio to the headset.<br>
+          <b style="color:var(--txt)">Mono audio tip:</b> If using a single-ear headset, go to <b style="color:var(--txt)">Settings → Accessibility → Audio/Visual</b> and enable <b style="color:var(--txt)">Mono Audio</b> so the spoken voice comes through clearly on one side.
+        </div>
+      </div>
+
+      <div style="background:rgba(255,170,0,.05);border:1px solid rgba(255,170,0,.2);border-radius:6px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--amb);letter-spacing:1px;margin-bottom:8px">COMPATIBLE BLUETOOTH HEADSETS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;color:var(--txt2)">
+          <div>✓ Bose A20 (Bluetooth option)</div>
+          <div>✓ Bose ProFlight 2 Series</div>
+          <div>✓ Lightspeed Zulu 3</div>
+          <div>✓ Lightspeed Delta Zulu</div>
+          <div>✓ David Clark ONE-X</div>
+          <div>✓ Rugged Air RA200 BT</div>
+          <div style="color:var(--txt3)">⚠ Non-BT headsets: use aux adapter</div>
+          <div style="color:var(--txt3)">⚠ Aviation plugs: need BT adapter</div>
+        </div>
+      </div>
+
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:6px;padding:12px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--txt3);letter-spacing:1px;margin-bottom:8px">TEST READ-ALOUD</div>
+        <div style="font-size:11px;color:var(--txt2);margin-bottom:10px">Tap below to test — your headset should speak the sample through the headset if connected.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" onclick="ttsSpeak('Tower frequency. One three four point five five.',true)" style="padding:9px 14px;background:rgba(56,190,255,.1);border:1px solid var(--blu2);color:var(--blu);font-family:var(--mono);font-size:10px;cursor:pointer;border-radius:4px">🔊 Test Tower Freq</button>
+          <button type="button" onclick="ttsSpeak('ATIS information Alpha. Winds two seven zero at one two. Visibility one zero. Sky clear. Altimeter two niner niner two.',true)" style="padding:9px 14px;background:rgba(0,200,80,.08);border:1px solid rgba(0,200,80,.3);color:var(--grn);font-family:var(--mono);font-size:10px;cursor:pointer;border-radius:4px">🔊 Test ATIS Sample</button>
+          <button type="button" onclick="window.speechSynthesis&&window.speechSynthesis.cancel();showToast('Read-aloud stopped','info')" style="padding:9px 14px;background:rgba(255,80,80,.06);border:1px solid rgba(255,80,80,.25);color:var(--red);font-family:var(--mono);font-size:10px;cursor:pointer;border-radius:4px">■ Stop</button>
+        </div>
+        <div id="tts-status" style="margin-top:8px;font-size:9px;color:var(--txt3);font-family:var(--mono)"></div>
+      </div>
+
+      <div style="font-size:10px;color:var(--txt3);font-family:var(--mono);line-height:1.7;padding:8px;background:rgba(0,0,0,.2);border-radius:4px">
+        <b style="color:var(--txt2)">🔊 How to use in flight:</b> Open Brief or Approach tab → tap 🔊 next to any frequency to hear it spoken. Tap the airport name row to read all comms in sequence. ATC always overrides — use this for setup and reference only.
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="profile-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.88);z-index:9997;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 0">
   <div style="background:var(--sky2);border:2px solid #2a5070;border-radius:10px;width:min(520px,96vw);display:flex;flex-direction:column;overflow:hidden;margin:auto">
     <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);flex-shrink:0;background:rgba(14,30,54,.7)">
@@ -616,6 +709,8 @@ canvas#cgc{display:block;width:100%;height:auto}
   <div class="logo-text">PilotAvisor <span>AI FLIGHT ADVISOR</span></div>
   <button type="button" class="topbar-if-btn" id="topbar-if-btn" onclick="openInFlightFromHeader()" title="Mid-flight: runway, ATIS, weather, fuel — then re-download .fpl">⚡ IN FLIGHT</button>
   <button type="button" class="topbar-if-btn" onclick="openProfileModal()" title="Pilot profile &amp; aircraft" style="border-color:rgba(100,200,255,.35);color:#8cd4ff">👤 PROFILE</button>
+  <button type="button" class="topbar-if-btn" onclick="openHeadsetModal()" title="Headset setup &amp; read-aloud" style="border-color:rgba(0,200,80,.35);color:#8cff9c">🎧 HEADSET</button>
+  <button type="button" class="topbar-if-btn" id="auth-status-btn" onclick="handleAuthButtonClick()" title="Sign in to sync your profile across devices" style="border-color:rgba(255,255,255,.15);color:var(--txt3)">👤 SIGN IN</button>
   <div class="topbar-pills">
     <div class="pill"><div class="live"></div>NOAA LIVE</div>
     <div class="pill"><div class="live" style="background:var(--amb);box-shadow:0 0 5px var(--amb)"></div>FAA NOTAMs</div>
@@ -4727,6 +4822,185 @@ function findRelPOH(q,txt,max){
 }
 
 // ══════════════════════════════════════════════════════════════════
+// ══ ATC TRANSCRIPT NORMALIZATION ═════════════════════════════════
+// Maps phonetic alphabet + digit words → characters for callsign reconstruction
+var _ATC_PHONETIC={
+  'alpha':'A','bravo':'B','charlie':'C','delta':'D','echo':'E',
+  'foxtrot':'F','golf':'G','hotel':'H','india':'I','juliet':'J',
+  'kilo':'K','lima':'L','mike':'M','november':'N','oscar':'O',
+  'papa':'P','quebec':'Q','romeo':'R','sierra':'S','tango':'T',
+  'uniform':'U','victor':'V','whiskey':'W','xray':'X','x-ray':'X',
+  'yankee':'Y','zulu':'Z'
+};
+var _ATC_DIGITS={
+  'zero':'0','oh':'0','one':'1','two':'2','three':'3','tree':'3',
+  'four':'4','fower':'4','five':'5','fife':'5','six':'6',
+  'seven':'7','eight':'8','ait':'8','nine':'9','niner':'9'
+};
+var _ATC_TO_SPOKEN={
+  'A':'alpha','B':'bravo','C':'charlie','D':'delta','E':'echo',
+  'F':'foxtrot','G':'golf','H':'hotel','I':'india','J':'juliet',
+  'K':'kilo','L':'lima','M':'mike','N':'november','O':'oscar',
+  'P':'papa','Q':'quebec','R':'romeo','S':'sierra','T':'tango',
+  'U':'uniform','V':'victor','W':'whiskey','X':'x-ray',
+  'Y':'yankee','Z':'zulu',
+  '0':'zero','1':'one','2':'two','3':'three','4':'four',
+  '5':'five','6':'six','7':'seven','8':'eight','9':'niner'
+};
+
+function _atcClean(w){return String(w||'').toLowerCase().replace(/[.,!?;:'"]/g,'').trim();}
+
+/** Convert raw speech-to-text into properly formatted aviation text.
+ *  N-numbers, runways, squawk codes, and headings are reconstructed. */
+function normalizeATCTranscript(raw){
+  if(!raw)return raw;
+  var words=raw.replace(/\s+/g,' ').trim().split(' ');
+  var out=[];
+  var i=0;
+  while(i<words.length){
+    var w=words[i];
+    var lo=_atcClean(w);
+
+    // ── N-number callsign ────────────────────────────────────────
+    // "november 63 kilo alpha" → "N63KA"
+    // "november six three kilo alpha" → "N63KA"
+    if(lo==='november'){
+      var cs='N';
+      var j=i+1;
+      while(j<words.length){
+        var wj=_atcClean(words[j]);
+        if(_ATC_PHONETIC[wj]&&wj!=='november'){cs+=_ATC_PHONETIC[wj];j++;}
+        else if(_ATC_DIGITS[wj]){cs+=_ATC_DIGITS[wj];j++;}
+        else if(/^\d{1,2}$/.test(wj)){cs+=wj;j++;} // "63" → keep digits in callsign
+        else break;
+      }
+      if(cs.length>=3){
+        // strip spurious "is" / "uh" / "um" immediately after callsign
+        while(j<words.length&&/^(is|uh|um|er|ah|oh)$/.test(_atcClean(words[j])))j++;
+        out.push(cs);i=j;continue;
+      }
+    }
+
+    // ── Runway number ────────────────────────────────────────────
+    // "runway two one left" → "runway 21L"
+    // "runway 21L" stays
+    if(lo==='runway'){
+      var rn='';var rd='';var jr=i+1;
+      while(jr<words.length&&rn.length<2){
+        var wjr=_atcClean(words[jr]);
+        if(_ATC_DIGITS[wjr]){rn+=_ATC_DIGITS[wjr];jr++;}
+        else if(/^\d{1,2}[LRC]?$/i.test(wjr)){
+          rd=wjr.match(/[LRC]$/i)?wjr.slice(-1).toUpperCase():'';
+          rn=wjr.replace(/[LRC]$/i,'');jr++;break;
+        }
+        else if(/^\d$/.test(wjr)){rn+=wjr;jr++;}
+        else break;
+      }
+      if(!rd&&jr<words.length){
+        var wjr2=_atcClean(words[jr]);
+        if(wjr2==='left'||wjr2==='l'){rd='L';jr++;}
+        else if(wjr2==='right'||wjr2==='r'){rd='R';jr++;}
+        else if(wjr2==='center'||wjr2==='centre'||wjr2==='c'){rd='C';jr++;}
+      }
+      if(rn){out.push('runway');out.push(rn+rd);i=jr;continue;}
+    }
+
+    // ── Squawk code ──────────────────────────────────────────────
+    // "squawk four five two seven" → "squawk 4527"
+    if(lo==='squawk'){
+      var sq='';var js=i+1;
+      while(js<words.length&&sq.length<4){
+        var wjs=_atcClean(words[js]);
+        if(_ATC_DIGITS[wjs]){sq+=_ATC_DIGITS[wjs];js++;}
+        else if(/^\d$/.test(wjs)){sq+=wjs;js++;}
+        else if(/^\d{4}$/.test(wjs)){sq=wjs;js++;break;}
+        else break;
+      }
+      if(sq.length===4){out.push('squawk '+sq);i=js;continue;}
+    }
+
+    // ── Contact/approach frequency ───────────────────────────────
+    // "contact approach one two two point eight" → "contact approach 122.8"
+    if((lo==='contact'||lo==='monitor')&&i+1<words.length){
+      out.push(w);i++;
+      // collect label words until we hit a digit/spoken-digit
+      while(i<words.length&&!_ATC_DIGITS[_atcClean(words[i])]&&!/^\d/.test(words[i]))
+        {out.push(words[i]);i++;}
+      // now parse frequency digits
+      var fq='';var hasPoint=false;var jf=i;
+      while(jf<words.length&&fq.length<6){
+        var wjf=_atcClean(words[jf]);
+        if(wjf==='point'||wjf==='decimal'){if(!hasPoint){fq+='.';hasPoint=true;}jf++;}
+        else if(_ATC_DIGITS[wjf]){fq+=_ATC_DIGITS[wjf];jf++;}
+        else if(/^\d$/.test(wjf)){fq+=wjf;jf++;}
+        else break;
+      }
+      if(fq.match(/^\d{3}\.\d{1,3}$/)){out.push(fq);i=jf;continue;}
+      // couldn't parse freq — leave rest alone
+      continue;
+    }
+
+    out.push(w);i++;
+  }
+  return out.join(' ');
+}
+
+/** Expand N-numbers and runway IDs in a string to full phonetics for TTS.
+ *  "N63KA runway 21L" → "november six three kilo alpha  runway two one left" */
+function expandATCForSpeech(text){
+  if(!text)return text;
+  return text
+    // N-number: N63KA → november six three kilo alpha
+    .replace(/\bN(\d{1,5}[A-Z]{0,2})\b/g,function(m,tail){
+      return('november '+('N'+tail).slice(1).split('').map(function(c){
+        return _ATC_TO_SPOKEN[c.toUpperCase()]||c;
+      }).join(' '));
+    })
+    // runway 21L → runway two one left
+    .replace(/\brunway\s+(\d{1,2})([LRC])?\b/ig,function(m,num,desig){
+      var digits=num.split('').map(function(d){return _ATC_TO_SPOKEN[d]||d;}).join(' ');
+      var des=desig?{L:'left',R:'right',C:'center'}[desig.toUpperCase()]||'':'';
+      return'runway '+digits+(des?' '+des:'');
+    })
+    // squawk 4527 → squawk four five two seven
+    .replace(/\bsquawk\s+(\d{4})\b/ig,function(m,code){
+      return'squawk '+code.split('').map(function(d){return _ATC_TO_SPOKEN[d]||d;}).join(' ');
+    });
+}
+
+function ttsAvailable(){return typeof window.speechSynthesis!=='undefined';}
+function ttsSpeak(text,interrupt){
+  if(!ttsAvailable()){showToast('Text-to-speech not available on this device','warn');return;}
+  if(interrupt)window.speechSynthesis.cancel();
+  var u=new SpeechSynthesisUtterance(text);
+  u.rate=0.88;u.pitch=1.0;u.volume=1.0;
+  window.speechSynthesis.speak(u);
+}
+function spokenFreq(freq){
+  var words={'0':'zero','1':'one','2':'two','3':'three','4':'four','5':'five','6':'six','7':'seven','8':'eight','9':'niner'};
+  return String(freq||'').split('').map(function(c){return c==='.'?'point':words[c]||c;}).join(' ');
+}
+function ttsReadFreq(label,freq){ttsSpeak(label+'... '+spokenFreq(freq),false);}
+function ttsReadAllComms(icao){
+  if(!ttsAvailable())return;
+  var db=typeof mergedFreqRecord==='function'?mergedFreqRecord(icao):{};
+  var apt=typeof APTS!=='undefined'&&APTS?APTS[icao]:null;
+  var name=apt&&apt.name?apt.name:icao;
+  var parts=[];
+  if(db.atis)parts.push('ATIS... '+spokenFreq(db.atis));
+  if(db.awos)parts.push('AWOS... '+spokenFreq(db.awos));
+  if(db.clr)parts.push('Clearance... '+spokenFreq(db.clr));
+  if(db.gnd)parts.push('Ground... '+spokenFreq(db.gnd));
+  if(db.twr)parts.push('Tower... '+spokenFreq(db.twr));
+  if(db.ctaf)parts.push('C T A F... '+spokenFreq(db.ctaf));
+  if(db.unicom)parts.push('Unicom... '+spokenFreq(db.unicom));
+  if(db.app)parts.push('Approach... '+spokenFreq(db.app));
+  if(db.dep)parts.push('Departure... '+spokenFreq(db.dep));
+  if(!parts.length){showToast('No frequencies stored for '+icao,'warn');return;}
+  ttsSpeak(name+' communications.  '+parts.join('.  '),true);
+}
+function ttsReadbackATCLine(text){ttsSpeak(expandATCForSpeech(text),true);}
+
 // ATC TRANSCRIBER — Web Speech API (browser engine; often cloud in Chrome)
 // ══════════════════════════════════════════════════════════════════
 const ATC_KEYWORDS=['runway','go around','hold short','traffic','wind shear','turbulence','pirep','airmet','sigmet','clear','cleared','descend','climb','contact','squawk','ident','cancel','emergency'];
@@ -4735,7 +5009,7 @@ function flushATCMergeBuffer(){
   if(STATE.atcMergeTimer){clearTimeout(STATE.atcMergeTimer); STATE.atcMergeTimer=null;}
   var buf=(STATE.atcMergeBuf||'').replace(/\s+/g,' ').trim();
   STATE.atcMergeBuf='';
-  if(buf) addATCLine(buf);
+  if(buf) addATCLine(normalizeATCTranscript(buf));
 }
 /** Longer pause after phrases where the next word is often a separate final (runway number, tail digits). */
 function atcMergeDelayMs(buf){
@@ -4856,7 +5130,7 @@ function addATCLine(txt,isError=false){
     if(prevLineEndsAwaitingRunwayNbr(prev)&&isLikelyRunwayDesignatorFragment(txt)) append=prev+' '+txt;
     else if(prevLineEndsAwaitingTailFragment(prev)&&isLikelyTailSecondFragment(txt)) append=prev+' '+txt;
     if(append){
-      var merged=append.replace(/\s+/g,' ').trim();
+      var merged=normalizeATCTranscript(append.replace(/\s+/g,' ').trim());
       last.txt=merged;
       var lines=el.querySelectorAll('.atc-line');
       var row=lines[lines.length-1];
@@ -4868,6 +5142,9 @@ function addATCLine(txt,isError=false){
           spans[1].textContent=merged;
           spans[1].className=hitsM.length?'atc-alert':'atc-content';
         }
+        // update speak button if present
+        var spkBtn=row.querySelector('button');
+        if(spkBtn)(function(t){spkBtn.onclick=function(){ttsReadbackATCLine(t);};})(merged);
       }
       el.scrollTop=el.scrollHeight;
       return;
@@ -4888,6 +5165,15 @@ function addATCLine(txt,isError=false){
   msgSpan.textContent=txt;
   div.appendChild(tsSpan);
   div.appendChild(msgSpan);
+  if(!isError&&ttsAvailable()){
+    var speakBtn=document.createElement('button');
+    speakBtn.type='button';
+    speakBtn.textContent='🔊';
+    speakBtn.title='Read aloud through headset';
+    speakBtn.style.cssText='background:none;border:none;color:var(--txt3);font-size:11px;cursor:pointer;padding:0 4px;flex-shrink:0;opacity:.6';
+    speakBtn.onclick=(function(t){return function(){ttsReadbackATCLine(t);};})(txt);
+    div.appendChild(speakBtn);
+  }
   // Remove placeholder if first line
   if(STATE.atcLines.length===1)el.innerHTML='';
   el.appendChild(div);el.scrollTop=el.scrollHeight;
@@ -5944,16 +6230,24 @@ function buildAirportCommsCard(icao,aptData){
   }
   function commRow(label,val,sub,col){
     if(!val)return '';
+    var sp='';
+    if(ttsAvailable()){
+      var lq=label.replace(/'/g,"\\'");var vq=val.replace(/'/g,"\\'");
+      sp='<button type="button" onclick="ttsReadFreq(\''+lq+'\',\''+vq+'\')" title="Read aloud" style="background:none;border:none;color:var(--txt3);font-size:12px;cursor:pointer;padding:0 4px;opacity:.55;flex-shrink:0">🔊</button>';
+    }
     return '<div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05)">'
       +'<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--txt)">'+label+'</div>'
       +(sub?'<div style="font-size:10px;color:var(--txt3);margin-top:1px">'+sub+'</div>':'')
       +'</div>'
+      +sp
       +'<div style="font-family:var(--mono);font-size:14px;font-weight:700;color:'+(col||'var(--txt)')+'">'+val+'</div>'
       +'</div>';
   }
+  var readAllBtn=ttsAvailable()?'<button type="button" onclick="ttsReadAllComms(\''+id+'\')" title="Read all comms aloud" style="background:none;border:1px solid rgba(0,200,80,.3);color:var(--grn);font-size:9px;font-family:var(--mono);padding:3px 8px;cursor:pointer;border-radius:3px;margin-top:5px;letter-spacing:1px">🔊 READ ALL COMMS</button>':'';
   var html='<div style="padding:6px 0 8px 0;margin-bottom:8px;border-bottom:1px solid var(--line)">'
     +'<div style="font-size:15px;font-weight:700;color:var(--txt)">'+name+'</div>'
     +(elev?'<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+id+' · Elevation: '+elev+'</div>':'<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+id+'</div>')
+    +readAllBtn
     +'</div>';
 
   var wxRows=commRow('ATIS',db.atis,'','var(--blu)')+commRow('AWOS / ASOS',db.awos,'','var(--blu)');
