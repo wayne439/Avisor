@@ -595,8 +595,11 @@ canvas#cgc{display:block;width:100%;height:auto}
         </label>
         <label style="display:block"><span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">Medical Expiry</span><input id="prf-med-exp" type="month" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:7px;font-family:var(--mono);font-size:12px"></label>
       </div>
-      <button type="button" onclick="savePilotInfo()" style="padding:10px;background:#003d1a;border:2px solid var(--grn);color:var(--grn);font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:4px">SAVE PILOT INFO</button>
-      <div id="prf-pilot-msg" style="font-family:var(--mono);font-size:9px;color:var(--grn);text-align:center;min-height:14px"></div>
+      <div style="display:flex;gap:8px">
+        <button type="button" onclick="savePilotInfo()" style="flex:1;padding:10px;background:#003d1a;border:2px solid var(--grn);color:var(--grn);font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:4px">SAVE PILOT INFO</button>
+        <button type="button" id="prf-sync-btn" onclick="profileSyncNow()" style="padding:10px 14px;background:rgba(56,190,255,.08);border:1px solid var(--blu2);color:var(--blu);font-family:var(--mono);font-size:10px;cursor:pointer;border-radius:4px;letter-spacing:1px" title="Sync profile to cloud account">☁ SYNC</button>
+      </div>
+      <div id="prf-sync-status" style="font-family:var(--mono);font-size:9px;color:var(--txt3);text-align:center;min-height:14px"></div>
     </div>
     <!-- Aircraft list tab -->
     <div id="profile-tab-aircraft" style="padding:16px;display:none;flex-direction:column;gap:10px">
@@ -3326,25 +3329,34 @@ function profileUpsertAircraft(saved){
 function openProfileModal(){
   var p=_loadProfile();
   var pil=p.pilot||{};
-  var nf=document.getElementById('prf-pilot-name');
-  var cf=document.getElementById('prf-pilot-cert');
-  var mf=document.getElementById('prf-pilot-med');
-  var mxf=document.getElementById('prf-pilot-medexp');
+  // correct IDs matching the HTML
+  var nf=document.getElementById('prf-name');
+  var cf=document.getElementById('prf-cert');
+  var mf=document.getElementById('prf-med-class');
+  var mxf=document.getElementById('prf-med-exp');
   if(nf)nf.value=pil.name||'';
   if(cf)cf.value=pil.cert||'';
-  if(mf)mf.value=pil.medClass||'3rd Class';
+  if(mf)mf.value=pil.medClass||'';
   if(mxf)mxf.value=pil.medExp||'';
+  // update cloud sync status badge
+  _updateProfileSyncBadge();
   profileShowAcList();
   showProfileTab('pilot');
   document.getElementById('profile-modal').style.display='flex';
 }
 function closeProfileModal(){document.getElementById('profile-modal').style.display='none';}
 function showProfileTab(tab){
+  // tab buttons: ptab-pilot / ptab-aircraft
+  // panes: profile-tab-pilot / profile-tab-aircraft
   ['pilot','aircraft'].forEach(function(t){
-    var btn=document.getElementById('prf-tab-'+t);
-    var pane=document.getElementById('prf-pane-'+t);
-    if(btn)btn.style.background=t===tab?'rgba(100,200,255,.18)':'transparent';
-    if(pane)pane.style.display=t===tab?'block':'none';
+    var btn=document.getElementById('ptab-'+t);
+    var pane=document.getElementById('profile-tab-'+t);
+    if(btn){
+      btn.style.background=t===tab?'rgba(56,190,255,.1)':'none';
+      btn.style.borderBottom=t===tab?'2px solid #38beff':'2px solid transparent';
+      btn.style.color=t===tab?'#38beff':'var(--txt3)';
+    }
+    if(pane)pane.style.display=t===tab?'flex':'none';
   });
 }
 
@@ -3439,6 +3451,7 @@ function profileSaveAircraft(){
   if(idx===p.activeAcIdx){
     applyAndSaveAircraft(ac.key,ac.name,ac.tas,ac.gph,ac.climb,ac.alts,ac.icao||ac.key,ac.tail||'');
   }
+  if(_sbUser)syncProfileToCloud().catch(function(){});
   showToast('Aircraft saved.','info');
   profileShowAcList();
 }
@@ -3467,16 +3480,18 @@ function profileDeleteAircraft(){
 function savePilotInfo(){
   var p=_loadProfile();
   p.pilot=p.pilot||{};
-  var nf=document.getElementById('prf-pilot-name');
-  var cf=document.getElementById('prf-pilot-cert');
-  var mf=document.getElementById('prf-pilot-med');
-  var mxf=document.getElementById('prf-pilot-medexp');
+  var nf=document.getElementById('prf-name');
+  var cf=document.getElementById('prf-cert');
+  var mf=document.getElementById('prf-med-class');
+  var mxf=document.getElementById('prf-med-exp');
   p.pilot.name=(nf?nf.value:'').trim();
   p.pilot.cert=(cf?cf.value:'').trim();
-  p.pilot.medClass=(mf?mf.value:'3rd Class').trim();
+  p.pilot.medClass=(mf?mf.value:'').trim();
   p.pilot.medExp=(mxf?mxf.value:'').trim();
   _saveProfile(p);
   showToast('Pilot info saved.','info');
+  // auto-sync to cloud if signed in
+  if(_sbUser)syncProfileToCloud().catch(function(){});
 }
 
 function profileUploadPoh(inputEl){
@@ -3558,6 +3573,237 @@ function loadProfileOnBoot(){
     applyAndSaveAircraft(ac.key,ac.name,ac.tas||120,ac.gph||10,ac.climb||800,ac.alts||[6000,8000,10000],ac.icao||ac.key,ac.tail||'');
   }
 }
+
+// ══════════════════════════════════════════════════════════════════
+// SUPABASE AUTH + CLOUD PROFILE SYNC
+// ══════════════════════════════════════════════════════════════════
+// Fill in your Supabase project details to enable cloud accounts.
+// Get these from: supabase.com → your project → Settings → API
+var SUPABASE_URL='';       // e.g. https://xyzcompany.supabase.co
+var SUPABASE_ANON_KEY='';  // your project's anon/public key
+
+var _sb=null;
+var _sbUser=null;
+var _sbLoading=false;
+
+function _sbConfigured(){return !!(SUPABASE_URL&&SUPABASE_ANON_KEY);}
+
+async function _sbInit(){
+  if(_sb)return _sb;
+  if(!_sbConfigured())return null;
+  if(!window.supabase){
+    await new Promise(function(resolve,reject){
+      var s=document.createElement('script');
+      s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+      s.onload=resolve;s.onerror=reject;
+      document.head.appendChild(s);
+    });
+  }
+  _sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+  _sb.auth.onAuthStateChange(function(event,session){
+    _sbUser=session?session.user:null;
+    updateAuthUI();
+    _updateProfileSyncBadge();
+    if(event==='SIGNED_IN'){syncProfileFromCloud().catch(function(){});}
+  });
+  var s=await _sb.auth.getSession();
+  _sbUser=s.data&&s.data.session?s.data.session.user:null;
+  return _sb;
+}
+
+async function syncProfileToCloud(){
+  var sb=await _sbInit();
+  if(!sb||!_sbUser)return;
+  var p=_loadProfile();
+  var payload={
+    id:_sbUser.id,
+    pilot_name:(p.pilot&&p.pilot.name)||null,
+    cert_number:(p.pilot&&p.pilot.cert)||null,
+    med_class:(p.pilot&&p.pilot.medClass)||null,
+    med_expiry:(p.pilot&&p.pilot.medExp)||null,
+    aircraft:p.aircraft||[],
+    active_ac_idx:p.activeAcIdx||0,
+    updated_at:new Date().toISOString()
+  };
+  var r=await sb.from('profiles').upsert(payload,{onConflict:'id'});
+  if(!r.error){
+    var ts=new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit'});
+    var el=document.getElementById('prf-sync-status');
+    if(el)el.textContent='✓ Synced to cloud '+ts;
+    showToast('Profile synced.','info');
+  }else{
+    showToast('Sync failed: '+r.error.message,'warn');
+  }
+}
+
+async function syncProfileFromCloud(){
+  var sb=await _sbInit();
+  if(!sb||!_sbUser)return;
+  var r=await sb.from('profiles').select('*').eq('id',_sbUser.id).single();
+  if(r.error||!r.data)return;
+  var d=r.data;
+  var p=_loadProfile();
+  if(d.pilot_name||d.cert_number||d.med_class){
+    p.pilot={
+      name:d.pilot_name||'',
+      cert:d.cert_number||'',
+      medClass:d.med_class||'',
+      medExp:d.med_expiry||''
+    };
+  }
+  if(d.aircraft&&d.aircraft.length){
+    p.aircraft=d.aircraft;
+    p.activeAcIdx=d.active_ac_idx||0;
+  }
+  _saveProfile(p);
+  loadProfileOnBoot();
+  showToast('Profile loaded from cloud.','info');
+  _updateProfileSyncBadge();
+}
+
+function _updateProfileSyncBadge(){
+  var el=document.getElementById('prf-sync-status');
+  if(!el)return;
+  if(!_sbConfigured()){el.textContent='Cloud sync not configured — saved locally on this device';el.style.color='var(--txt3)';return;}
+  if(_sbUser){el.textContent='Signed in as '+_sbUser.email+' — changes sync automatically';el.style.color='var(--grn)';}
+  else{el.textContent='Sign in to sync across devices (SYNC button above)';el.style.color='var(--txt3)';}
+}
+
+function profileSyncNow(){
+  if(!_sbConfigured()){openAuthModal();return;}
+  if(_sbUser){syncProfileToCloud().catch(function(e){showToast('Sync error: '+(e&&e.message),'warn');});}
+  else{openAuthModal();}
+}
+
+function updateAuthUI(){
+  var btn=document.getElementById('auth-status-btn');
+  if(!btn)return;
+  if(_sbUser){
+    var email=_sbUser.email||'pilot';
+    var short=email.length>15?email.slice(0,13)+'…':email;
+    btn.textContent='✓ '+short;
+    btn.title='Signed in as '+email+' — tap to sign out';
+    btn.style.color='var(--grn)';
+    btn.style.borderColor='rgba(0,200,80,.4)';
+  }else if(_sbConfigured()){
+    btn.textContent='👤 SIGN IN';
+    btn.title='Sign in to sync your profile across all devices';
+    btn.style.color='var(--txt3)';
+    btn.style.borderColor='rgba(255,255,255,.15)';
+  }else{
+    btn.textContent='👤 LOCAL';
+    btn.title='Profile saved locally — configure Supabase to enable cloud accounts';
+    btn.style.color='var(--txt3)';
+    btn.style.borderColor='rgba(255,255,255,.1)';
+  }
+}
+
+function handleAuthButtonClick(){
+  if(_sbUser){if(confirm('Sign out of '+_sbUser.email+'?'))authLogout();}
+  else if(_sbConfigured())openAuthModal();
+  else showToast('Cloud auth not configured — profile saved locally.','info');
+}
+
+function openAuthModal(){
+  showAuthTab('login');
+  var m=document.getElementById('auth-modal');
+  if(m)m.style.display='flex';
+}
+function closeAuthModal(){
+  var m=document.getElementById('auth-modal');
+  if(m)m.style.display='none';
+}
+function showAuthTab(tab){
+  ['login','register'].forEach(function(t){
+    var btn=document.getElementById('auth-tab-'+t);
+    var pane=document.getElementById('auth-pane-'+t);
+    if(btn){
+      btn.style.background=t===tab?'rgba(100,200,255,.12)':'transparent';
+      btn.style.color=t===tab?'#8cd4ff':'var(--txt3)';
+      btn.style.borderBottom=t===tab?'2px solid #8cd4ff':'2px solid transparent';
+    }
+    if(pane)pane.style.display=t===tab?'block':'none';
+  });
+}
+
+async function authLogin(){
+  var email=(document.getElementById('auth-login-email').value||'').trim();
+  var pass=document.getElementById('auth-login-pass').value||'';
+  var errEl=document.getElementById('auth-login-err');
+  if(!email||!pass){errEl.textContent='Email and password required.';return;}
+  errEl.textContent='Signing in…';
+  var sb=await _sbInit();
+  if(!sb){errEl.textContent='Auth service not configured.';return;}
+  var r=await sb.auth.signInWithPassword({email:email,password:pass});
+  if(r.error){errEl.textContent=r.error.message;return;}
+  closeAuthModal();
+  showToast('Welcome back, '+(r.data.user.email||'pilot')+'!','info');
+}
+
+async function authRegister(){
+  var email=(document.getElementById('auth-reg-email').value||'').trim();
+  var pass=document.getElementById('auth-reg-pass').value||'';
+  var confirm=document.getElementById('auth-reg-confirm').value||'';
+  var errEl=document.getElementById('auth-reg-err');
+  if(!email||!pass){errEl.textContent='Email and password required.';return;}
+  if(pass!==confirm){errEl.textContent='Passwords do not match.';return;}
+  if(pass.length<6){errEl.textContent='Password must be at least 6 characters.';return;}
+  errEl.textContent='Creating account…';
+  var sb=await _sbInit();
+  if(!sb){errEl.textContent='Auth service not configured.';return;}
+  var r=await sb.auth.signUp({email:email,password:pass});
+  if(r.error){errEl.textContent=r.error.message;return;}
+  closeAuthModal();
+  if(r.data.user&&!r.data.session){
+    showToast('Check your email to confirm your account.','info');
+  }else{
+    showToast('Account created! Welcome, '+email,'info');
+    syncProfileToCloud().catch(function(){});
+  }
+}
+
+async function authLogout(){
+  var sb=await _sbInit();
+  if(sb)await sb.auth.signOut();
+  _sbUser=null;
+  updateAuthUI();
+  _updateProfileSyncBadge();
+  showToast('Signed out.','info');
+}
+
+async function authForgotPassword(){
+  var email=(document.getElementById('auth-login-email').value||'').trim();
+  if(!email){document.getElementById('auth-login-err').textContent='Enter your email above first.';return;}
+  var sb=await _sbInit();
+  if(!sb)return;
+  var r=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.href});
+  if(r.error){document.getElementById('auth-login-err').textContent=r.error.message;return;}
+  showToast('Password reset email sent to '+email,'info');
+}
+
+function authContinueAsGuest(){
+  closeAuthModal();
+  showToast('Using local storage — profile saved on this device only.','info');
+}
+
+function openHeadsetModal(){
+  var m=document.getElementById('headset-modal');
+  if(m)m.style.display='flex';
+}
+function closeHeadsetModal(){
+  var m=document.getElementById('headset-modal');
+  if(m)m.style.display='none';
+}
+
+// Boot: init Supabase silently and restore session
+(function(){
+  if(_sbConfigured()){
+    _sbInit().then(function(){updateAuthUI();_updateProfileSyncBadge();}).catch(function(){});
+  }else{
+    // run after DOM ready so elements exist
+    setTimeout(function(){updateAuthUI();},200);
+  }
+})();
 
 // ══════════════════════════════════════════════════════════════════
 // RENDER ALL
