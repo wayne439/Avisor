@@ -3730,14 +3730,25 @@ function showAuthTab(tab){
 async function authTestConnection(){
   var errEl=document.getElementById('auth-login-err');
   errEl.style.color='var(--txt3)';
-  errEl.textContent='Pinging '+SUPABASE_URL+'…';
+  errEl.textContent='Pinging…';
+  // Step 1: no-cors — tells us if the host resolves and accepts a TCP connection at all
   try{
-    var res=await fetch(SUPABASE_URL+'/auth/v1/health',{method:'GET',cache:'no-store'});
-    errEl.style.color=res.ok?'var(--grn)':'var(--red)';
-    errEl.textContent='HTTP '+res.status+(res.ok?' — server reachable':'— server error');
+    await fetch(SUPABASE_URL,{method:'GET',mode:'no-cors',cache:'no-store'});
+    // If we get here the host is UP — now try the real auth endpoint with headers
+    try{
+      var res=await fetch(SUPABASE_URL+'/auth/v1/health',{
+        method:'GET',cache:'no-store',
+        headers:{'apikey':SUPABASE_ANON_KEY,'Content-Type':'application/json'}
+      });
+      errEl.style.color=res.ok?'var(--grn)':'#f90';
+      errEl.textContent='Host UP · auth/v1/health HTTP '+res.status+(res.ok?' ✓':' — check project settings');
+    }catch(e2){
+      errEl.style.color='#f90';
+      errEl.textContent='Host UP but CORS blocked auth endpoint: '+e2.message;
+    }
   }catch(e){
     errEl.style.color='var(--red)';
-    errEl.textContent='Fetch failed: '+(e&&e.message?e.message:String(e))+' — check console for details';
+    errEl.textContent='Host UNREACHABLE — project may be paused. Go to supabase.com/dashboard and click Resume. ('+e.message+')';
   }
 }
 
