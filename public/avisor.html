@@ -489,8 +489,9 @@ canvas#cgc{display:block;width:100%;height:auto}
       <div style="font-size:12px;color:var(--txt2);margin-bottom:16px;line-height:1.6">Sync your pilot profile and saved aircraft across all devices.</div>
       <label style="display:block;margin-bottom:12px"><div style="font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:4px">EMAIL</div><input id="auth-login-email" type="email" autocomplete="email" placeholder="pilot@email.com" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:9px;font-family:var(--mono);font-size:12px"></label>
       <label style="display:block;margin-bottom:16px"><div style="font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:4px">PASSWORD</div><input id="auth-login-pass" type="password" autocomplete="current-password" placeholder="••••••••" style="width:100%;box-sizing:border-box;background:var(--sky3);border:1px solid var(--line);color:var(--txt);padding:9px;font-family:var(--mono);font-size:12px"></label>
-      <div id="auth-login-err" style="font-size:10px;color:var(--red);margin-bottom:10px;min-height:14px;font-family:var(--mono)"></div>
+      <div id="auth-login-err" style="font-size:10px;color:var(--red);margin-bottom:10px;min-height:14px;font-family:var(--mono);word-break:break-all"></div>
       <button type="button" onclick="authLogin()" style="width:100%;padding:12px;background:#003d1a;border:2px solid var(--grn);color:var(--grn);font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:4px">SIGN IN</button>
+      <div style="margin-top:8px;text-align:center"><button type="button" onclick="authTestConnection()" style="background:none;border:none;color:var(--txt3);font-size:9px;cursor:pointer;font-family:var(--mono);text-decoration:underline">test connection</button></div>
       <div style="margin-top:10px;text-align:center"><button type="button" onclick="authForgotPassword()" style="background:none;border:none;color:var(--txt3);font-size:10px;cursor:pointer;font-family:var(--mono);text-decoration:underline">Forgot password?</button></div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);text-align:center"><button type="button" onclick="authContinueAsGuest()" style="background:none;border:1px solid var(--line);color:var(--txt3);font-family:var(--mono);font-size:9px;padding:8px 16px;cursor:pointer;border-radius:4px;letter-spacing:1px">CONTINUE AS GUEST — local storage only</button></div>
     </div>
@@ -3594,7 +3595,7 @@ async function _sbInit(){
   if(!window.supabase){
     await new Promise(function(resolve,reject){
       var s=document.createElement('script');
-      s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+      s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.50.0/dist/umd/supabase.min.js';
       s.onload=resolve;s.onerror=reject;
       document.head.appendChild(s);
     });
@@ -3726,6 +3727,20 @@ function showAuthTab(tab){
   });
 }
 
+async function authTestConnection(){
+  var errEl=document.getElementById('auth-login-err');
+  errEl.style.color='var(--txt3)';
+  errEl.textContent='Pinging '+SUPABASE_URL+'…';
+  try{
+    var res=await fetch(SUPABASE_URL+'/auth/v1/health',{method:'GET',cache:'no-store'});
+    errEl.style.color=res.ok?'var(--grn)':'var(--red)';
+    errEl.textContent='HTTP '+res.status+(res.ok?' — server reachable':'— server error');
+  }catch(e){
+    errEl.style.color='var(--red)';
+    errEl.textContent='Fetch failed: '+(e&&e.message?e.message:String(e))+' — check console for details';
+  }
+}
+
 async function authLogin(){
   var email=(document.getElementById('auth-login-email').value||'').trim();
   var pass=document.getElementById('auth-login-pass').value||'';
@@ -3734,8 +3749,10 @@ async function authLogin(){
   errEl.textContent='Signing in…';
   var sb=await _sbInit();
   if(!sb){errEl.textContent='Auth service not configured.';return;}
-  var r=await sb.auth.signInWithPassword({email:email,password:pass});
-  if(r.error){errEl.textContent=r.error.message;return;}
+  var r;
+  try{r=await sb.auth.signInWithPassword({email:email,password:pass});}
+  catch(e){errEl.textContent='Network error: '+(e&&e.message?e.message:String(e));return;}
+  if(r.error){errEl.textContent=r.error.message+(r.error.status?' ('+r.error.status+')':'');return;}
   closeAuthModal();
   showToast('Welcome back, '+(r.data.user.email||'pilot')+'!','info');
 }
@@ -3751,8 +3768,10 @@ async function authRegister(){
   errEl.textContent='Creating account…';
   var sb=await _sbInit();
   if(!sb){errEl.textContent='Auth service not configured.';return;}
-  var r=await sb.auth.signUp({email:email,password:pass});
-  if(r.error){errEl.textContent=r.error.message;return;}
+  var r;
+  try{r=await sb.auth.signUp({email:email,password:pass});}
+  catch(e){errEl.textContent='Network error: '+(e&&e.message?e.message:String(e));return;}
+  if(r.error){errEl.textContent=r.error.message+(r.error.status?' ('+r.error.status+')':'');return;}
   closeAuthModal();
   if(r.data.user&&!r.data.session){
     showToast('Check your email to confirm your account.','info');
