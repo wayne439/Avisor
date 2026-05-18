@@ -2336,7 +2336,7 @@ function simplifyRouteByDetourRemoval(depRef,arrRef,wpts){
       var noC=gcDist(p.lat,p.lon,n.lat,n.lon);
       var xtk=crossTrackDist(dl,dLo,al,aLo,c.lat,c.lon);
       var excess=withC-noC;
-      if(noC<withC-4||(xtk>=16&&noC<=withC+3)||(xtk>=20&&excess>=3)||(excess>=5)){
+      if(noC<withC-2||(xtk>=10&&noC<=withC+4)||(xtk>=14&&excess>=2)||(excess>=4)){
         wpts.splice(i,1);
         changed=true;
         break;
@@ -2360,12 +2360,12 @@ function pruneCorridorZigzags(depRef,arrRef,wpts){
       var chord=gcDist(p.lat,p.lon,n.lat,n.lon);
       var xtk=crossTrackDist(dl,dLo,al,aLo,c.lat,c.lon);
       var excess=leg1+leg2-chord;
-      if(excess<1.2&&xtk<12) continue;
+      if(excess<0.8&&xtk<8) continue;
       var cut=false;
-      if(xtk>=14&&chord<=leg1+leg2-4) cut=true;
-      else if(excess>=4) cut=true;
-      else if(excess>=3&&xtk>=11) cut=true;
-      else if(xtk>=22&&excess>=2) cut=true;
+      if(xtk>=10&&chord<=leg1+leg2-2) cut=true;
+      else if(excess>=3) cut=true;
+      else if(excess>=2&&xtk>=8) cut=true;
+      else if(xtk>=16&&excess>=1) cut=true;
       if(cut){hit=i;break;}
     }
     if(hit<0) break;
@@ -2451,10 +2451,10 @@ function densifyWaypointsByDistance(wpts,depRef,arrRef,profile){
         var along=alongTrackNmDepArr(a.lat,a.lon,b.lat,b.lon,n.lat,n.lon);
         if(along<8||along>leg-8) return;
         var xtk=crossTrackDist(a.lat,a.lon,b.lat,b.lon,n.lat,n.lon);
-        if(xtk>34) return;
+        if(xtk>28) return;
         if(depLat!=null&&arrLat!=null){
           var xtkDA=crossTrackDist(depLat,depLon,arrLat,arrLon,n.lat,n.lon);
-          if(xtkDA>30) return;
+          if(xtkDA>18) return;
           var alDA=alongTrackNmDepArr(depLat,depLon,arrLat,arrLon,n.lat,n.lon);
           if(alDA<10) return;
         }
@@ -2473,7 +2473,7 @@ function densifyWaypointsByDistance(wpts,depRef,arrRef,profile){
           var score=Math.abs(c.along-tgt)+(c.xtk*3.4);
           if(depLat!=null&&arrLat!=null){
             var xda=crossTrackDist(depLat,depLon,arrLat,arrLon,c.lat,c.lon);
-            score+=xda*1.35;
+            score+=xda*3.5;
           }
           if(distA2Arr!=null){
             var dC=gcDist(c.lat,c.lon,arrLat,arrLon);
@@ -6281,7 +6281,7 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
     :(direct>=520?4:direct>=260?3:direct>=195?2:1);
   var need=Math.max(needBase,minNeedByDistance);
   var conus=isConusCoord(dep.lat,dep.lon)&&isConusCoord(arr.lat,arr.lon);
-  var xtkMax=(rules==='VFR')?(direct>320?32:direct>160?28:24):48;
+  var xtkMax=(rules==='VFR')?(direct>320?22:direct>160?18:15):48;
   var airwayBias=rules==='IFR'?airwayBiasSetForCorridor(dep,arr):{};
   var routeHints=rules==='VFR'&&vfrVisualOn?buildVfrEnrouteHintSets(dep,arr):{victor:{},metro:{}};
   var cands=[];
@@ -6486,7 +6486,7 @@ function refineRouteIdsMonotonic(dep,arr,ids,rules){
   keep.push(ids[ids.length-1]);
   // Remove obvious out-of-the-way mids even when total ratio still looks acceptable.
   var direct=gcDist(dep.lat,dep.lon,arr.lat,arr.lon);
-  var xtkHard=(rules==='VFR')?Math.max(30,Math.min(62,direct*0.12)):Math.max(40,Math.min(78,direct*0.16));
+  var xtkHard=(rules==='VFR')?Math.max(12,Math.min(22,direct*0.055)):Math.max(40,Math.min(78,direct*0.16));
   for(var pr=0;pr<18&&keep.length>2;pr++){
     var cut=-1;
     for(var cj=1;cj<keep.length-1;cj++){
