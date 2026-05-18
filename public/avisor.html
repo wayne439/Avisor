@@ -802,13 +802,19 @@ canvas#cgc{display:block;width:100%;height:auto}
     <div class="field"><label>Date of Flight</label><input type="date" id="flt-date" class="date-input" style="-webkit-appearance:none;-webkit-text-fill-color:inherit"></div>
     <div class="row2">
       <div class="field">
-        <label>From ICAO</label>
-        <input id="dep" value="" maxlength="8" spellcheck="false" autocomplete="off" oninput="onRouteIcaoInput('dep')" onblur="onRouteIcaoBlur('dep')">
+        <label>From Airport</label>
+        <div style="position:relative">
+          <input id="dep" value="" maxlength="50" spellcheck="false" autocomplete="off" placeholder="ICAO or name" oninput="onRouteIcaoInput('dep')" onblur="onRouteIcaoBlur('dep')" onkeydown="onAptKeydown('dep',event)">
+          <div id="dep-apt-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#0d1322;border:1px solid #2a3350;border-top:none;z-index:900;max-height:220px;overflow-y:auto;border-radius:0 0 5px 5px;box-shadow:0 8px 24px rgba(0,0,0,.7)"></div>
+        </div>
         <div id="dep-icao-msg" class="icao-msg" aria-live="polite"></div>
       </div>
       <div class="field">
-        <label>To ICAO</label>
-        <input id="arr" value="" maxlength="8" spellcheck="false" autocomplete="off" oninput="onRouteIcaoInput('arr')" onblur="onRouteIcaoBlur('arr')">
+        <label>To Airport</label>
+        <div style="position:relative">
+          <input id="arr" value="" maxlength="50" spellcheck="false" autocomplete="off" placeholder="ICAO or name" oninput="onRouteIcaoInput('arr')" onblur="onRouteIcaoBlur('arr')" onkeydown="onAptKeydown('arr',event)">
+          <div id="arr-apt-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#0d1322;border:1px solid #2a3350;border-top:none;z-index:900;max-height:220px;overflow-y:auto;border-radius:0 0 5px 5px;box-shadow:0 8px 24px rgba(0,0,0,.7)"></div>
+        </div>
         <div id="arr-icao-msg" class="icao-msg" aria-live="polite"></div>
       </div>
     </div>
@@ -1416,13 +1422,96 @@ function validateRouteIcaoField(which){
 function onRouteIcaoInput(which){
   var el=document.getElementById(which);
   if(!el) return;
-  el.value=normalizeFormIcao(el.value);
+  var raw=el.value;
+  // Only uppercase-normalize while the input still looks like a pure ICAO code
+  if(/^[A-Za-z0-9]{0,8}$/.test(raw)){el.value=raw.toUpperCase();raw=el.value;}
+  _showAptSuggestions(which,raw);
   clearTimeout(_icaoValidateTimer);
-  _icaoValidateTimer=setTimeout(function(){validateRouteIcaoField(which);},300);
+  _icaoValidateTimer=setTimeout(function(){validateRouteIcaoField(which);},400);
 }
 function onRouteIcaoBlur(which){
+  setTimeout(function(){_hideAptSuggestions(which);},160);
   validateRouteIcaoField(which);
   scheduleAirportRefresh();
+}
+function _searchAirports(q,limit){
+  limit=limit||8;
+  if(!q||q.length<2) return [];
+  var Q=q.trim().toUpperCase();
+  var res=[],seen={};
+  function add(icao,name,s){var k=icao.toUpperCase();if(seen[k])return;seen[k]=true;res.push({icao:k,name:name||k,score:s});}
+  function rank(k,name){
+    var kU=k.toUpperCase(),nU=(name||'').toUpperCase();
+    if(kU===Q) return 100;
+    if(kU.indexOf(Q)===0) return 90-(kU.length-Q.length);
+    if(nU.indexOf(Q)===0) return 70;
+    if(nU.indexOf(Q)>=0) return 50;
+    return 0;
+  }
+  if(typeof AIRPORTS_DB!=='undefined'){
+    var ks=Object.keys(AIRPORTS_DB);
+    for(var i=0;i<ks.length;i++){var rec=AIRPORTS_DB[ks[i]];var n=Array.isArray(rec)?rec[0]:(rec&&rec.name)||ks[i];var s=rank(ks[i],n);if(s)add(ks[i],n,s);}
+  }
+  if(typeof APTS!=='undefined'){
+    var ak=Object.keys(APTS);
+    for(var j=0;j<ak.length;j++){var ar=APTS[ak[j]];var an=ar&&ar.name||ak[j];var as=rank(ak[j],an);if(as)add(ak[j],an,as);}
+  }
+  res.sort(function(a,b){return b.score-a.score;});
+  return res.slice(0,limit);
+}
+function _showAptSuggestions(which,query){
+  var drop=document.getElementById(which+'-apt-drop');
+  if(!drop) return;
+  if(!query||query.length<2){drop.style.display='none';drop.innerHTML='';return;}
+  var results=_searchAirports(query,8);
+  if(!results.length){drop.style.display='none';drop.innerHTML='';return;}
+  drop.innerHTML=results.map(function(r){
+    return '<div class="_apt-opt" data-icao="'+r.icao+'" data-which="'+which+'"'
+      +' onmousedown="event.preventDefault();selectAptSuggestion(\''+which+'\',\''+r.icao+'\')"'
+      +' onmouseover="this.style.background=\'#162038\'" onmouseout="if(!this.classList.contains(\'_apt-hl\'))this.style.background=\'\'"'
+      +' style="padding:9px 11px;cursor:pointer;border-bottom:1px solid #1b2540;display:flex;align-items:center;gap:10px">'
+      +'<span style="font-family:monospace;font-size:12px;color:#38beff;min-width:52px;flex-shrink:0">'+r.icao+'</span>'
+      +'<span style="font-size:11px;color:#c8d4ec;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.name+'</span>'
+      +'</div>';
+  }).join('');
+  drop.style.display='block';
+}
+function _hideAptSuggestions(which){
+  var drop=document.getElementById(which+'-apt-drop');
+  if(drop){drop.style.display='none';drop.innerHTML='';}
+}
+function selectAptSuggestion(which,icao){
+  var el=document.getElementById(which);
+  if(el){el.value=normalizeFormIcao(icao);}
+  _hideAptSuggestions(which);
+  validateRouteIcaoField(which);
+  scheduleAirportRefresh();
+}
+function onAptKeydown(which,e){
+  var drop=document.getElementById(which+'-apt-drop');
+  if(!drop||drop.style.display==='none') return;
+  var opts=Array.prototype.slice.call(drop.querySelectorAll('._apt-opt'));
+  if(!opts.length) return;
+  var cur=drop.querySelector('._apt-opt._apt-hl');
+  var idx=-1;
+  for(var i=0;i<opts.length;i++){if(opts[i]===cur){idx=i;break;}}
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    opts.forEach(function(o){o.classList.remove('_apt-hl');o.style.background='';});
+    var ni=Math.min(idx+1,opts.length-1);
+    opts[ni].classList.add('_apt-hl');opts[ni].style.background='#162038';opts[ni].scrollIntoView({block:'nearest'});
+  } else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    if(idx<=0) return;
+    opts.forEach(function(o){o.classList.remove('_apt-hl');o.style.background='';});
+    var pi=idx-1;
+    opts[pi].classList.add('_apt-hl');opts[pi].style.background='#162038';opts[pi].scrollIntoView({block:'nearest'});
+  } else if(e.key==='Enter'&&cur){
+    e.preventDefault();
+    selectAptSuggestion(which,cur.getAttribute('data-icao'));
+  } else if(e.key==='Escape'){
+    _hideAptSuggestions(which);
+  }
 }
 
 
