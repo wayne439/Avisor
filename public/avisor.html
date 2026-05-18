@@ -1059,7 +1059,7 @@ canvas#cgc{display:block;width:100%;height:auto}
       <div class="card c-p">
         <div class="card-h"><span class="card-title">Traffic Pattern Diagram</span><span class="badge b-p">LIVE</span></div>
         <div class="card-b">
-          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
             <select id="pat-rwy-sel" style="background:var(--bg2,#151c2e);border:1px solid var(--brd,#2a3350);color:var(--tx,#dde5f5);font-size:11px;padding:5px;font-family:monospace" onchange="drawPattern()">
               <option value="">-- Select Runway --</option>
             </select>
@@ -1068,8 +1068,17 @@ canvas#cgc{display:block;width:100%;height:auto}
               <option value="R">Right Traffic</option>
             </select>
           </div>
+          <div style="margin-bottom:8px">
+            <select id="pat-entry-type" style="width:100%;background:var(--bg2,#151c2e);border:1px solid var(--brd,#2a3350);color:var(--tx,#dde5f5);font-size:11px;padding:6px;font-family:monospace">
+              <option value="45">45° Entry (Best Side)</option>
+              <option value="straight">Straight In</option>
+              <option value="crossmid">Cross Midfield Teardrop</option>
+              <option value="crossdirect">Cross Midfield Direct</option>
+            </select>
+          </div>
           <canvas id="patcanvas" width="520" height="360" style="width:100%;background:#07090f;border:1px solid #1e2535"></canvas>
           <div id="pat-legs" style="margin-top:8px;font-size:9px;color:var(--tx2);font-family:monospace;line-height:1.8"></div>
+          <button onclick="addPatternWaypointsToRoute()" style="margin-top:10px;width:100%;padding:12px;background:#1a3a8f;border:1px solid #4488ff;color:#fff;font-size:13px;font-weight:700;font-family:monospace;letter-spacing:1px;cursor:pointer;border-radius:4px">+ ADD TO ROUTE</button>
         </div>
       </div>
     </div>
@@ -4377,9 +4386,9 @@ function scheduleGpsWatchRestart(){
     if(!navigator.geolocation)return;
     _planeWatchId=navigator.geolocation.watchPosition(onPlaneGeoUpdate,function(err){
       console.warn('Geolocation',err&&err.code,err&&err.message);
-      if(err&&err.code===1&&typeof toast==='function')toast('Location blocked — allow Location for this site');
+      if(err&&err.code===1&&typeof toast==='function')toast('Location blocked — allow Location in browser settings');
       if(err&&err.code!==1)scheduleGpsWatchRestart();
-    },{enableHighAccuracy:true,maximumAge:120000,timeout:120000});
+    },{enableHighAccuracy:true,maximumAge:15000,timeout:60000});
   },2000);
 }
 function startPlaneTrackerCore(){
@@ -4388,17 +4397,21 @@ function startPlaneTrackerCore(){
   if(!_trackLine)_trackLine=L.polyline([],{color:'#38beff',weight:2,opacity:0.85,dashArray:'4,4'}).addTo(_map);
   _planeWatchId=navigator.geolocation.watchPosition(onPlaneGeoUpdate,function(err){
     console.warn('Geolocation',err&&err.code,err&&err.message);
-    if(err&&err.code===1&&typeof toast==='function')toast('Location blocked — allow Location for this site');
+    if(err&&err.code===1&&typeof toast==='function')toast('Location blocked — allow Location in browser settings for this site');
     if(err&&err.code!==1)scheduleGpsWatchRestart();
-  },{enableHighAccuracy:true,maximumAge:120000,timeout:120000});
+  },{enableHighAccuracy:true,maximumAge:15000,timeout:60000});
   startGpsPollBackup();
 }
 function startPlaneTracker(){
   if(_planeWatchId!=null){stopPlaneTracker();return;}
   startPlaneTrackerCore();
+  // Auto-enable follow so map pans to plane immediately
+  _mapFollow=true;
+  var followBtn=document.getElementById('map-follow-btn');
+  if(followBtn){followBtn.style.background='#003d1a';followBtn.style.borderColor='#00e57a';}
   var btn=document.getElementById('map-gps-btn');
   if(btn){btn.textContent='✈ GPS OFF';btn.style.background='#301818';btn.style.borderColor='#cc4444';btn.style.color='#ffb0b0';}
-  if(typeof toast==='function')toast('GPS on — keep app visible; first fix may take 1–2 min (GNSS)');
+  if(typeof toast==='function')toast('GPS tracking on — map will follow your position. First fix may take ~30 sec with clear sky view.');
 }
 
 function stopPlaneTracker(){
@@ -4409,6 +4422,9 @@ function stopPlaneTracker(){
   _lastPlaneCoords=null;
   _terrainElevInFlight=false;
   _terrainElevLastPt=null;
+  _mapFollow=false;
+  var followBtn=document.getElementById('map-follow-btn');
+  if(followBtn){followBtn.style.background='';followBtn.style.borderColor='';}
   var hud=document.getElementById('flight-terrain-hud');
   if(hud)hud.style.display='none';
   var btn=document.getElementById('map-gps-btn');
@@ -6872,6 +6888,100 @@ function analyzeDepartureWindow(depTaf,arrTaf,dateStr,depMetar,arrMetar){
   if(hasGust) return {window:'CHECK WINDS — EARLY/EVENING',reason:'TAF shows gusts 30+kt. Winds typically lightest at dawn and early evening.'};
   return {window:'CONDITIONS FAVORABLE',reason:'No significant weather concerns in TAF. Early morning departure recommended for smooth air and best density altitude.'};
 }
+
+// ── PATTERN WAYPOINTS (ForeFlight-style Add to Route) ────────────
+function _ptCalc(fromLat,fromLon,bearingDeg,distNm){
+  var R=3440.065,b=bearingDeg*Math.PI/180,d=distNm/R;
+  var la=fromLat*Math.PI/180,lo=fromLon*Math.PI/180;
+  var la2=Math.asin(Math.sin(la)*Math.cos(d)+Math.cos(la)*Math.sin(d)*Math.cos(b));
+  var lo2=lo+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(la),Math.cos(d)-Math.sin(la)*Math.sin(la2));
+  return[la2*180/Math.PI,lo2*180/Math.PI];
+}
+function generatePatternWaypointsGeo(rwyHdg,rwyLat,rwyLon,leftTraffic,rwyId,entryType){
+  entryType=entryType||'45';
+  var turn=leftTraffic?-1:1;
+  var fin=(((rwyHdg%360)+360)%360);
+  var crossHdg=(fin+turn*90+360)%360;
+  var downHdg=(fin+180)%360;
+  var baseHdg=(fin+turn*270+360)%360;
+  var upNm=1.0,crossNm=0.55,downNm=1.05,baseNm=0.55,finalNm=0.65;
+  var thr=[rwyLat,rwyLon];
+  var upEnd=_ptCalc(thr[0],thr[1],fin,upNm);
+  var xwindPt=_ptCalc(upEnd[0],upEnd[1],crossHdg,crossNm);
+  var abeamPt=_ptCalc(xwindPt[0],xwindPt[1],downHdg,downNm);
+  var basePt=_ptCalc(abeamPt[0],abeamPt[1],baseHdg,baseNm);
+  var finalPt=_ptCalc(thr[0],thr[1],(fin+180)%360,finalNm);
+  var r=rwyId?String(rwyId).replace(/^RWY\s*/i,'').trim():'';
+  var sfx=r?r.replace(/[^A-Z0-9]/g,''):'';
+  if(entryType==='straight'){
+    return[
+      {id:'FINAL'+sfx,lat:finalPt[0],lon:finalPt[1],type:'user',desc:'Final Rwy '+r+' (straight-in)'}
+    ];
+  }
+  if(entryType==='crossmid'){
+    // Cross midfield then teardrop entry onto downwind
+    var midfield=_ptCalc(thr[0],thr[1],fin,upNm*0.5);
+    var tearBrg=(downHdg+turn*150+360)%360;
+    var tearEntry=_ptCalc(midfield[0],midfield[1],tearBrg,0.8);
+    return[
+      {id:'MIDXNG'+sfx,lat:midfield[0],lon:midfield[1],type:'user',desc:'Cross Midfield Rwy '+r},
+      {id:'ENTRY'+sfx, lat:tearEntry[0],lon:tearEntry[1],type:'user',desc:'Teardrop Entry Rwy '+r},
+      {id:'DWNWND'+sfx,lat:abeamPt[0],lon:abeamPt[1],type:'user',desc:'Abeam Numbers Rwy '+r+' (TPA)'},
+      {id:'BASE'+sfx,  lat:basePt[0], lon:basePt[1],  type:'user',desc:'Base Turn Rwy '+r},
+      {id:'FINAL'+sfx, lat:finalPt[0],lon:finalPt[1], type:'user',desc:'Final Rwy '+r}
+    ];
+  }
+  if(entryType==='crossdirect'){
+    // Cross midfield then descend directly to pattern side (no teardrop)
+    var midfield2=_ptCalc(thr[0],thr[1],fin,upNm*0.5);
+    var directEntry=_ptCalc(midfield2[0],midfield2[1],(downHdg+turn*90+360)%360,crossNm);
+    return[
+      {id:'MIDXNG'+sfx,lat:midfield2[0],lon:midfield2[1],type:'user',desc:'Cross Midfield Rwy '+r},
+      {id:'ENTRY'+sfx, lat:directEntry[0],lon:directEntry[1],type:'user',desc:'Direct Entry Rwy '+r},
+      {id:'DWNWND'+sfx,lat:abeamPt[0],lon:abeamPt[1],type:'user',desc:'Abeam Numbers Rwy '+r+' (TPA)'},
+      {id:'BASE'+sfx,  lat:basePt[0], lon:basePt[1],  type:'user',desc:'Base Turn Rwy '+r},
+      {id:'FINAL'+sfx, lat:finalPt[0],lon:finalPt[1], type:'user',desc:'Final Rwy '+r}
+    ];
+  }
+  // Default: 45° entry (Best Side per AIM)
+  // Entry point: approach abeam midfield at 45° to the downwind leg from outside
+  var midDownwind=_ptCalc(xwindPt[0],xwindPt[1],downHdg,downNm*0.5);
+  var entryBrg=(downHdg+(turn>0?-45:45)+360)%360; // 45° from outside into downwind
+  var entry45=_ptCalc(midDownwind[0],midDownwind[1],entryBrg,1.5);
+  return[
+    {id:'E45'+sfx,   lat:entry45[0], lon:entry45[1], type:'user',desc:'45° Entry Rwy '+r},
+    {id:'XWIND'+sfx, lat:xwindPt[0], lon:xwindPt[1], type:'user',desc:'Crosswind Turn Rwy '+r},
+    {id:'DWNWND'+sfx,lat:abeamPt[0], lon:abeamPt[1], type:'user',desc:'Abeam Numbers Rwy '+r+' (TPA)'},
+    {id:'BASE'+sfx,  lat:basePt[0],  lon:basePt[1],  type:'user',desc:'Base Turn Rwy '+r},
+    {id:'FINAL'+sfx, lat:finalPt[0], lon:finalPt[1], type:'user',desc:'Final Rwy '+r}
+  ];
+}
+function addPatternWaypointsToRoute(){
+  if(!STATE||!STATE.plan){if(typeof showToast==='function')showToast('Build a plan first.','warn');return;}
+  var sel=document.getElementById('pat-rwy-sel');
+  if(!sel||!sel.value){if(typeof showToast==='function')showToast('Select a runway first.','warn');return;}
+  var parts=sel.value.split('|');
+  var rwyId=parts[0],hdgMag=parseInt(parts[1])||180;
+  var dirSel=document.getElementById('pat-dir-sel');
+  var isLeft=!dirSel||dirSel.value!=='R';
+  var entryEl=document.getElementById('pat-entry-type');
+  var entryType=entryEl?entryEl.value:'45';
+  var g=getPatternMapGeometryFromPlan(STATE.plan);
+  if(!g){if(typeof showToast==='function')showToast('Cannot determine runway position.','warn');return;}
+  g.rwyHdg=hdgMag; g.leftTraffic=isLeft;
+  var newWpts=generatePatternWaypointsGeo(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,rwyId,entryType);
+  // Remove any existing pattern waypoints then append after destination
+  var wpts=(STATE.waypoints||[]).filter(function(w){
+    return!/^(E45|XWIND|DWNWND|BASE|FINAL|MIDXNG|ENTRY)/.test(String(w.id||'').toUpperCase());
+  });
+  STATE.waypoints=wpts.concat(newWpts);
+  if(typeof syncWaypointsAfterManualEdit==='function') syncWaypointsAfterManualEdit({skipToast:true});
+  // Draw on map too
+  drawPatternOnMap(g.rwyHdg,g.rwyLat,g.rwyLon,g.leftTraffic,g.altFt,g.rwyLenNm||0,false);
+  if(typeof tab==='function') tab('map');
+  if(typeof showToast==='function') showToast('Pattern waypoints added — re-download .fpl for ForeFlight','info');
+}
+// ─────────────────────────────────────────────────────────────────
 
 function drawPattern(){
   var sel=document.getElementById('pat-rwy-sel');
