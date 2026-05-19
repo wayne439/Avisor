@@ -2789,8 +2789,14 @@ function buildFPL(plan,wpts){
     var cm=((w.id?('SRC '+w.id+' - '):'')+(w.desc||'')).replace(/&/g,'&amp;').replace(/</g,'&lt;');
     return `    <Waypoint>\n      <Identifier>${w.eid}</Identifier>\n      <Type>${wType}</Type>\n      <Lat>${w.lat.toFixed(6)}</Lat>\n      <Lon>${w.lon.toFixed(6)}</Lon>\n      <Comment>${cm}</Comment>\n    </Waypoint>`;
   }).join('\n');
-  // Keep route string conservative for ForeFlight parser reliability.
-  const rs=`${plan.depIcao} ${plan.arrIcao}`;
+  // Route string: only charted identifiers (apt/vor/fix). GPS and pattern
+  // waypoints are not in ForeFlight's database — include them as Waypoints
+  // with coordinates only, never in the Route string.
+  const chartedIds=exportWpts
+    .filter(function(w){return w.type!=='vis'&&w.type!=='user';})
+    .map(function(w){return w.eid;})
+    .filter(function(id){return /^[A-Z0-9]{3,5}$/.test(id);});
+  const rs=chartedIds.length>=2?chartedIds.join(' '):`${plan.depIcao} ${plan.arrIcao}`;
   return`<?xml version="1.0" encoding="utf-8"?>\n<FlightAware>\n  <Flight>\n    <Ident>${tail}</Ident>\n    <Departure><AirportCode>${plan.depIcao}</AirportCode></Departure>\n    <Destination><AirportCode>${plan.arrIcao}</AirportCode></Destination>\n    <Route>${rs}</Route>\n    <CruiseAltitude>${plan.alt}</CruiseAltitude>\n    <Speed>${plan.ac.tas}</Speed>\n    <AircraftType>${plan.acid.toUpperCase()}</AircraftType>\n    <FlightRules>${plan.rules}</FlightRules>\n    <Waypoints>\n${wpXML}\n    </Waypoints>\n    <Notes>PilotAvisor | ${plan.ac.name} | ${plan.dist} NM | ETE ${plan.eteMin} min | ${now.toUTCString()}</Notes>\n  </Flight>\n</FlightAware>`;
 }
 
@@ -5058,7 +5064,12 @@ function cpRoute(which){if(!STATE.plan)return;navigator.clipboard.writeText(STAT
 function openFF(){
   if(!STATE.plan){ showToast('Build a flight plan first.'); return; }
   var p=STATE.plan;
-  var routeIds=(STATE.waypoints||[]).map(function(w){return String((w&&w.id)||'').toUpperCase().replace(/[^A-Z0-9]/g,'');})
+  // Only include charted fixes (apt/vor/fix) in the deep-link route query.
+  // GPS coordinate waypoints (vis) and pattern waypoints (user) are not in
+  // ForeFlight's database and cause "No Joy" errors.
+  var routeIds=(STATE.waypoints||[])
+    .filter(function(w){return w&&w.type!=='vis'&&w.type!=='user';})
+    .map(function(w){return String((w&&w.id)||'').toUpperCase().replace(/[^A-Z0-9]/g,'');})
     .filter(function(id){return /^[A-Z0-9]{3,5}$/.test(id)&&id.indexOf('USR')!==0&&!BLOCKED_ROUTE_IDS[id];});
   if(routeIds.length<2) routeIds=[p.depIcao,p.arrIcao];
   routeIds=routeIds.slice(0,18);
