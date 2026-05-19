@@ -2089,26 +2089,28 @@ async function buildWaypoints(plan){
   }
   // Add charted navaids/fixes; spacing from Options (default ~50–60 nm).
   if(!useGpsDirect&&wpts.length>=2){
-    var wpProf=readEnrouteWpSpacingProfile();
     if(rulesNorm==='VFR'&&!vfrVisualWp){
-      // VFR non-visual: corridor-builder already spaced waypoints well; don't over-densify
-      wpProf=Object.assign({},wpProf,{maxLegNm:220,minLegNm:110});
+      // VFR non-visual: great-circle route with 80nm spacing, VOR-snapped where available.
+      // Bypasses the VOR-corridor + densification pipeline that creates zigzag.
+      wpts=buildVfrDirectRoute(depRef,arrRef,80);
+    } else {
+      var wpProf=readEnrouteWpSpacingProfile();
+      wpts=densifyWaypointsByDistance(wpts,depRef,arrRef,wpProf);
+      wpts=splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,wpProf);
+      wpts=pruneWaypointProgressToArr(depRef,arrRef,wpts);
+      wpts=pruneBearingReversals(depRef,arrRef,wpts);
+      wpts=enforceDirectnessAndRebuild(depRef,arrRef,wpts,rulesNorm,wpProf);
+      wpts=splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,wpProf);
+      wpts=mergeCloseRouteWaypoints(wpts,wpProf.minLegNm);
+      wpts=simplifyRouteByDetourRemoval(depRef,arrRef,wpts);
+      wpts=pruneBearingReversals(depRef,arrRef,wpts);
+      wpts=pruneCorridorZigzags(depRef,arrRef,wpts);
+      wpts=simplifyRouteByDetourRemoval(depRef,arrRef,wpts);
+      wpts=pruneBearingReversals(depRef,arrRef,wpts);
+      wpts=pruneNotClosingOnDest(depRef,arrRef,wpts);
+      wpts=simplifyRouteByDetourRemoval(depRef,arrRef,wpts);
+      wpts=pruneBearingReversals(depRef,arrRef,wpts);
     }
-    wpts=densifyWaypointsByDistance(wpts,depRef,arrRef,wpProf);
-    wpts=splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,wpProf);
-    wpts=pruneWaypointProgressToArr(depRef,arrRef,wpts);
-    wpts=pruneBearingReversals(depRef,arrRef,wpts);
-    wpts=enforceDirectnessAndRebuild(depRef,arrRef,wpts,rulesNorm,wpProf);
-    wpts=splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,wpProf);
-    wpts=mergeCloseRouteWaypoints(wpts,wpProf.minLegNm);
-    wpts=simplifyRouteByDetourRemoval(depRef,arrRef,wpts);
-    wpts=pruneBearingReversals(depRef,arrRef,wpts);
-    wpts=pruneCorridorZigzags(depRef,arrRef,wpts);
-    wpts=simplifyRouteByDetourRemoval(depRef,arrRef,wpts);
-    wpts=pruneBearingReversals(depRef,arrRef,wpts);
-    wpts=pruneNotClosingOnDest(depRef,arrRef,wpts);
-    wpts=simplifyRouteByDetourRemoval(depRef,arrRef,wpts);
-    wpts=pruneBearingReversals(depRef,arrRef,wpts);
   }
   // Approach fixes
   let apchFixes=[];
@@ -6722,6 +6724,53 @@ function smartRouteGeometric(dep,arr,rules){
     });
   }
   return [dep.ident].concat(mids.slice(0,Math.max(need,mids.length))).concat([arr.ident]);
+}
+// Great-circle intermediate point at fraction f (0=dep, 1=arr)
+function gcIntermediate(depLat,depLon,arrLat,arrLon,f){
+  var φ1=depLat*Math.PI/180,λ1=depLon*Math.PI/180;
+  var φ2=arrLat*Math.PI/180,λ2=arrLon*Math.PI/180;
+  var δ=2*Math.asin(Math.sqrt(Math.pow(Math.sin((φ2-φ1)/2),2)+Math.cos(φ1)*Math.cos(φ2)*Math.pow(Math.sin((λ2-λ1)/2),2)));
+  if(δ<1e-10) return {lat:depLat,lon:depLon};
+  var A=Math.sin((1-f)*δ)/Math.sin(δ),B=Math.sin(f*δ)/Math.sin(δ);
+  var x=A*Math.cos(φ1)*Math.cos(λ1)+B*Math.cos(φ2)*Math.cos(λ2);
+  var y=A*Math.cos(φ1)*Math.sin(λ1)+B*Math.cos(φ2)*Math.sin(λ2);
+  var z=A*Math.sin(φ1)+B*Math.sin(φ2);
+  return {lat:Math.atan2(z,Math.sqrt(x*x+y*y))*180/Math.PI,lon:Math.atan2(y,x)*180/Math.PI};
+}
+// VFR direct route: waypoints every ~targetNm on the great-circle path, snapping to nearest VOR within 10nm
+function buildVfrDirectRoute(dep,arr,targetNm){
+  targetNm=targetNm||80;
+  var direct=gcDist(dep.lat,dep.lon,arr.lat,arr.lon);
+  var depWpt={id:String(dep.ident||'').toUpperCase(),lat:dep.lat,lon:dep.lon,type:'apt',desc:dep.name||dep.ident||'DEP'};
+  var arrWpt={id:String(arr.ident||'').toUpperCase(),lat:arr.lat,lon:arr.lon,type:'apt',desc:arr.name||arr.ident||'ARR'};
+  if(direct<90) return [depWpt,arrWpt];
+  var n=Math.max(1,Math.round(direct/targetNm)-1);
+  var snapNm=10;
+  var usedIds={};
+  var wpts=[depWpt];
+  for(var k=1;k<=n;k++){
+    var f=k/(n+1);
+    var pt=gcIntermediate(dep.lat,dep.lon,arr.lat,arr.lon,f);
+    var bestId=null,bestDist=snapNm,bestNv=null;
+    Object.keys(NAVCOORDS||{}).forEach(function(id){
+      var nv=NAVCOORDS[id];
+      if(!nv||!isFinite(nv.lat)||!isFinite(nv.lon)) return;
+      if(nv.type!=='vor') return;
+      if(BLOCKED_ROUTE_IDS[String(id).toUpperCase()]) return;
+      var d=gcDist(pt.lat,pt.lon,nv.lat,nv.lon);
+      if(d<bestDist){bestDist=d;bestId=id;bestNv=nv;}
+    });
+    if(bestId&&!usedIds[bestId.toUpperCase()]){
+      usedIds[bestId.toUpperCase()]=1;
+      wpts.push({id:bestId.toUpperCase(),lat:bestNv.lat,lon:bestNv.lon,type:'vor',freq:bestNv.freq||'',desc:bestNv.desc||bestId});
+    } else {
+      // GPS coordinate — no VOR within 10nm, place exact great-circle point
+      var gpId='P'+String(k).padStart(2,'0');
+      wpts.push({id:gpId,lat:pt.lat,lon:pt.lon,type:'vis',desc:'GPS '+pt.lat.toFixed(2)+'N '+Math.abs(pt.lon).toFixed(2)+'W'});
+    }
+  }
+  wpts.push(arrWpt);
+  return wpts;
 }
 async function smartRoute(dep,arr,rules){
   rules=normalizeFlightRules(rules);
