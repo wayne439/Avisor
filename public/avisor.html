@@ -7083,7 +7083,7 @@ function generatePatternWaypointsGeo(rwyHdg,rwyLat,rwyLon,leftTraffic,rwyId,entr
   var downHdg=(fin+180)%360;
   var baseHdg=(fin+turn*270+360)%360;
   // Standard GA pattern dimensions (nm) — real-world proportions
-  var upNm=0.4, crossNm=0.9, downNm=1.4, baseNm=0.8, finalNm=1.0, initNm=3.5;
+  var upNm=0.4, crossNm=0.9, downNm=1.4, baseNm=0.8, finalNm=1.0;
   var thr=[rwyLat,rwyLon];
   // Midpoint of runway (used for cross-midfield entries)
   var midfield=_ptCalc(thr[0],thr[1],fin,rwyLenNm*0.5);
@@ -7094,27 +7094,28 @@ function generatePatternWaypointsGeo(rwyHdg,rwyLat,rwyLon,leftTraffic,rwyId,entr
   var finalPt=_ptCalc(thr[0],thr[1],(fin+180)%360,finalNm);
   var r=rwyId?String(rwyId).replace(/^RWY\s*/i,'').trim():'';
   var sfx=r?r.replace(/[^A-Z0-9]/g,''):'';
-  // Direction FROM the traffic side TOWARD the non-traffic side + 45° offset
-  // This correctly places E45 on the non-traffic side of the pattern
-  var entryBrg=(crossHdg+180+45+360)%360;
   var midDownwind=_ptCalc(xwindPt[0],xwindPt[1],downHdg,downNm*0.5);
+  // Correct 45° entry bearing: pilot approaches at (downHdg ± 45°) from non-traffic side,
+  // so E45 is in the OPPOSITE direction from mid-downwind.
+  // LEFT traffic: approach heading = downHdg+45, E45 bearing from mid-downwind = fin+45
+  // RIGHT traffic: approach heading = downHdg-45, E45 bearing from mid-downwind = fin-45
+  var entryBrg=(fin+(turn>0?-45:45)+360)%360;
 
   if(entryType==='straight'){
-    // Initial TPA point 4nm on final; final fix 1nm out
-    var initFinal=_ptCalc(thr[0],thr[1],(fin+180)%360,initNm+0.5);
+    var initFinal=_ptCalc(thr[0],thr[1],(fin+180)%360,4.5);
     return[
-      {id:'INITTPA'+sfx,lat:initFinal[0],lon:initFinal[1],type:'user',desc:'Descend to TPA — Rwy '+r+' final ('+Math.round(initNm+0.5)+'nm)'},
+      {id:'INITTPA'+sfx,lat:initFinal[0],lon:initFinal[1],type:'user',desc:'Descend to TPA — Rwy '+r+' final (4.5nm out)'},
       {id:'FINAL'+sfx,  lat:finalPt[0], lon:finalPt[1],  type:'user',desc:'Final Rwy '+r+' (straight-in)'}
     ];
   }
 
   if(entryType==='crossmid'){
-    // Initial TPA point on non-traffic side before midfield crossing
-    var initCross=_ptCalc(midfield[0],midfield[1],(crossHdg+180)%360,initNm);
+    // INITTPA 4nm from threshold on non-traffic side before midfield crossing
+    var initCross=_ptCalc(thr[0],thr[1],(crossHdg+180)%360,4.0);
     var tearBrg=(downHdg+turn*150+360)%360;
     var tearEntry=_ptCalc(midfield[0],midfield[1],tearBrg,0.9);
     return[
-      {id:'INITTPA'+sfx,lat:initCross[0],  lon:initCross[1],  type:'user',desc:'Arrive at TPA+500 — cross midfield Rwy '+r},
+      {id:'INITTPA'+sfx,lat:initCross[0],  lon:initCross[1],  type:'user',desc:'Arrive at TPA+500 (4nm) — cross midfield Rwy '+r},
       {id:'MIDXNG'+sfx, lat:midfield[0],   lon:midfield[1],   type:'user',desc:'Cross Midfield Rwy '+r},
       {id:'ENTRY'+sfx,  lat:tearEntry[0],  lon:tearEntry[1],  type:'user',desc:'Teardrop Entry Rwy '+r},
       {id:'DWNWND'+sfx, lat:abeamPt[0],    lon:abeamPt[1],    type:'user',desc:'Abeam Numbers Rwy '+r+' (TPA)'},
@@ -7124,10 +7125,10 @@ function generatePatternWaypointsGeo(rwyHdg,rwyLat,rwyLon,leftTraffic,rwyId,entr
   }
 
   if(entryType==='crossdirect'){
-    var initCross2=_ptCalc(midfield[0],midfield[1],(crossHdg+180)%360,initNm);
+    var initCross2=_ptCalc(thr[0],thr[1],(crossHdg+180)%360,4.0);
     var directEntry=_ptCalc(midfield[0],midfield[1],crossHdg,crossNm);
     return[
-      {id:'INITTPA'+sfx,lat:initCross2[0], lon:initCross2[1], type:'user',desc:'Arrive at TPA+500 — cross midfield Rwy '+r},
+      {id:'INITTPA'+sfx,lat:initCross2[0], lon:initCross2[1], type:'user',desc:'Arrive at TPA+500 (4nm) — cross midfield Rwy '+r},
       {id:'MIDXNG'+sfx, lat:midfield[0],   lon:midfield[1],   type:'user',desc:'Cross Midfield Rwy '+r},
       {id:'ENTRY'+sfx,  lat:directEntry[0],lon:directEntry[1],type:'user',desc:'Direct Entry Downwind Rwy '+r},
       {id:'DWNWND'+sfx, lat:abeamPt[0],    lon:abeamPt[1],    type:'user',desc:'Abeam Numbers Rwy '+r+' (TPA)'},
@@ -7136,12 +7137,13 @@ function generatePatternWaypointsGeo(rwyHdg,rwyLat,rwyLon,leftTraffic,rwyId,entr
     ];
   }
 
-  // Default: 45° entry — entry bearing toward NON-TRAFFIC side at 45° to downwind
-  // INITTPA is 3.5nm out on same approach line; E45 is 1.5nm (downwind merge point)
-  var initEntry=_ptCalc(midDownwind[0],midDownwind[1],entryBrg,initNm);
+  // Default: 45° entry
+  // INITTPA: 4nm from threshold on the 45° approach path (pilot arrive at TPA here)
+  // E45: entry merge point at mid-downwind, 1.5nm from mid-downwind along same bearing
+  var initEntry=_ptCalc(thr[0],thr[1],entryBrg,4.0);
   var entry45=_ptCalc(midDownwind[0],midDownwind[1],entryBrg,1.5);
   return[
-    {id:'INITTPA'+sfx,lat:initEntry[0],lon:initEntry[1],type:'user',desc:'Arrive at TPA — Rwy '+r+' 45° entry (~'+Math.round(initNm)+'nm out)'},
+    {id:'INITTPA'+sfx,lat:initEntry[0],lon:initEntry[1],type:'user',desc:'Arrive at TPA — Rwy '+r+' 45° entry (4nm out)'},
     {id:'E45'+sfx,    lat:entry45[0],  lon:entry45[1],  type:'user',desc:'45° Entry Point Rwy '+r},
     {id:'DWNWND'+sfx, lat:abeamPt[0],  lon:abeamPt[1],  type:'user',desc:'Abeam Numbers Rwy '+r+' (TPA)'},
     {id:'BASE'+sfx,   lat:basePt[0],   lon:basePt[1],   type:'user',desc:'Base Turn Rwy '+r},
