@@ -2089,8 +2089,8 @@ async function buildWaypoints(plan){
   }
   // Add charted navaids/fixes; spacing from Options (default ~50–60 nm).
   if(!useGpsDirect&&wpts.length>=2){
-    if(rulesNorm==='VFR'&&!vfrVisualWp){
-      // VFR non-visual: great-circle route with 80nm spacing, VOR-snapped where available.
+    if(rulesNorm==='VFR'){
+      // VFR: great-circle route with 80nm spacing, VOR-snapped where available.
       // Bypasses the VOR-corridor + densification pipeline that creates zigzag.
       wpts=buildVfrDirectRoute(depRef,arrRef,80);
     } else {
