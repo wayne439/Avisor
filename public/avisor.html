@@ -3283,8 +3283,9 @@ async function buildPlan(){
     }
     // Fuel-stop flow calls buildWaypoints twice; persist merged route as final state.
     STATE.waypoints=wpts;
-    // Enhance with real VOR/NDB waypoints from corridor search
-    if(_navaidDB&&_navaidDB.length&&plan.dep&&plan.arr){
+    // Enhance with real VOR/NDB waypoints from corridor search — IFR only.
+    // VFR uses GPS great-circle waypoints that must not be overwritten with VOR inserts.
+    if(rules!=='VFR'&&_navaidDB&&_navaidDB.length&&plan.dep&&plan.arr){
       STATE.waypoints=enhanceWaypointsWithNavaids(STATE.waypoints,plan.dep.lat,plan.dep.lon,plan.arr.lat,plan.arr.lon);
       wpts=STATE.waypoints;
     }
