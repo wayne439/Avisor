@@ -6745,29 +6745,12 @@ function buildVfrDirectRoute(dep,arr,targetNm){
   var arrWpt={id:String(arr.ident||'').toUpperCase(),lat:arr.lat,lon:arr.lon,type:'apt',desc:arr.name||arr.ident||'ARR'};
   if(direct<90) return [depWpt,arrWpt];
   var n=Math.max(1,Math.round(direct/targetNm)-1);
-  var snapNm=10;
-  var usedIds={};
   var wpts=[depWpt];
   for(var k=1;k<=n;k++){
     var f=k/(n+1);
     var pt=gcIntermediate(dep.lat,dep.lon,arr.lat,arr.lon,f);
-    var bestId=null,bestDist=snapNm,bestNv=null;
-    Object.keys(NAVCOORDS||{}).forEach(function(id){
-      var nv=NAVCOORDS[id];
-      if(!nv||!isFinite(nv.lat)||!isFinite(nv.lon)) return;
-      if(nv.type!=='vor') return;
-      if(BLOCKED_ROUTE_IDS[String(id).toUpperCase()]) return;
-      var d=gcDist(pt.lat,pt.lon,nv.lat,nv.lon);
-      if(d<bestDist){bestDist=d;bestId=id;bestNv=nv;}
-    });
-    if(bestId&&!usedIds[bestId.toUpperCase()]){
-      usedIds[bestId.toUpperCase()]=1;
-      wpts.push({id:bestId.toUpperCase(),lat:bestNv.lat,lon:bestNv.lon,type:'vor',freq:bestNv.freq||'',desc:bestNv.desc||bestId});
-    } else {
-      // GPS coordinate — no VOR within 10nm, place exact great-circle point
-      var gpId='P'+String(k).padStart(2,'0');
-      wpts.push({id:gpId,lat:pt.lat,lon:pt.lon,type:'vis',desc:'GPS '+pt.lat.toFixed(2)+'N '+Math.abs(pt.lon).toFixed(2)+'W'});
-    }
+    var nm=Math.round(direct*f);
+    wpts.push({id:'D'+String(nm).padStart(4,'0'),lat:pt.lat,lon:pt.lon,type:'vis',desc:pt.lat.toFixed(3)+'N/'+Math.abs(pt.lon).toFixed(3)+'W ('+nm+'nm)'});
   }
   wpts.push(arrWpt);
   return wpts;
