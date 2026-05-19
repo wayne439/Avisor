@@ -2633,11 +2633,14 @@ function splitLongLegsWithCorridorFixes(depRef,arrRef,wpts,profile){
         var along=alongTrackNmDepArr(a.lat,a.lon,b.lat,b.lon,n.lat,n.lon);
         if(along<12||along>leg-12) return;
         var xtk=crossTrackDist(a.lat,a.lon,b.lat,b.lon,n.lat,n.lon);
-        if(xtk>46) return;
+        if(xtk>28) return;
         var dA=gcDist(a.lat,a.lon,n.lat,n.lon),dB=gcDist(n.lat,n.lon,b.lat,b.lon);
         if(dA>=leg-8||dB>=leg-8) return;
         var sc=Math.abs(along-(leg/2))+(xtk*3.5)+Math.abs(dA-dB)*0.22;
         if(depRef&&arrRef&&isFinite(Number(depRef.lat))&&isFinite(Number(arrRef.lat))){
+          var xtkDA=crossTrackDist(depRef.lat,depRef.lon,arrRef.lat,arrRef.lon,n.lat,n.lon);
+          var xtkDAlimit=leg>350?Math.min(36,leg*0.05):20;
+          if(xtkDA>xtkDAlimit) return;
           var al=alongTrackNmDepArr(depRef.lat,depRef.lon,arrRef.lat,arrRef.lon,n.lat,n.lon);
           if(al<10) return;
         }
