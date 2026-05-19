@@ -7158,13 +7158,14 @@ function generatePatternWaypointsGeo(rwyHdg,rwyLat,rwyLon,leftTraffic,rwyId,entr
   }
 
   // Default: 45° entry
-  // INITTPA: 4nm from threshold on the 45° approach path (pilot arrive at TPA here)
-  // E45: entry merge point at mid-downwind, 1.5nm from mid-downwind along same bearing
-  var initEntry=_ptCalc(thr[0],thr[1],entryBrg,4.0);
-  var entry45=_ptCalc(midDownwind[0],midDownwind[1],entryBrg,1.5);
+  // INITTPA: 4nm from the mid-downwind join point along the 45° approach path.
+  // E45: exactly at mid-downwind — the point where the pilot turns to fly the downwind heading.
+  // Measuring from mid-downwind (not threshold) keeps the entry path geometrically correct.
+  var initEntry=_ptCalc(midDownwind[0],midDownwind[1],entryBrg,4.0);
+  var entry45=midDownwind; // E45 IS the downwind join point
   return[
     {id:'INITTPA'+sfx,lat:initEntry[0],lon:initEntry[1],type:'user',desc:'Arrive at TPA — Rwy '+r+' 45° entry (4nm out)'},
-    {id:'E45'+sfx,    lat:entry45[0],  lon:entry45[1],  type:'user',desc:'45° Entry Point Rwy '+r},
+    {id:'E45'+sfx,    lat:entry45[0],  lon:entry45[1],  type:'user',desc:'Join Downwind Rwy '+r+' — turn to fly '+Math.round(downHdg)+'°'},
     {id:'DWNWND'+sfx, lat:abeamPt[0],  lon:abeamPt[1],  type:'user',desc:'Abeam Numbers Rwy '+r+' (TPA)'},
     {id:'BASE'+sfx,   lat:basePt[0],   lon:basePt[1],   type:'user',desc:'Base Turn Rwy '+r},
     {id:'FINAL'+sfx,  lat:finalPt[0],  lon:finalPt[1],  type:'user',desc:'Final Rwy '+r}
