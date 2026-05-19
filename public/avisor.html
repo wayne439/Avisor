@@ -2200,12 +2200,23 @@ async function buildWaypoints(plan){
   if(!useGpsDirect&&rulesNorm!=='VFR') wpts=ensureHalfwayWaypointIfShortTrip(depRef,arrRef,wpts);
   if(dropped>0&&typeof toast==='function') toast('Dropped '+dropped+' unverified waypoint(s)');
   // Insert VFR traffic pattern waypoints before the destination airport.
-  // Correct order: ...enroute... → INITTPA → E45 → DWNWND → BASE → FINAL → DEST
+  // Correct order: ...enroute... → INITTPA → E45/FINAL → DWNWND → BASE → FINAL → DEST
   if(rulesNorm==='VFR'&&favRwy&&isFinite(Number(favRwy.hdg))){
     var patLeft=(String(favRwy.pat||'L').toUpperCase()!=='R');
     var patLenNm=(Number(favRwy.len)||4000)/6076.12;
+    // Pick entry type based on approach direction vs runway heading.
+    // If the enroute approach bearing aligns with the runway final (<60°) → straight-in.
+    // Otherwise use 45° entry.
+    var entryTypePat='45';
+    var lastEnrWpt=wpts.length>=2?wpts[wpts.length-2]:null;
+    if(lastEnrWpt&&isFinite(lastEnrWpt.lat)&&isFinite(lastEnrWpt.lon)){
+      var rwyFinA=((Number(favRwy.hdg)%360)+360)%360;
+      var apprBrg=crsB(lastEnrWpt.lat,lastEnrWpt.lon,arrRef.lat,arrRef.lon);
+      var alignDeg=Math.abs(((apprBrg-rwyFinA+540)%360)-180);
+      if(alignDeg<60) entryTypePat='straight';
+    }
     var patWpts=generatePatternWaypointsGeo(
-      Number(favRwy.hdg),arrRef.lat,arrRef.lon,patLeft,favRwy.id,'45',patLenNm
+      Number(favRwy.hdg),arrRef.lat,arrRef.lon,patLeft,favRwy.id,entryTypePat,patLenNm
     );
     var dest=wpts[wpts.length-1];
     wpts=wpts.slice(0,-1).concat(patWpts).concat([dest]);
