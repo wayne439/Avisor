@@ -2471,6 +2471,12 @@ function pruneCorridorZigzags(depRef,arrRef,wpts){
       else if(excess>=3) cut=true;
       else if(excess>=2&&xtk>=8) cut=true;
       else if(xtk>=16&&excess>=1) cut=true;
+      // XTK sign-alternation (zigzag): C is on the opposite side of the direct track from both neighbours
+      if(!cut&&Math.abs(xtk)>=5){
+        var xtkP=crossTrackDist(dl,dLo,al,aLo,p.lat,p.lon);
+        var xtkN=crossTrackDist(dl,dLo,al,aLo,n.lat,n.lon);
+        if(Math.abs(xtkP)>=3&&Math.abs(xtkN)>=3&&(xtk>0)!==(xtkP>0)&&(xtk>0)!==(xtkN>0)){cut=true;}
+      }
       if(cut){hit=i;break;}
     }
     if(hit<0) break;
@@ -2559,7 +2565,8 @@ function densifyWaypointsByDistance(wpts,depRef,arrRef,profile){
         if(xtk>28) return;
         if(depLat!=null&&arrLat!=null){
           var xtkDA=crossTrackDist(depLat,depLon,arrLat,arrLon,n.lat,n.lon);
-          if(xtkDA>18) return;
+          var xtkDAlimit=leg>350?Math.min(38,leg*0.05):18;
+          if(xtkDA>xtkDAlimit) return;
           var alDA=alongTrackNmDepArr(depLat,depLon,arrLat,arrLon,n.lat,n.lon);
           if(alDA<10) return;
         }
@@ -6397,8 +6404,10 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
     ?(direct>=700?3:direct>=320?2:direct>=180?1:0)
     :(direct>=520?4:direct>=260?3:direct>=195?2:1);
   var need=Math.max(needBase,minNeedByDistance);
+  // Cap VFR waypoint count — too many picks from the corridor causes north/south zigzag
+  if(rules==='VFR') need=Math.min(need,9);
   var conus=isConusCoord(dep.lat,dep.lon)&&isConusCoord(arr.lat,arr.lon);
-  var xtkMax=(rules==='VFR')?(direct>320?22:direct>160?18:15):48;
+  var xtkMax=(rules==='VFR')?(direct>320?18:direct>160?15:12):48;
   var airwayBias=rules==='IFR'?airwayBiasSetForCorridor(dep,arr):{};
   var routeHints=rules==='VFR'&&vfrVisualOn?buildVfrEnrouteHintSets(dep,arr):{victor:{},metro:{}};
   var cands=[];
@@ -6467,17 +6476,22 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
   var minMidGap=Math.max(14,target*0.35);
   for(var k=1;k<=need;k++){
     var tgt=(direct*k)/(need+1),best=null,bs=1e9;
+    // Track XTK side of last selected waypoint to penalise sign-switching (zigzag)
+    var prevSelXtk=0;
+    if(mids.length){var pm=cands.find(function(x){return x.id===mids[mids.length-1];});if(pm)prevSelXtk=pm.xtk;}
     for(var j=0;j<cands.length;j++){
       var c=cands[j],cid=String(c.id).toUpperCase();
       if(used[cid]) continue;
-      var score=Math.abs(c.along-tgt)+(c.xtk*(rules==='VFR'?6.2:4.25));
+      var score=Math.abs(c.along-tgt)+(c.xtk*(rules==='VFR'?7.5:4.25));
       if(rules==='VFR'){
         if(routeHints.victor[cid]) score-=28;
         if(routeHints.metro[cid]) score-=10;
-        if(c.type==='vor') score-=22;       // VORs strongly preferred — reliable cross-country references
-        else if(c.type==='vis') score-=10;   // VFR visual checkpoints
+        if(c.type==='vor') score-=22;
+        else if(c.type==='vis') score-=10;
         else if(c.type==='fix') score+=2;
-        else if(c.type==='apt') score+=18;   // airports penalised — only fallback when nothing else fits
+        else if(c.type==='apt') score+=18;
+        // Penalise flipping from one side of the direct track to the other (causes zigzag)
+        if(prevSelXtk&&Math.abs(c.xtk)>4&&Math.abs(prevSelXtk)>4&&(c.xtk>0)!==(prevSelXtk>0)) score+=24;
       }else{
         if(airwayBias[cid]) score-=6;
         if(c.type==='apt') score+=6;
