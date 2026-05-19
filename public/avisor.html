@@ -2199,14 +2199,16 @@ async function buildWaypoints(plan){
   }
   if(!useGpsDirect&&rulesNorm!=='VFR') wpts=ensureHalfwayWaypointIfShortTrip(depRef,arrRef,wpts);
   if(dropped>0&&typeof toast==='function') toast('Dropped '+dropped+' unverified waypoint(s)');
-  // Auto-append VFR traffic pattern waypoints for arrival airport (45° entry, favRwy)
+  // Insert VFR traffic pattern waypoints before the destination airport.
+  // Correct order: ...enroute... → INITTPA → E45 → DWNWND → BASE → FINAL → DEST
   if(rulesNorm==='VFR'&&favRwy&&isFinite(Number(favRwy.hdg))){
     var patLeft=(String(favRwy.pat||'L').toUpperCase()!=='R');
     var patLenNm=(Number(favRwy.len)||4000)/6076.12;
     var patWpts=generatePatternWaypointsGeo(
       Number(favRwy.hdg),arrRef.lat,arrRef.lon,patLeft,favRwy.id,'45',patLenNm
     );
-    wpts=wpts.concat(patWpts);
+    var dest=wpts[wpts.length-1];
+    wpts=wpts.slice(0,-1).concat(patWpts).concat([dest]);
   }
   STATE.waypoints=wpts;STATE.apchFixes=apchFixes;
   return wpts;
