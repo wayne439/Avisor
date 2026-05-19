@@ -2155,6 +2155,8 @@ async function buildWaypoints(plan){
     if(!w||!w.id||!isFinite(Number(w.lat))||!isFinite(Number(w.lon))) {dropped++;return false;}
     var id=String(w.id).toUpperCase();
     if(BLOCKED_ROUTE_IDS[id]){ dropped++; return false; }
+    // GPS coordinate waypoints (vis) and user-defined pattern waypoints always pass
+    if(w.type==='vis'||w.type==='user') return true;
     if(knownFixIds[id]) return true;
     if(/^K[A-Z0-9]{3}$/.test(id)&&knownFixIds[id.slice(1)]) return true;
     if(id.length===3&&knownFixIds['K'+id]) return true;
@@ -2169,6 +2171,8 @@ async function buildWaypoints(plan){
     if(!w||!isFinite(Number(w.lat))||!isFinite(Number(w.lon))) return false;
     if(idx===0||idx===wpts.length-1) return true;
     if(BLOCKED_ROUTE_IDS[String(w.id||'').toUpperCase()]){ dropped++; return false; }
+    // GPS/user waypoints have verified coords — skip corridor gate
+    if(w.type==='vis'||w.type==='user') return true;
     var along=alongTrackNmDepArr(depLat,depLon,arrLat,arrLon,w.lat,w.lon);
     var xtk=crossTrackDist(depLat,depLon,arrLat,arrLon,w.lat,w.lon);
     var withinAlong=(along>=-15&&along<=totalDist+15);
@@ -2196,6 +2200,15 @@ async function buildWaypoints(plan){
   }
   if(!useGpsDirect) wpts=ensureHalfwayWaypointIfShortTrip(depRef,arrRef,wpts);
   if(dropped>0&&typeof toast==='function') toast('Dropped '+dropped+' unverified waypoint(s)');
+  // Auto-append VFR traffic pattern waypoints for arrival airport (45° entry, favRwy)
+  if(rulesNorm==='VFR'&&favRwy&&isFinite(Number(favRwy.hdg))){
+    var patLeft=(String(favRwy.pat||'L').toUpperCase()!=='R');
+    var patLenNm=(Number(favRwy.len)||4000)/6076.12;
+    var patWpts=generatePatternWaypointsGeo(
+      Number(favRwy.hdg),arrRef.lat,arrRef.lon,patLeft,favRwy.id,'45',patLenNm
+    );
+    wpts=wpts.concat(patWpts);
+  }
   STATE.waypoints=wpts;STATE.apchFixes=apchFixes;
   return wpts;
 }
