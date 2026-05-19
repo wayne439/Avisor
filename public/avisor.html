@@ -6410,14 +6410,14 @@ function buildCorridorRouteIds(dep,arr,rules,targetNm){
   if(direct<95&&!(rules==='VFR'&&vfrVisualOn)) return [dep.ident,arr.ident];
   var tn=Number(targetNm);
   var target=(isFinite(tn)&&tn>=25&&tn<=140)?tn:55;
-  var needBase=Math.max(1,Math.round(direct/(target*1.38))-1);
-  // Keep meaningful enroute references on longer flights (user preference: 3-4+ mids by distance).
+  // VFR: target leg spacing directly (60-100nm legs); IFR: use route-deviation factor
+  var needBase=(rules==='VFR')
+    ?Math.max(1,Math.round(direct/target)-1)
+    :Math.max(1,Math.round(direct/(target*1.38))-1);
   var minNeedByDistance=(rules==='VFR')
     ?(direct>=700?3:direct>=320?2:direct>=180?1:0)
     :(direct>=520?4:direct>=260?3:direct>=195?2:1);
   var need=Math.max(needBase,minNeedByDistance);
-  // Cap VFR waypoint count — too many picks from the corridor causes north/south zigzag
-  if(rules==='VFR') need=Math.min(need,9);
   var conus=isConusCoord(dep.lat,dep.lon)&&isConusCoord(arr.lat,arr.lon);
   var xtkMax=(rules==='VFR')?(direct>320?18:direct>160?15:12):48;
   var airwayBias=rules==='IFR'?airwayBiasSetForCorridor(dep,arr):{};
