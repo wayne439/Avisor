@@ -1205,6 +1205,7 @@ const APCHDB={
 // ══════════════════════════════════════════════════════════════════
 const APTS={
   KSDL:{ident:'KSDL',name:'Scottsdale',elev:1510,lat:33.6229,lon:-111.9106,rwys:[{id:'03',hdg:30,len:8249,pat:'L'},{id:'21',hdg:210,len:8249,pat:'L'}],pagl:1000},
+  KPRC:{ident:'KPRC',name:'Prescott Regional/Love Field',elev:5045,lat:34.6548,lon:-112.4192,rwys:[{id:'03L',hdg:24,len:7616,pat:'L'},{id:'21R',hdg:204,len:7616,pat:'R'},{id:'03R',hdg:24,len:4823,pat:'R'},{id:'21L',hdg:204,len:4823,pat:'L'}],pagl:1000},
   KCHD:{ident:'KCHD',name:'Chandler',elev:1243,lat:33.2691,lon:-111.8110,rwys:[{id:'04R',hdg:40,len:4871,pat:'L'},{id:'22L',hdg:220,len:4871,pat:'L'}],pagl:1000},
   KASE:{ident:'KASE',name:'Aspen/Pitkin County',elev:7820,lat:39.2232,lon:-106.8690,rwys:[{id:'15',hdg:150,len:8006,pat:'L'},{id:'33',hdg:330,len:8006,pat:'R'}],pagl:1000,mtn:true},
   KSAF:{ident:'KSAF',name:'Santa Fe Regional',elev:6348,lat:35.6171,lon:-106.0894,rwys:[{id:'02',hdg:20,len:8366,pat:'L'},{id:'20',hdg:200,len:8366,pat:'L'}],pagl:1000},
@@ -1877,8 +1878,8 @@ function _ourAirportsToRunway(row){
   var le=_normRwyRef(row.le_ident),he=_normRwyRef(row.he_ident);
   var len=Math.max(1000,Math.round(Number(row.length_ft)||0));
   var out=[];
-  if(le){out.push({id:le,hdg:Math.round(Number(row.le_heading_degT)||rwyLabelToHeading(le))%360,len:len,pat:'L',surface:row.surface||'',src:'ourairports'});}
-  if(he){out.push({id:he,hdg:Math.round(Number(row.he_heading_degT)||rwyLabelToHeading(he))%360,len:len,pat:'L',surface:row.surface||'',src:'ourairports'});}
+  if(le){out.push({id:le,hdg:Math.round(Number(row.le_heading_degT)||rwyLabelToHeading(le))%360,len:len,pat:/[Rr]$/.test(le)?'R':'L',surface:row.surface||'',src:'ourairports'});}
+  if(he){out.push({id:he,hdg:Math.round(Number(row.he_heading_degT)||rwyLabelToHeading(he))%360,len:len,pat:/[Rr]$/.test(he)?'R':'L',surface:row.surface||'',src:'ourairports'});}
   return out;
 }
 async function ensureOurAirportsRunways(){
@@ -2960,7 +2961,8 @@ async function applyIF(){
     var cleanRwy=rwy.replace(/^RWY\s*/,'');
     var fromDb=(p.arr&&p.arr.rwys||[]).find(function(x){return String(x.id).toUpperCase()===cleanRwy;});
     var fbHdg=rwyLabelToHeading(cleanRwy);
-    p.favRwy=fromDb||{id:cleanRwy,hdg:fbHdg,len:4000,pat:'L'};
+    var inferPat=/[Rr]$/.test(cleanRwy)?'R':'L';
+    p.favRwy=fromDb||{id:cleanRwy,hdg:fbHdg,len:4000,pat:inferPat};
     changes.push('Runway -> RWY '+cleanRwy);
     needsRouteRebuild=true;
   }
@@ -3424,6 +3426,7 @@ var NAVCOORDS={
 // ══ APT DATABASE ══════════════════════════════════════════════════
 var APT={
   KSDL:{ident:"KSDL",name:"Scottsdale",elev:1510,lat:33.6229,lon:-111.9106,rwys:[{id:"03",hdg:30,len:8249,pat:"L"},{id:"21",hdg:210,len:8249,pat:"L"}],pagl:1000},
+  KPRC:{ident:"KPRC",name:"Prescott Regional/Love Field",elev:5045,lat:34.6548,lon:-112.4192,rwys:[{id:"03L",hdg:24,len:7616,pat:"L"},{id:"21R",hdg:204,len:7616,pat:"R"},{id:"03R",hdg:24,len:4823,pat:"R"},{id:"21L",hdg:204,len:4823,pat:"L"}],pagl:1000},
   KEKS:{ident:"KEKS",name:"Ennis-Big Sky",elev:5423,lat:45.2757,lon:-111.6489,rwys:[{id:"16",hdg:163,len:6600,pat:"R"},{id:"34",hdg:343,len:6600,pat:"L"}],pagl:1000},
   "18AZ":{ident:"18AZ",name:"Sky Ranch At Carefree",elev:2569,lat:33.8186,lon:-111.8981,rwys:[{id:"03",hdg:30,len:2460,pat:"L"},{id:"21",hdg:210,len:2460,pat:"L"}],pagl:1000,pvt:true,nearestWx:"KSDL"},
   KPHX:{ident:"KPHX",name:"Phoenix Sky Harbor",elev:1135,lat:33.4343,lon:-112.0116,rwys:[{id:"08",hdg:80,len:11489,pat:"L"},{id:"26",hdg:260,len:11489,pat:"L"}],pagl:1500},
