@@ -2,7 +2,8 @@
  * Copy AVISOR single-file build into public/avisor.html for Vite serving.
  * Applies post-processing patches after every copy:
  *   1. showToast() helper  2. alert()->showToast()  3. console.log removal
- *   4. Pattern leg sizes   5. Entry bearing fix
+ *   4. Pattern leg sizes
+ * Entry bearing formula is now fixed in source — patch #5 removed.
  */
 const fs = require('fs');
 const path = require('path');
@@ -50,10 +51,6 @@ const oL='var legNm=0.38,crossNm=0.34,depNm=0.48,downNm=0.55,finalNm=0.28;';
 const nL='var legNm=0.5,crossNm=0.5,depNm=0.9,downNm=1.0,finalNm=0.5;';
 if(html.includes(oL)){html=html.replace(oL,nL);p++;console.log('  Pattern legs fixed');}
 else if(!html.includes(nL)){console.log('  [warn] Pattern leg string not found');}
-const oE='var ea=(hdg+180+(isLeft?45:-45))*Math.PI/180;';
-const nE='var ea=((hdg+(isLeft?-45:45)+360)%360)*Math.PI/180;';
-if(html.includes(oE)){html=html.replace(oE,nE);p++;console.log('  Entry bearing fixed');}
-else if(!html.includes(nE)){console.log('  [warn] Entry bearing string not found');}
 fs.writeFileSync(dest, html, 'utf8');
 console.log('Done.', p, 'patches applied.');
 const {spawnSync}=require('child_process');
