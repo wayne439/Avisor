@@ -653,6 +653,7 @@ canvas#cgc{display:block;width:100%;height:auto}
       <div class="card c-b"><div class="card-h"><span class="card-title">Departure</span><span class="badge b-b" id="dep-cat">—</span></div><div class="card-b"><div id="dep-wx-rows"></div><div class="raw-block" id="dep-metar-raw">—</div><div style="font-family:var(--mono);font-size:8px;color:var(--txt3);margin-top:5px">TAF</div><div class="raw-block" id="dep-taf-raw">—</div></div></div>
       <div class="card c-g"><div class="card-h"><span class="card-title">Destination</span><span class="badge b-g" id="arr-cat">—</span></div><div class="card-b"><div id="arr-wx-rows"></div><div class="raw-block" id="arr-metar-raw">—</div><div style="font-family:var(--mono);font-size:8px;color:var(--txt3);margin-top:5px">TAF</div><div class="raw-block" id="arr-taf-raw">—</div></div></div>
       <div class="card c-a"><div class="card-h"><span class="card-title">En Route Winds</span></div><div class="card-b" id="winds-body"></div></div>
+      <div class="card c-a" style="margin-top:10px"><div class="card-h" style="display:flex;align-items:center;justify-content:space-between"><span class="card-title">Route Weather Strip</span><button onclick="renderRouteWx()" style="font-size:9px;font-family:var(--mono);background:none;border:1px solid var(--txt3);color:var(--txt3);padding:2px 9px;cursor:pointer;border-radius:2px;letter-spacing:0.5px">↻ REFRESH</button></div><div class="card-b" id="route-wx-body"><div style="color:var(--txt3);font-size:11px;padding:4px">Build a plan to load route weather.</div></div></div>
     </div>
   </div>
 
@@ -1440,6 +1441,30 @@ async function fTaf(icao){
     var row=(await r.json())?.[0]||null;
     return row?normalizeAwMetarTaf(row):null;
   }catch(e){console.warn('TAF',icao,e&&e.message);return null;}
+}
+async function fMetarBatch(icaos){
+  if(!icaos||!icaos.length)return{};
+  try{
+    var base=location.protocol==='file:'?'https://aviationweather.gov':'';
+    var r=await fetchJSONTimeout(base+'/awc-api/data/metar?ids='+encodeURIComponent(icaos.join(','))+'&format=json&hours=2',null,10000);
+    if(!r.ok)return{};
+    var arr=await r.json();
+    var map={};
+    (arr||[]).forEach(function(ob){if(ob&&ob.icaoId)map[ob.icaoId.toUpperCase()]=normalizeAwMetarTaf(ob);});
+    return map;
+  }catch(e){return{};}
+}
+async function fTafBatch(icaos){
+  if(!icaos||!icaos.length)return{};
+  try{
+    var base=location.protocol==='file:'?'https://aviationweather.gov':'';
+    var r=await fetchJSONTimeout(base+'/awc-api/data/taf?ids='+encodeURIComponent(icaos.join(','))+'&format=json',null,10000);
+    if(!r.ok)return{};
+    var arr=await r.json();
+    var map={};
+    (arr||[]).forEach(function(ob){if(ob&&ob.icaoId)map[ob.icaoId.toUpperCase()]=normalizeAwMetarTaf(ob);});
+    return map;
+  }catch(e){return{};}
 }
 function getFaaNotamApiKey(){
   var el=document.getElementById('faa-notam-key');
@@ -2356,6 +2381,55 @@ function renderWx(p){
     '<a href="https://aviationweather.gov/windtemp/" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 12px;border:1px solid var(--grn);color:var(--grn);font-family:monospace;font-size:9px;letter-spacing:1px;text-decoration:none">&#9883; WINDS ALOFT</a>'+
     '</div>'+
     '<div style="margin-top:6px;font-size:8px;color:var(--txt3);font-family:monospace">1800wxbrief.com is the FAA official briefing system. Opens pre-filled with your route for '+fltDate2+'.</div>';
+  renderRouteWx();
+}
+
+async function renderRouteWx(){
+  var body=document.getElementById('route-wx-body');
+  if(!body)return;
+  var plan=STATE.plan;
+  var wpts=(STATE.waypoints||[]).filter(function(w){return w.type==='apt';});
+  if(!wpts.length){body.innerHTML='<div style="color:var(--txt3);font-size:11px;padding:4px">No airports in route.</div>';return;}
+  body.innerHTML='<div style="color:var(--txt3);font-size:11px;padding:6px">Fetching weather for '+wpts.length+' airport'+(wpts.length>1?'s':'')+'...</div>';
+  var icaos=wpts.map(function(w){return(w.id||'').toUpperCase().replace(/[^A-Z0-9]/g,'');}).filter(Boolean);
+  var results=await Promise.all([fMetarBatch(icaos),fTafBatch(icaos)]);
+  var mmap=results[0],tmap=results[1];
+  var catColor={VFR:'#00c060',MVFR:'#3399ff',IFR:'#ff4444',LIFR:'#cc44ff'};
+  var catBg={VFR:'rgba(0,192,96,.07)',MVFR:'rgba(51,153,255,.07)',IFR:'rgba(255,68,68,.07)',LIFR:'rgba(204,68,255,.07)'};
+  var depId=plan?plan.depIcao.toUpperCase():'';
+  var arrId=plan?plan.arrIcao.toUpperCase():'';
+  var html='';
+  wpts.forEach(function(w,idx){
+    var id=(w.id||'').toUpperCase();
+    var m=mmap[id]||null;
+    var t=tmap[id]||null;
+    var cat=m&&m.fltCat?m.fltCat:'UNK';
+    var cc=catColor[cat]||'#666';
+    var cbg=catBg[cat]||'transparent';
+    var wind=wfmt(m);
+    var sky=skyFmt(m);
+    var raw=m&&m.rawOb?m.rawOb:'No METAR available';
+    var tafRaw=t&&(t.rawTAF||t.rawTaf)?t.rawTAF||t.rawTaf:'';
+    var isFirst=id===depId||idx===0;
+    var isLast=id===arrId||idx===wpts.length-1;
+    var label=isFirst?'DEP':isLast?'ARR':'EN ROUTE';
+    var borderCol=isFirst?'var(--ac)':isLast?'#00c878':'#557a66';
+    html+='<div style="border-left:3px solid '+borderCol+';background:'+cbg+';padding:7px 10px 8px;margin-bottom:8px;border-radius:0 4px 4px 0">';
+    html+='<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">';
+    html+='<span style="font-family:var(--mono);font-weight:700;font-size:13px;color:#fff">'+id+'</span>';
+    html+='<span style="background:'+cc+';color:#000;font-size:8px;font-weight:700;padding:1px 6px;border-radius:2px;letter-spacing:0.5px">'+cat+'</span>';
+    html+='<span style="font-size:8px;color:#888;font-family:var(--mono);letter-spacing:0.5px">'+label+'</span>';
+    if(w.desc){html+='<span style="font-size:8px;color:var(--txt3);margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px" title="'+w.desc.replace(/"/g,"'")+'">'+w.desc+'</span>';}
+    html+='</div>';
+    html+='<div style="font-family:var(--mono);font-size:10px;color:var(--txt2);margin-bottom:3px">'+wind+' &nbsp;·&nbsp; '+sky+'</div>';
+    html+='<div style="font-family:var(--mono);font-size:9px;color:#888;word-break:break-all;white-space:pre-wrap">'+raw+'</div>';
+    if(tafRaw){
+      html+='<details style="margin-top:5px"><summary style="font-size:8px;color:var(--txt3);cursor:pointer;letter-spacing:0.5px;font-family:var(--mono)">TAF ▸</summary>';
+      html+='<div style="font-family:var(--mono);font-size:9px;color:#777;word-break:break-all;white-space:pre-wrap;margin-top:3px;padding:4px 6px;background:rgba(0,0,0,.25);border-radius:2px">'+tafRaw+'</div></details>';
+    }
+    html+='</div>';
+  });
+  body.innerHTML=html||'<div style="color:var(--txt3);font-size:11px;padding:4px">No weather data returned.</div>';
 }
 
 function renderNotams(p){
