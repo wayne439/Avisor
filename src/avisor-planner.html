@@ -2315,46 +2315,101 @@ async function renderRouteWx(){
   var plan=STATE.plan;
   var wpts=(STATE.waypoints||[]).filter(function(w){return w.type==='apt';});
   if(!wpts.length){body.innerHTML='<div style="color:var(--txt3);font-size:11px;padding:4px">No airports in route.</div>';return;}
-  body.innerHTML='<div style="color:var(--txt3);font-size:11px;padding:6px">Fetching weather for '+wpts.length+' airport'+(wpts.length>1?'s':'')+'...</div>';
+  body.innerHTML='<div style="color:var(--txt3);font-size:11px;padding:6px">Fetching weather + corridor airports...</div>';
   var icaos=wpts.map(function(w){return(w.id||'').toUpperCase().replace(/[^A-Z0-9]/g,'');}).filter(Boolean);
-  var results=await Promise.all([fMetarBatch(icaos),fTafBatch(icaos)]);
-  var mmap=results[0],tmap=results[1];
-  var catColor={VFR:'#00c060',MVFR:'#3399ff',IFR:'#ff4444',LIFR:'#cc44ff'};
-  var catBg={VFR:'rgba(0,192,96,.07)',MVFR:'rgba(51,153,255,.07)',IFR:'rgba(255,68,68,.07)',LIFR:'rgba(204,68,255,.07)'};
   var depId=plan?plan.depIcao.toUpperCase():'';
   var arrId=plan?plan.arrIcao.toUpperCase():'';
-  var html='';
-  wpts.forEach(function(w,idx){
-    var id=(w.id||'').toUpperCase();
-    var m=mmap[id]||null;
-    var t=tmap[id]||null;
+  var allData=await Promise.all([
+    Promise.all([fMetarBatch(icaos),fTafBatch(icaos)]),
+    _fetchCorridorMetars()
+  ]);
+  var mmap=allData[0][0],tmap=allData[0][1],corridorObs=allData[1];
+  var catColor={VFR:'#00c060',MVFR:'#3399ff',IFR:'#ff4444',LIFR:'#cc44ff'};
+  var catBg={VFR:'rgba(0,192,96,.07)',MVFR:'rgba(51,153,255,.07)',IFR:'rgba(255,68,68,.07)',LIFR:'rgba(204,68,255,.07)'};
+  function wxBlock(id,m,t,label,borderCol,showTaf){
     var cat=m&&m.fltCat?m.fltCat:'UNK';
     var cc=catColor[cat]||'#666';
     var cbg=catBg[cat]||'transparent';
-    var wind=wfmt(m);
-    var sky=skyFmt(m);
-    var raw=m&&m.rawOb?m.rawOb:'No METAR available';
+    var wind=wfmt(m);var sky=skyFmt(m);
+    var raw=m&&m.rawOb?m.rawOb:'No METAR';
     var tafRaw=t&&(t.rawTAF||t.rawTaf)?t.rawTAF||t.rawTaf:'';
-    var isFirst=id===depId||idx===0;
-    var isLast=id===arrId||idx===wpts.length-1;
-    var label=isFirst?'DEP':isLast?'ARR':'EN ROUTE';
-    var borderCol=isFirst?'var(--ac)':isLast?'#00c878':'#557a66';
-    html+='<div style="border-left:3px solid '+borderCol+';background:'+cbg+';padding:7px 10px 8px;margin-bottom:8px;border-radius:0 4px 4px 0">';
-    html+='<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">';
-    html+='<span style="font-family:var(--mono);font-weight:700;font-size:13px;color:#fff">'+id+'</span>';
-    html+='<span style="background:'+cc+';color:#000;font-size:8px;font-weight:700;padding:1px 6px;border-radius:2px;letter-spacing:0.5px">'+cat+'</span>';
-    html+='<span style="font-size:8px;color:#888;font-family:var(--mono);letter-spacing:0.5px">'+label+'</span>';
-    if(w.desc){html+='<span style="font-size:8px;color:var(--txt3);margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px" title="'+w.desc.replace(/"/g,"'")+'">'+w.desc+'</span>';}
-    html+='</div>';
-    html+='<div style="font-family:var(--mono);font-size:10px;color:var(--txt2);margin-bottom:3px">'+wind+' &nbsp;·&nbsp; '+sky+'</div>';
-    html+='<div style="font-family:var(--mono);font-size:9px;color:#888;word-break:break-all;white-space:pre-wrap">'+raw+'</div>';
+    var name=m&&(m.name||m.site)?String(m.name||m.site):'';
+    var h='<div style="border-left:3px solid '+borderCol+';background:'+cbg+';padding:7px 10px 8px;margin-bottom:8px;border-radius:0 4px 4px 0">';
+    h+='<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">';
+    h+='<span style="font-family:var(--mono);font-weight:700;font-size:13px;color:#fff">'+id+'</span>';
+    h+='<span style="background:'+cc+';color:#000;font-size:8px;font-weight:700;padding:1px 6px;border-radius:2px;letter-spacing:0.5px">'+cat+'</span>';
+    h+='<span style="font-size:8px;color:#888;font-family:var(--mono);letter-spacing:0.5px">'+label+'</span>';
+    if(name){h+='<span style="font-size:8px;color:var(--txt3);margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px" title="'+name.replace(/"/g,"'")+'">'+name+'</span>';}
+    h+='</div>';
+    h+='<div style="font-family:var(--mono);font-size:10px;color:var(--txt2);margin-bottom:3px">'+wind+' &nbsp;·&nbsp; '+sky+'</div>';
+    h+='<div style="font-family:var(--mono);font-size:9px;color:#888;word-break:break-all;white-space:pre-wrap">'+raw+'</div>';
     if(tafRaw){
-      html+='<details style="margin-top:5px"><summary style="font-size:8px;color:var(--txt3);cursor:pointer;letter-spacing:0.5px;font-family:var(--mono)">TAF ▸</summary>';
-      html+='<div style="font-family:var(--mono);font-size:9px;color:#777;word-break:break-all;white-space:pre-wrap;margin-top:3px;padding:4px 6px;background:rgba(0,0,0,.25);border-radius:2px">'+tafRaw+'</div></details>';
+      h+='<details'+(showTaf?' open':'')+' style="margin-top:5px"><summary style="font-size:8px;color:#88aabb;cursor:pointer;letter-spacing:0.5px;font-family:var(--mono)">TAF ▸</summary>';
+      h+='<div style="font-family:var(--mono);font-size:9px;color:#7799aa;word-break:break-all;white-space:pre-wrap;margin-top:3px;padding:4px 6px;background:rgba(0,30,50,.35);border-left:2px solid #1a4060;border-radius:0 2px 2px 0">'+tafRaw+'</div></details>';
+    } else if(showTaf){
+      h+='<div style="font-size:8px;color:#3a5060;margin-top:3px;font-family:var(--mono)">No TAF — only available at major reporting airports</div>';
     }
-    html+='</div>';
+    h+='</div>';
+    return h;
+  }
+  var html='';
+  wpts.forEach(function(w,idx){
+    var id=(w.id||'').toUpperCase();
+    var isFirst=id===depId||idx===0,isLast=id===arrId||idx===wpts.length-1;
+    html+=wxBlock(id,mmap[id]||null,tmap[id]||null,isFirst?'DEP':isLast?'ARR':'EN ROUTE',isFirst?'var(--ac)':isLast?'#00c878':'#557a66',isFirst||isLast);
   });
+  if(corridorObs&&corridorObs.length){
+    var planIds=new Set(icaos);
+    var nearby=corridorObs
+      .filter(function(ob){return ob&&ob.icaoId&&!planIds.has((ob.icaoId||'').toUpperCase());})
+      .filter(function(ob){
+        var minD=Infinity;
+        var ww=STATE.waypoints||[];
+        for(var i=1;i<ww.length;i++){
+          var a=ww[i-1],b=ww[i];
+          var dx=b.lon-a.lon,dy=b.lat-a.lat,lenSq=dx*dx+dy*dy;
+          var t2=lenSq<1e-12?0:Math.max(0,Math.min(1,((Number(ob.lon)-a.lon)*dx+(Number(ob.lat)-a.lat)*dy)/lenSq));
+          var d=gcDist(Number(ob.lat),Number(ob.lon),a.lat+t2*dy,a.lon+t2*dx);
+          if(d<minD)minD=d;
+        }
+        return minD<=30;
+      })
+      .sort(function(a,b){
+        var da=plan&&plan.dep?gcDist(plan.dep.lat,plan.dep.lon,Number(a.lat)||0,Number(a.lon)||0):0;
+        var db=plan&&plan.dep?gcDist(plan.dep.lat,plan.dep.lon,Number(b.lat)||0,Number(b.lon)||0):0;
+        return da-db;
+      })
+      .slice(0,20);
+    if(nearby.length){
+      html+='<div style="font-size:8px;color:#3a6a4a;letter-spacing:1px;font-family:var(--mono);margin:12px 0 6px;padding:4px 8px;background:rgba(0,60,20,.2);border-radius:2px">CORRIDOR AIRPORTS — '+nearby.length+' nearby stations</div>';
+      nearby.forEach(function(ob){
+        html+=wxBlock((ob.icaoId||'').toUpperCase(),ob,null,'CORRIDOR','#2a4a3a',false);
+      });
+    }
+  }
   body.innerHTML=html||'<div style="color:var(--txt3);font-size:11px;padding:4px">No weather data returned.</div>';
+}
+async function _fetchCorridorMetars(){
+  if(!STATE.waypoints||!STATE.waypoints.length||!STATE.plan) return [];
+  try{
+    var ww=STATE.waypoints;
+    var lats=ww.map(function(w){return w.lat;});
+    var lons=ww.map(function(w){return w.lon;});
+    var pad=0.4;
+    var minLat=(Math.min.apply(null,lats)-pad).toFixed(3);
+    var maxLat=(Math.max.apply(null,lats)+pad).toFixed(3);
+    var minLon=(Math.min.apply(null,lons)-pad).toFixed(3);
+    var maxLon=(Math.max.apply(null,lons)+pad).toFixed(3);
+    var base=location.protocol==='file:'?'https://aviationweather.gov':'';
+    var url=base+'/awc-api/data/metar?bbox='+minLat+','+minLon+','+maxLat+','+maxLon+'&format=json&hours=2';
+    var r=await fetchJSONTimeout(url,null,12000);
+    if(!r||!r.ok) return [];
+    var arr=await r.json();
+    return (arr||[]).map(function(ob){return normalizeAwMetarTaf(ob);}).filter(function(ob){
+      var id=(ob&&ob.icaoId||'').toUpperCase();
+      return id.length===4&&/^[A-Z]/.test(id);
+    });
+  }catch(e){return [];}
 }
 
 function renderNotams(p){
