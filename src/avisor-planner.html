@@ -2543,8 +2543,8 @@ function drawPatternOnMap(rwyHdg,rwyLat,rwyLon,leftTraffic,altFt){
     [rwyLat,rwyLon],depEnd,crossStart,downwindStart,baseStart,finalStart,[rwyLat,rwyLon]
   ];
   _patternLayer=L.polyline(patternPts,{color:'#ff9900',weight:2.5,opacity:0.9}).addTo(_map);
-  // 45° entry approach: dashed green line arriving at the downwind leg start at 45° to runway
-  var entryPt=crossStart;
+  // 45° entry approach: dashed green line arriving at the midpoint of the downwind leg at 45° to runway
+  var entryPt=pt(crossStart[0],crossStart[1],downwindHdg,dep);
   var approachBearing=(hdgDeg+(leftTraffic?45:-45)+360)%360;
   var approachStart=pt(entryPt[0],entryPt[1],approachBearing,1.8);
   var entryLine=L.polyline([approachStart,entryPt],{color:'#00e878',weight:2,dashArray:'5 7',opacity:0.85}).addTo(_map);
@@ -2804,8 +2804,8 @@ function showPatternOnMap(){
   if(!STATE||!STATE.plan){if(typeof toast==='function')toast('Build a plan first');return;}
   var p=STATE.plan;
   if(!p.arr||!p.arr.lat){if(typeof toast==='function')toast('No destination data');return;}
-  var rwyHdg=p.favRwy?parseInt(p.favRwy.id)*10:360;
-  var leftTraffic=p.favRwy?p.favRwy.traffic!=='R':true;
+  var rwyHdg=p.favRwy?(p.favRwy.hdg!=null?p.favRwy.hdg:parseInt(p.favRwy.id)*10):360;
+  var leftTraffic=p.favRwy?((p.favRwy.pat||'L')!=='R'):true;
   var elev=p.arr.elev||p.arr.elevation||0;
   // Use runway threshold if available, otherwise airport center
   var rwyLat=p.arr.lat, rwyLon=p.arr.lon;
