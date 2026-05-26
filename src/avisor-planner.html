@@ -547,6 +547,13 @@ canvas#cgc{display:block;width:100%;height:auto}
     <div id="d-brief" style="display:none">
       <div class="stat-grid" id="stat-grid"></div>
       <div id="terrain-alert"></div>
+      <div class="card" style="border-color:#00aa55;background:rgba(0,40,20,.55)">
+        <div class="card-h"><span class="card-title">✈ Flight Following</span><span class="badge b-g" id="brief-gps-status" style="min-width:32px">OFF</span></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:8px">
+          <button type="button" id="brief-fly-btn" data-gc="var(--grn)" onclick="togglePlaneTracker()" style="width:100%;padding:10px 0;background:transparent;border:1px solid var(--grn);color:var(--grn);font-family:var(--mono);font-size:11px;letter-spacing:1px;cursor:pointer;transition:all .15s">✈ START FLIGHT — OPEN MAP + GPS</button>
+          <div style="font-size:10px;color:var(--txt3);font-family:var(--mono);line-height:1.6">Tap to enable GPS. Your plane icon appears on the sectional map, the map follows your position, and next-waypoint distance/ETE updates live. Tap again to stop.</div>
+        </div>
+      </div>
       <div class="card c-g" id="brief-pattern-card">
         <div class="card-h"><span class="card-title">Arrival — Pattern &amp; altitude</span><span class="badge b-g">AT DEST</span></div>
         <div class="card-b" id="brief-pattern-body" style="font-size:11px;color:var(--txt2);line-height:1.65">Build a plan to see pattern altitude and 45° entry for the destination.</div>
@@ -2338,6 +2345,24 @@ function renderFPLPanel(){
 var _planeMarker=null,_trackLine=null,_trackPts=[],_planeWatchId=null,_mapFollow=false,_lastHeading=0;
 var _planeIcon=L&&L.divIcon?L.divIcon({className:'',html:'<div style="width:0;height:0"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="-16 -16 32 32" id="plane-svg" style="transform-origin:center;filter:drop-shadow(0 0 3px #000)"><polygon points="0,-14 4,-4 14,0 4,2 2,14 0,8 -2,14 -4,2 -14,0 -4,-4" fill="#00e57a" stroke="#003d1a" stroke-width="1.5"/></svg></div>',iconSize:[32,32],iconAnchor:[16,16]}):null;
 
+function _updateGpsBtn(){
+  var on=_planeWatchId!=null;
+  var btn=document.getElementById('map-gps-btn');
+  if(btn){btn.textContent=on?'✈ GPS OFF':'✈ GPS ON';btn.style.background=on?'#003d1a':'#001a0d';btn.style.borderColor=on?'#00ff88':'#00e57a';btn.style.color=on?'#00ff88':'#00e57a';btn.style.fontWeight=on?'bold':'';}
+  var fb=document.getElementById('brief-fly-btn');
+  if(fb){fb.textContent=on?'■ STOP FLIGHT FOLLOWING':'✈ START FLIGHT — OPEN MAP + GPS';fb.style.borderColor=on?'#ff6060':fb.dataset.gc||'var(--grn)';fb.style.color=on?'#ff6060':fb.dataset.gc||'var(--grn)';}
+  var sb=document.getElementById('brief-gps-status');
+  if(sb){sb.textContent=on?'LIVE':'OFF';sb.style.background=on?'rgba(0,229,122,.18)':'';}
+}
+function _updateFollowBtn(){
+  var btn=document.getElementById('map-follow-btn');
+  if(!btn)return;
+  btn.style.background=_mapFollow?'#003d5c':'#001a2a';
+  btn.style.borderColor=_mapFollow?'#38beff':'#1a4a6a';
+  btn.style.color=_mapFollow?'#38beff':'#3a6a8a';
+  btn.textContent=_mapFollow?'⊙ FOLLOW ON':'⊙ FOLLOW';
+}
+
 function startPlaneTracker(){
   if(!window._map){setTimeout(startPlaneTracker,500);return;}
   if(_planeWatchId!=null)return;
@@ -2359,21 +2384,38 @@ function startPlaneTracker(){
     if(_mapFollow)_map.setView(ll,_map.getZoom());
     updateNextWaypointInfo(lat,lon);
   },function(err){
-    if(typeof toast==='function')toast('GPS: '+err.message);
-  },{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
-  if(typeof toast==='function')toast('GPS tracking started');
+    if(typeof toast==='function')toast('GPS error: '+err.message);
+  },{enableHighAccuracy:true,maximumAge:3000,timeout:15000});
+  // Auto-enable follow and go to map
+  _mapFollow=true;
+  _updateFollowBtn();
+  if(typeof tab==='function')tab('map');
+  _updateGpsBtn();
+  if(typeof toast==='function')toast('Flight following active — tracking your position');
 }
 
 function stopPlaneTracker(){
   if(_planeWatchId!=null&&navigator.geolocation)navigator.geolocation.clearWatch(_planeWatchId);
   _planeWatchId=null;
+  _mapFollow=false;
+  if(_planeMarker&&window._map){_map.removeLayer(_planeMarker);_planeMarker=null;}
+  if(_trackLine&&window._map){_map.removeLayer(_trackLine);_trackLine=null;}
+  if(window._nextWpLine&&window._map){_map.removeLayer(window._nextWpLine);window._nextWpLine=null;}
+  if(window._nextWpLabel&&window._map){_map.removeLayer(window._nextWpLabel);window._nextWpLabel=null;}
+  _trackPts=[];
+  _updateGpsBtn();
+  _updateFollowBtn();
   if(typeof toast==='function')toast('GPS tracking stopped');
+}
+
+function togglePlaneTracker(){
+  if(_planeWatchId!=null)stopPlaneTracker();
+  else startPlaneTracker();
 }
 
 function toggleMapFollow(){
   _mapFollow=!_mapFollow;
-  var btn=document.getElementById('map-follow-btn');
-  if(btn){btn.style.background=_mapFollow?'#003d1a':'';btn.style.borderColor=_mapFollow?'#00e57a':'';}
+  _updateFollowBtn();
   if(_mapFollow&&_planeMarker)_map.setView(_planeMarker.getLatLng(),_map.getZoom());
 }
 
@@ -2667,8 +2709,8 @@ function addMapControlButtons(){
   if(!window._map||document.getElementById('map-gps-btn'))return;
   var ctrl=document.createElement('div');
   ctrl.style.cssText='position:absolute;top:8px;left:8px;z-index:1000;display:flex;flex-direction:column;gap:5px';
-  ctrl.innerHTML='<button id="map-gps-btn" onclick="startPlaneTracker()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#001a0d;border:1px solid #00e57a;color:#00e57a;border-radius:4px;cursor:pointer;white-space:nowrap">✈ GPS ON</button>'
-    +'<button id="map-follow-btn" onclick="toggleMapFollow()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#001a2a;border:1px solid #38beff;color:#38beff;border-radius:4px;cursor:pointer;white-space:nowrap">⊙ FOLLOW</button>'
+  ctrl.innerHTML='<button id="map-gps-btn" onclick="togglePlaneTracker()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#001a0d;border:1px solid #00e57a;color:#00e57a;border-radius:4px;cursor:pointer;white-space:nowrap">✈ GPS ON</button>'
+    +'<button id="map-follow-btn" onclick="toggleMapFollow()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#001a2a;border:1px solid #1a4a6a;color:#3a6a8a;border-radius:4px;cursor:pointer;white-space:nowrap">⊙ FOLLOW</button>'
     +'<button id="map-edit-btn" onclick="toggleMapEditMode()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#1a0050;border:1px solid #b87aff;color:#b87aff;border-radius:4px;cursor:pointer;white-space:nowrap">✏ ADD WPT</button>'
     +'<button id="map-pattern-btn" onclick="showPatternOnMap()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#2a1500;border:1px solid #ff9900;color:#ff9900;border-radius:4px;cursor:pointer;white-space:nowrap">⬡ PATTERN</button>'
     +'<button onclick="clearPatternFromMap()" style="padding:5px 8px;font-family:monospace;font-size:10px;background:#1a0000;border:1px solid #ff5555;color:#ff5555;border-radius:4px;cursor:pointer;white-space:nowrap">✕ CLR PTN</button>';
