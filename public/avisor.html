@@ -145,7 +145,7 @@ body{color:var(--txt);font-family:var(--sans);font-size:13px;user-select:none}
 .haz:last-child{border-bottom:none}
 
 /* ═══ STAT GRID ═════════════════════════════════════════════════ */
-.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:11px}
+.stat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-bottom:11px}
 .stat{background:var(--sky3);border:1px solid var(--line);padding:9px;text-align:center}
 .stat-n{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--blu)}
 .stat-u{font-family:var(--mono);font-size:7px;color:var(--txt3);letter-spacing:1px}
@@ -569,11 +569,16 @@ canvas#cgc{display:block;width:100%;height:auto}
           <div style="font-size:10px;color:var(--txt3);font-family:var(--mono);line-height:1.6">Tap to enable GPS. Your plane icon appears on the sectional map, the map follows your position, and next-waypoint distance/ETE updates live. Tap again to stop.</div>
         </div>
       </div>
-      <div class="card c-g" id="brief-pattern-card">
-        <div class="card-h"><span class="card-title">Arrival — Pattern &amp; altitude</span><span class="badge b-g">AT DEST</span></div>
-        <div class="card-b" id="brief-pattern-body" style="font-size:11px;color:var(--txt2);line-height:1.65">Build a plan to see pattern altitude and 45° entry for the destination.</div>
-        <div class="card-b" style="padding-top:0;border-top:1px solid var(--line)">
-          <button type="button" class="bsm" onclick="tab('approach')" style="width:100%;margin-top:2px">Open full Approach &amp; Pattern tab →</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="card c-b" style="margin-bottom:0"><div class="card-h"><span class="card-title">Departure</span><span class="badge b-b" id="brief-dep-cat">—</span></div><div class="card-b" id="brief-dep-body" style="font-size:10px"></div></div>
+        <div class="card c-g" style="margin-bottom:0"><div class="card-h"><span class="card-title">Arrival</span><span class="badge b-g" id="brief-arr-cat">—</span></div><div class="card-b" id="brief-arr-body" style="font-size:10px"></div></div>
+      </div>
+      <div class="card c-g" id="brief-rwy-card">
+        <div class="card-h" style="display:flex;align-items:center;justify-content:space-between"><span class="card-title">Arrival Runways &amp; Pattern</span><span class="badge b-g" id="brief-rwy-badge">—</span></div>
+        <div class="card-b" id="brief-rwy-body"></div>
+        <div class="card-b" style="padding-top:0;border-top:1px solid var(--line);display:flex;gap:6px">
+          <button type="button" class="bsm bsm-g" onclick="showPatternOnMap();tab('map')" style="flex:1;margin-top:2px">Draw Pattern on Map →</button>
+          <button type="button" class="bsm" onclick="tab('approach')" style="flex:1;margin-top:2px">Full Approach Tab →</button>
         </div>
       </div>
       <div class="card c-b">
@@ -2338,9 +2343,30 @@ function buildPatternBriefHTML(p){
 function renderBrief(p){
   show('brief');
   var fuelStopLabel = getFuelStop&&getFuelStop() ? '&#9981; '+getFuelStop() : '—';
-  document.getElementById('stat-grid').innerHTML=stat(p.dist,'NM','DISTANCE')+stat(p.eteMin,'MIN','ETE')+stat(p.totalFuel,'GAL','FUEL+RES')+stat((p.alt/1000).toFixed(0)+'K','FT','CRUISE ALT');
-  var bpb=document.getElementById('brief-pattern-body');
-  if(bpb) bpb.innerHTML=buildPatternBriefHTML(p);
+  var _hwLabel=(p.hw>0?'↙ '+p.hw+'kt HW':p.hw<0?'↗ '+Math.abs(p.hw)+'kt TW':'calm');
+  document.getElementById('stat-grid').innerHTML=stat(p.dist,'NM','DISTANCE')+stat(p.eteMin,'MIN','ETE')+stat(p.totalFuel,'GAL','FUEL+RES')+stat((p.alt/1000).toFixed(0)+'K','FT','CRUISE ALT')+stat(_hwLabel,'','EN ROUTE');
+  // Departure weather
+  var _bdepCat=document.getElementById('brief-dep-cat');
+  if(_bdepCat)_bdepCat.textContent=p.dm?.fltCat||'UNK';
+  var _bdepBody=document.getElementById('brief-dep-body');
+  if(_bdepBody)_bdepBody.innerHTML=dr('Airport','<b>'+escHtml(p.depIcao)+'</b> '+escHtml((p.dep&&p.dep.name)||''))+dr('Wind',p.depWind,p.dm?.wspd>15?'a':'')+dr('Conditions',skyFmt(p.dm))+dr('Altimeter',p.dm?p.dm.altim+'" Hg':'—')+'<div style="font-family:monospace;font-size:8px;color:var(--txt3);margin-top:6px;padding:4px;background:var(--bg3,#0d1018);border-radius:3px;word-break:break-all">'+escHtml(p.dm?.rawOb||'No METAR')+'</div>';
+  // Arrival weather + density altitude
+  var _barrCat=document.getElementById('brief-arr-cat');
+  if(_barrCat)_barrCat.textContent=p.am?.fltCat||'UNK';
+  var _barrBody=document.getElementById('brief-arr-body');
+  if(_barrBody){
+    var _oatB=p.am?.temp!=null?Number(p.am.temp):null,_elevB=p.arr?.elev||0,_daStrB='—';
+    if(_oatB!=null){var _isaB=15-1.98*(_elevB/1000);var _daB=Math.round(_elevB+120*(_oatB-_isaB));_daStrB=_daB.toLocaleString()+' ft';}
+    _barrBody.innerHTML=dr('Airport','<b>'+escHtml(p.arrIcao)+'</b> '+escHtml((p.arr&&p.arr.name)||''))+dr('Wind',p.arrWind,p.am?.wspd>15?'a':'')+dr('Conditions',skyFmt(p.am))+dr('Field elev',(_elevB).toLocaleString()+' ft MSL')+dr('Density alt',_daStrB)+'<div style="font-family:monospace;font-size:8px;color:var(--txt3);margin-top:6px;padding:4px;background:var(--bg3,#0d1018);border-radius:3px;word-break:break-all">'+escHtml(p.am?.rawOb||'No METAR')+'</div>';
+  }
+  // Arrival runway table
+  var _brwyBadge=document.getElementById('brief-rwy-badge');
+  if(_brwyBadge)_brwyBadge.textContent=p.favRwy?'RWY '+p.favRwy.id:'TBD';
+  var _brwyBody=document.getElementById('brief-rwy-body');
+  if(_brwyBody){
+    var _r=p.favRwy,_patAlt=(p.arr?.elev||0)+(p.arr?.pagl||1000);
+    _brwyBody.innerHTML=dr('Pattern altitude',_patAlt.toLocaleString()+' ft MSL')+dr('Entry',_r?'45° entry RWY '+_r.id+', '+(_r.pat==='R'?'right':'left')+' traffic':'Check ATIS')+buildRwyTableHTML(p);
+  }
   // Show fuel stop in hazards/info if set
   if(getFuelStop&&getFuelStop()){
     var hazEl=document.getElementById('hazards');
@@ -2530,48 +2556,38 @@ function rNotams(items,bid,cid){
   el.innerHTML=items.map(n=>{const txt=n?.properties?.coreNOTAMData?.notam?.text||JSON.stringify(n).slice(0,120);const isR=txt.includes('RWY')||txt.includes('RUNWAY');const isN=txt.includes('ILS')||txt.includes('VOR');return`<div class="notam-i"><span class="badge ${isR?'b-r':isN?'b-a':'b-b'}" style="margin-right:5px">${isR?'RWY':isN?'NAVAID':'INFO'}</span>${txt.slice(0,270)}</div>`;}).join('');
 }
 
+function buildRwyTableHTML(p){
+  var _am=p.am,_wdir=_am?.wdir==='VRB'?null:(_am?.wdir!=null?parseInt(_am.wdir):null),_wspd=_am?.wspd||0,_vrb=_am?.wdir==='VRB';
+  var _calm=!_vrb&&_wspd<3,r=p.favRwy;
+  var _rwys=(p.arr&&p.arr.rwys||[]).slice();
+  if(_rwys.length>1&&_wdir!=null&&!_calm){_rwys.sort(function(a,b){var ca=windComponents(_wdir,_wspd,a.hdg||0),cb=windComponents(_wdir,_wspd,b.hdg||0);return(cb.hw||0)-(ca.hw||0);});}
+  if(!_rwys.length)return'<div style="color:var(--txt3);font-size:10px;font-family:monospace;padding:4px 0">No runway data — verify airport</div>';
+  var t='<div style="margin-top:6px"><div style="font-size:9px;color:var(--txt3);font-family:monospace;margin-bottom:4px">ALL RUNWAYS — '+((_vrb||_calm)?(_vrb?'VARIABLE WIND':'CALM / LIGHT WIND'):'SORTED BY HEADWIND')+' ('+(_am?wfmt(_am):'no METAR')+')</div><table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:10px"><tr style="color:var(--txt3);border-bottom:1px solid var(--brd,#2a3350)"><th style="text-align:left;padding:3px 6px">RWY</th><th style="padding:3px 6px">HDG</th><th style="padding:3px 6px">LEN</th><th style="padding:3px 6px">HW</th><th style="padding:3px 6px">XW</th><th style="padding:3px 6px">PATTERN</th></tr>';
+  _rwys.forEach(function(rw){
+    var isFav=r&&rw.id===r.id;
+    var wc=windComponents(_wdir,_wspd,rw.hdg||0);
+    var hwTxt='—',xwTxt='—',hwCol='var(--txt2)';
+    if(_vrb){hwTxt='VRB';xwTxt='—';}
+    else if(_calm){hwTxt='calm';xwTxt='calm';}
+    else if(wc.hw!=null){hwTxt=(wc.hw>=0?wc.hw+'kt HW':Math.abs(wc.hw)+'kt TW');xwTxt=wc.xw+'kt';hwCol=wc.hw>=0?'#00e878':(wc.hw<-5?'#ff6060':'var(--amb)');}
+    t+='<tr style="'+(isFav?'background:rgba(0,232,120,0.08);':'')+';border-bottom:1px solid rgba(42,51,80,0.3)">'
+      +'<td style="padding:4px 6px;font-weight:bold;color:'+(isFav?'#00e878':'var(--txt)')+'">'+( isFav?'★ ':'')+rw.id+'</td>'
+      +'<td style="padding:4px 6px;color:var(--txt2)">'+String(rw.hdg||0).padStart(3,'0')+'°</td>'
+      +'<td style="padding:4px 6px;color:var(--txt2)">'+(rw.len||0).toLocaleString()+'</td>'
+      +'<td style="padding:4px 6px;color:'+hwCol+'">'+hwTxt+'</td>'
+      +'<td style="padding:4px 6px;color:var(--amb)">'+xwTxt+'</td>'
+      +'<td style="padding:4px 6px;color:var(--txt2)">'+(rw.pat==='R'?'Right':'Left')+'</td></tr>';
+  });
+  t+='</table></div>';
+  return t;
+}
 function renderApproach(p){
   show('approach');
   const r=p.favRwy;const patAlt=p.arr.elev+p.arr.pagl;
   document.getElementById('ap-rwy-badge').textContent=r?'RWY '+r.id:'TBD';
-  // Wind components from arrival METAR
-  var _am=p.am,_wdir=_am?.wdir==='VRB'?null:(_am?.wdir!=null?parseInt(_am.wdir):null),_wspd=_am?.wspd||0,_vrb=_am?.wdir==='VRB';
-  var _calm=!_vrb&&_wspd<3;
-  // Density altitude at arrival
-  var _oat=_am?.temp!=null?Number(_am.temp):null;
-  var _elev=p.arr.elev||0;
-  var _daStr='—';
+  var _am=p.am,_elev=p.arr.elev||0,_oat=_am?.temp!=null?Number(_am.temp):null,_daStr='—';
   if(_oat!=null){var _isa=15-1.98*(_elev/1000);var _da=Math.round(_elev+120*(_oat-_isa));_daStr=_da.toLocaleString()+' ft ('+((_da-_elev)>=0?'+':'')+((_da-_elev).toLocaleString())+' ft)';}
-  // Runway table with headwind/crosswind per runway
-  var _rwys=(p.arr.rwys||[]).slice();
-  if(_rwys.length>1&&_wdir!=null&&!_calm){
-    _rwys.sort(function(a,b){var ca=windComponents(_wdir,_wspd,a.hdg||0),cb=windComponents(_wdir,_wspd,b.hdg||0);return (cb.hw||0)-(ca.hw||0);});
-  }
-  var _rwyTable='';
-  if(_rwys.length){
-    _rwyTable='<div style="margin-top:10px"><div style="font-size:9px;color:var(--txt3);font-family:monospace;margin-bottom:4px">ALL RUNWAYS — '+((_vrb||_calm)?(_vrb?'VARIABLE WIND':'CALM / LIGHT WIND'):'SORTED BY HEADWIND')+' ('+(_am?wfmt(_am):'no METAR')+')</div><table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:10px"><tr style="color:var(--txt3);border-bottom:1px solid var(--brd,#2a3350)"><th style="text-align:left;padding:3px 6px">RWY</th><th style="padding:3px 6px">HDG</th><th style="padding:3px 6px">LENGTH</th><th style="padding:3px 6px">HW</th><th style="padding:3px 6px">XW</th><th style="padding:3px 6px">PATTERN</th></tr>';
-    _rwys.forEach(function(rw){
-      var isFav=r&&rw.id===r.id;
-      var wc=windComponents(_wdir,_wspd,rw.hdg||0);
-      var hwTxt='—',xwTxt='—',hwCol='var(--txt2)';
-      if(_vrb){hwTxt='VRB';xwTxt='—';}
-      else if(_calm){hwTxt='calm';xwTxt='calm';}
-      else if(wc.hw!=null){
-        hwTxt=(wc.hw>=0?wc.hw+'kt HW':Math.abs(wc.hw)+'kt TW');
-        xwTxt=wc.xw+'kt';
-        hwCol=wc.hw>=0?'#00e878':(wc.hw<-5?'#ff6060':'var(--amb)');
-      }
-      _rwyTable+='<tr style="'+(isFav?'background:rgba(0,232,120,0.08);':'')+';border-bottom:1px solid rgba(42,51,80,0.3)">'
-        +'<td style="padding:4px 6px;font-weight:bold;color:'+(isFav?'#00e878':'var(--txt)')+'">'+( isFav?'★ ':'')+rw.id+'</td>'
-        +'<td style="padding:4px 6px;color:var(--txt2)">'+String(rw.hdg||0).padStart(3,'0')+'°</td>'
-        +'<td style="padding:4px 6px;color:var(--txt2)">'+(rw.len||0).toLocaleString()+' ft</td>'
-        +'<td style="padding:4px 6px;color:'+hwCol+'">'+hwTxt+'</td>'
-        +'<td style="padding:4px 6px;color:var(--amb)">'+xwTxt+'</td>'
-        +'<td style="padding:4px 6px;color:var(--txt2)">'+(rw.pat==='R'?'Right':'Left')+'</td></tr>';
-    });
-    _rwyTable+='</table></div>';
-  }
-  document.getElementById('ap-rwy-body').innerHTML=dr('Favored runway',r?'RWY '+r.id:'TBD — check ATIS','b')+dr('Arr wind (METAR)',_am?wfmt(_am):'No METAR')+dr('Field elevation',_elev.toLocaleString()+' ft MSL')+dr('Density altitude',_daStr)+_rwyTable+(p.arr.rwysSynthetic?'<div class="warn info" style="margin-top:7px"><b>ℹ</b><div>Runways <b>estimated from inbound course</b> — verify IDs, lengths, and pattern in Chart Supplement or ForeFlight.</div></div>':'')+(p.arr.mtn?'<div class="haz" style="margin-top:7px"><span style="color:var(--red)">⚠</span><span style="color:var(--amb)">Mountain airport — verify arrival and escape procedures</span></div>':'');
+  document.getElementById('ap-rwy-body').innerHTML=dr('Favored runway',r?'RWY '+r.id:'TBD — check ATIS','b')+dr('Arr wind (METAR)',_am?wfmt(_am):'No METAR')+dr('Field elevation',_elev.toLocaleString()+' ft MSL')+dr('Density altitude',_daStr)+buildRwyTableHTML(p)+(p.arr.rwysSynthetic?'<div class="warn info" style="margin-top:7px"><b>ℹ</b><div>Runways <b>estimated from inbound course</b> — verify IDs, lengths, and pattern in Chart Supplement or ForeFlight.</div></div>':'')+(p.arr.mtn?'<div class="haz" style="margin-top:7px"><span style="color:var(--red)">⚠</span><span style="color:var(--amb)">Mountain airport — verify arrival and escape procedures</span></div>':'');
   document.getElementById('ap-pat-body').innerHTML=dr('Pattern altitude',patAlt.toLocaleString()+' ft MSL')+dr('AGL',p.arr.pagl+' ft')+dr('Entry',r?'45° entry RWY '+r.id+', '+(r.pat==='R'?'right':'left')+' traffic':'Check local procedures')+'<div style="margin-top:5px;font-size:11px;color:var(--txt2)">ATC instructions always override pattern preference.</div>';
   // Approach fixes
   const fixes=STATE.apchFixes;
