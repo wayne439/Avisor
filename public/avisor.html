@@ -3148,32 +3148,15 @@ function gcDist(lat1,lon1,lat2,lon2){
   return 2*R*Math.asin(Math.sqrt(Math.min(1,a)));
 }
 
-function crossTrackDist(ptLat,ptLon,fromLat,fromLon,toLat,toLon){
-  var R=3440.065,r=Math.PI/180;
-  var d13=gcDist(fromLat,fromLon,ptLat,ptLon)/R;
-  var brng13=Math.atan2(Math.sin((ptLon-fromLon)*r)*Math.cos(ptLat*r),Math.cos(fromLat*r)*Math.sin(ptLat*r)-Math.sin(fromLat*r)*Math.cos(ptLat*r)*Math.cos((ptLon-fromLon)*r));
-  var brng12=Math.atan2(Math.sin((toLon-fromLon)*r)*Math.cos(toLat*r),Math.cos(fromLat*r)*Math.sin(toLat*r)-Math.sin(fromLat*r)*Math.cos(toLat*r)*Math.cos((toLon-fromLon)*r));
-  return Math.abs(Math.asin(Math.sin(d13)*Math.sin(brng13-brng12)))*R;
-}
-
-function alongTrackDist(ptLat,ptLon,fromLat,fromLon,toLat,toLon){
-  var R=3440.065,r=Math.PI/180;
-  var d13=gcDist(fromLat,fromLon,ptLat,ptLon)/R;
-  var brng13=Math.atan2(Math.sin((ptLon-fromLon)*r)*Math.cos(ptLat*r),Math.cos(fromLat*r)*Math.sin(ptLat*r)-Math.sin(fromLat*r)*Math.cos(ptLat*r)*Math.cos((ptLon-fromLon)*r));
-  var brng12=Math.atan2(Math.sin((toLon-fromLon)*r)*Math.cos(toLat*r),Math.cos(fromLat*r)*Math.sin(toLat*r)-Math.sin(fromLat*r)*Math.cos(toLat*r)*Math.cos((toLon-fromLon)*r));
-  var xtd=Math.asin(Math.sin(d13)*Math.sin(brng13-brng12));
-  return Math.acos(Math.cos(d13)/Math.cos(xtd))*R;
-}
-
 function findVFRWaypointsAlongRoute(fromLat,fromLon,toLat,toLon,maxCorridorNm,targetSpacingNm){
   maxCorridorNm=maxCorridorNm||5;
   targetSpacingNm=targetSpacingNm||60;
   if(!_navaidDB||!_navaidDB.length)return [];
   var totalDist=gcDist(fromLat,fromLon,toLat,toLon);
   var candidates=_navaidDB.filter(function(nav){
-    var xt=crossTrackDist(nav.lat,nav.lon,fromLat,fromLon,toLat,toLon);
+    var xt=crossTrackDist(fromLat,fromLon,toLat,toLon,nav.lat,nav.lon);
     if(xt>maxCorridorNm)return false;
-    var at=alongTrackDist(nav.lat,nav.lon,fromLat,fromLon,toLat,toLon);
+    var at=alongTrackNmDepArr(fromLat,fromLon,toLat,toLon,nav.lat,nav.lon);
     if(at<15||at>totalDist-15)return false;
     nav._along=at;
     nav._cross=xt;
