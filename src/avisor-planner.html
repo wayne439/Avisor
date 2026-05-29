@@ -585,6 +585,10 @@ canvas#cgc{display:block;width:100%;height:auto}
           <div id="alt-details"></div>
         </div>
       </div>
+      <div class="card c-r" id="brief-notam-card" style="display:none">
+        <div class="card-h" style="display:flex;align-items:center;justify-content:space-between"><span class="card-title">⚠ NOTAMs</span><div style="display:flex;gap:5px"><span class="badge b-r" id="brief-notam-ct">0</span><button class="bsm" onclick="tab('notams')" style="font-size:9px;padding:2px 8px">View All →</button></div></div>
+        <div class="card-b" id="brief-notam-body"></div>
+      </div>
       <div class="card">
         <div class="card-h"><span class="card-title">Hazards &amp; Cautions</span><span class="badge b-a" id="haz-ct">0</span></div>
         <div class="card-b" id="haz-list"></div>
@@ -2344,7 +2348,24 @@ function renderBrief(p){
   var _bdepCat=document.getElementById('brief-dep-cat');
   if(_bdepCat)_bdepCat.textContent=p.dm?.fltCat||'UNK';
   var _bdepBody=document.getElementById('brief-dep-body');
-  if(_bdepBody)_bdepBody.innerHTML=dr('Airport','<b>'+escHtml(p.depIcao)+'</b> '+escHtml((p.dep&&p.dep.name)||''))+dr('Wind',p.depWind,p.dm?.wspd>15?'a':'')+dr('Conditions',skyFmt(p.dm))+dr('Altimeter',p.dm?p.dm.altim+'" Hg':'—')+'<div style="font-family:monospace;font-size:8px;color:var(--txt3);margin-top:6px;padding:4px;background:var(--bg3,#0d1018);border-radius:3px;word-break:break-all">'+escHtml(p.dm?.rawOb||'No METAR')+'</div>';
+  // Compute flight UTC window for TAF highlighting
+  var _now=new Date(),_depUtcH=_now.getUTCHours(),_etaUtcH=(_depUtcH+Math.ceil((p.eteMin||60)/60))%24;
+  var _depTafPeriods=parseTafPeriods(p.dt?.rawTAF||p.dt?.rawTaf||'');
+  var _arrTafPeriods=parseTafPeriods(p.at?.rawTAF||p.at?.rawTaf||'');
+  // Departure window advisory from TAF periods
+  var _depWindowHtml='';
+  if(_depTafPeriods.length){
+    var _curPeriod=_depTafPeriods.filter(function(p){return p.startH<=_depUtcH;}).pop()||_depTafPeriods[0];
+    var _worst=_depTafPeriods.reduce(function(w,p){var r={LIFR:0,IFR:1,MVFR:2,VFR:3};return r[p.cat]<r[w.cat]?p:w;},_depTafPeriods[0]);
+    var _wcol={VFR:'#00e878',MVFR:'#4488ff',IFR:'#ff6060',LIFR:'#cc2200'};
+    var _winTxt='';
+    if(_worst.cat==='LIFR'||_worst.cat==='IFR')_winTxt='⚠ TAF shows '+_worst.cat+' conditions — verify before departure';
+    else if(_worst.cat==='MVFR')_winTxt='TAF shows MVFR periods — monitor before departure';
+    else _winTxt='TAF conditions favorable for VFR';
+    _depWindowHtml='<div style="margin-top:5px;padding:3px 6px;border-radius:3px;border-left:3px solid '+_wcol[_worst.cat]+';background:'+(_worst.cat!=='VFR'?'rgba(255,96,96,0.06)':'rgba(0,232,120,0.06)');
+    _depWindowHtml+=';font-family:monospace;font-size:9px;color:'+_wcol[_worst.cat]+'">'+_winTxt+'</div>';
+  }
+  if(_bdepBody)_bdepBody.innerHTML=dr('Airport','<b>'+escHtml(p.depIcao)+'</b> '+escHtml((p.dep&&p.dep.name)||''))+dr('Wind',p.depWind,p.dm?.wspd>15?'a':'')+dr('Conditions',skyFmt(p.dm))+dr('Altimeter',p.dm?p.dm.altim+'" Hg':'—')+_depWindowHtml+'<div style="font-family:monospace;font-size:8px;color:var(--txt3);margin-top:6px;padding:4px;background:var(--bg3,#0d1018);border-radius:3px;word-break:break-all">'+escHtml(p.dm?.rawOb||'No METAR')+'</div>'+(_depTafPeriods.length?'<div style="font-size:8px;color:var(--txt3);font-family:monospace;margin-top:6px;margin-bottom:2px">TAF FORECAST (✈ = your flight window)</div>'+buildTafTimelineHTML(_depTafPeriods,_depUtcH,_etaUtcH):'');
   // Arrival weather + density altitude
   var _barrCat=document.getElementById('brief-arr-cat');
   if(_barrCat)_barrCat.textContent=p.am?.fltCat||'UNK';
@@ -2352,7 +2373,11 @@ function renderBrief(p){
   if(_barrBody){
     var _oatB=p.am?.temp!=null?Number(p.am.temp):null,_elevB=p.arr?.elev||0,_daStrB='—';
     if(_oatB!=null){var _isaB=15-1.98*(_elevB/1000);var _daB=Math.round(_elevB+120*(_oatB-_isaB));_daStrB=_daB.toLocaleString()+' ft';}
-    _barrBody.innerHTML=dr('Airport','<b>'+escHtml(p.arrIcao)+'</b> '+escHtml((p.arr&&p.arr.name)||''))+dr('Wind',p.arrWind,p.am?.wspd>15?'a':'')+dr('Conditions',skyFmt(p.am))+dr('Field elev',(_elevB).toLocaleString()+' ft MSL')+dr('Density alt',_daStrB)+'<div style="font-family:monospace;font-size:8px;color:var(--txt3);margin-top:6px;padding:4px;background:var(--bg3,#0d1018);border-radius:3px;word-break:break-all">'+escHtml(p.am?.rawOb||'No METAR')+'</div>';
+    // Arrival frequencies
+    var _arrFreqDb=typeof mergedFreqRecord==='function'?mergedFreqRecord(p.arrIcao):{};
+    var _freqLine=[['ATIS',_arrFreqDb.atis,'var(--sky)'],['TWR',_arrFreqDb.twr,'var(--grn)'],['CTAF',_arrFreqDb.ctaf,'var(--grn)'],['AWOS',_arrFreqDb.awos,'var(--sky)'],['APCH',_arrFreqDb.app,'var(--amb)']].filter(function(x){return x[1];}).map(function(x){return'<span style="font-family:monospace;font-size:9px;margin-right:10px"><span style="color:var(--txt3)">'+x[0]+'</span> <span style="color:'+x[2]+'">'+x[1]+'</span></span>';}).join('');
+    var _freqHtml=_freqLine?'<div style="margin-top:6px;padding:4px;background:var(--bg3,#0d1018);border-radius:3px">'+_freqLine+'</div>':'';
+    _barrBody.innerHTML=dr('Airport','<b>'+escHtml(p.arrIcao)+'</b> '+escHtml((p.arr&&p.arr.name)||''))+dr('Wind',p.arrWind,p.am?.wspd>15?'a':'')+dr('Conditions',skyFmt(p.am))+dr('Field elev',(_elevB).toLocaleString()+' ft MSL')+dr('Density alt',_daStrB)+_freqHtml+'<div style="font-family:monospace;font-size:8px;color:var(--txt3);margin-top:6px;padding:4px;background:var(--bg3,#0d1018);border-radius:3px;word-break:break-all">'+escHtml(p.am?.rawOb||'No METAR')+'</div>'+(_arrTafPeriods.length?'<div style="font-size:8px;color:var(--txt3);font-family:monospace;margin-top:6px;margin-bottom:2px">TAF FORECAST (✈ = your arrival window)</div>'+buildTafTimelineHTML(_arrTafPeriods,_depUtcH,_etaUtcH):'');
   }
   // Arrival runway table
   var _brwyBadge=document.getElementById('brief-rwy-badge');
@@ -2400,6 +2425,19 @@ function renderBrief(p){
   document.getElementById('alt-details').innerHTML=dr('Altitude',`${Math.max(Math.min(...p.ac.alts),p.alt-2000).toLocaleString()} ft MSL`)+dr('Via','DRK — IFR route diversity');
   const hc=document.getElementById('haz-ct');hc.textContent=p.hazards.length;hc.className=`badge ${p.hazards.length?'b-a':'b-g'}`;
   document.getElementById('haz-list').innerHTML=p.hazards.length?p.hazards.map(h=>`<div class="haz"><span style="color:var(--amb)">△</span><span>${h}</span></div>`).join(''):'<div style="color:var(--grn);font-family:var(--mono);font-size:10px">✓ No hazards flagged</div>';
+  // NOTAMs summary card
+  var _allNotams=[].concat(p.dn||[]).concat(p.an||[]);
+  var _notamCard=document.getElementById('brief-notam-card');
+  var _notamBody=document.getElementById('brief-notam-body');
+  var _notamCt=document.getElementById('brief-notam-ct');
+  if(_notamCard&&_allNotams.length){
+    _notamCard.style.display='';
+    if(_notamCt)_notamCt.textContent=_allNotams.length;
+    // Show first 3 critical NOTAMs (TFR, RWY, NAV)
+    var _critical=_allNotams.filter(function(n){var t=String(n.text||n.message||n.number||'').toUpperCase();return /TFR|RWY|CLSD|TAXIWAY|ILS|VASI|PAPI|GPS|NAVAID/.test(t);}).slice(0,3);
+    var _shown=_critical.length?_critical:_allNotams.slice(0,3);
+    if(_notamBody)_notamBody.innerHTML=_shown.map(function(n){var txt=String(n.text||n.message||n.number||'').slice(0,180);return'<div style="font-family:monospace;font-size:8px;color:var(--txt2);border-bottom:1px solid rgba(42,51,80,0.4);padding:4px 0;line-height:1.5">'+escHtml(txt)+'</div>';}).join('')+'<div style="font-size:8px;color:var(--txt3);font-family:monospace;margin-top:4px">Showing '+_shown.length+' of '+_allNotams.length+' NOTAMs — tap View All for complete list</div>';
+  }else if(_notamCard){_notamCard.style.display='none';}
 }
 
 function renderWaypoints(){
@@ -2567,6 +2605,62 @@ function rNotams(items,bid,cid){
   el.innerHTML=items.map(n=>{const txt=n?.properties?.coreNOTAMData?.notam?.text||JSON.stringify(n).slice(0,120);const isR=txt.includes('RWY')||txt.includes('RUNWAY');const isN=txt.includes('ILS')||txt.includes('VOR');return`<div class="notam-i"><span class="badge ${isR?'b-r':isN?'b-a':'b-b'}" style="margin-right:5px">${isR?'RWY':isN?'NAVAID':'INFO'}</span>${txt.slice(0,270)}</div>`;}).join('');
 }
 
+function parseTafPeriods(rawTaf){
+  if(!rawTaf)return[];
+  var txt=rawTaf.replace(/\r?\n/g,' ').replace(/\s+/g,' ').trim();
+  var parts=txt.split(/\s+(?=FM\d{6})/);
+  var out=[];
+  parts.forEach(function(block,i){
+    var startH=null;
+    if(i===0){var v=block.match(/\d{4}\s+\d{6}Z\s+(\d{2})(\d{2})\/(\d{2})(\d{2})/);if(v)startH=parseInt(v[2]);}
+    else{var fm=block.match(/FM(\d{2})(\d{2})(\d{2})/);if(fm)startH=parseInt(fm[2]);}
+    if(startH===null)return;
+    var wm=block.match(/(\d{3}|VRB)(\d{2,3})(G(\d{2,3}))?KT/);
+    var wdir=wm?(wm[1]==='VRB'?'VRB':parseInt(wm[1])):null;
+    var wspd=wm?parseInt(wm[2]):0;
+    var wgst=wm&&wm[4]?parseInt(wm[4]):null;
+    var vis=10;
+    if(!block.match(/P6SM/)){var vm=block.match(/(\d+(?:\/\d+)?)\s*SM/);if(vm)vis=eval(vm[1]);}
+    var ceilHt=99999;
+    var ce,cr=/(BKN|OVC)(\d{3})/g;
+    while((ce=cr.exec(block))!==null){var h=parseInt(ce[2])*100;if(h<ceilHt)ceilHt=h;}
+    if(block.match(/\b(CLR|SKC)\b/))ceilHt=99999;
+    var sky='';
+    var se,sr=/(CLR|SKC|FEW|SCT|BKN|OVC)(\d{3})?/g;
+    while((se=sr.exec(block))!==null){if(!sky||/BKN|OVC/.test(se[1]))sky=se[1]+(se[2]?'@'+(parseInt(se[2])*100):'');}
+    var cat='VFR';
+    if(vis<1||ceilHt<500)cat='LIFR';
+    else if(vis<3||ceilHt<1000)cat='IFR';
+    else if(vis<=5||ceilHt<3000)cat='MVFR';
+    var wx='';
+    if(block.match(/\bTS\b/))wx+='⛈';
+    if(block.match(/\b(RA|SN|FG|BR|HZ)\b/))wx+=block.match(/\b(TS|RA|SN|FG|BR|HZ)\b/)[0]+' ';
+    out.push({startH,wdir,wspd,wgst,vis,ceilHt,sky,cat,wx:wx.trim()});
+  });
+  return out;
+}
+function buildTafTimelineHTML(periods,depUtcH,etaUtcH){
+  var CAT_COL={VFR:'#00e878',MVFR:'#4488ff',IFR:'#ff6060',LIFR:'#cc2200'};
+  var CAT_BG={VFR:'rgba(0,232,120,0.08)',MVFR:'rgba(68,136,255,0.10)',IFR:'rgba(255,96,96,0.10)',LIFR:'rgba(204,34,0,0.14)'};
+  if(!periods||!periods.length)return'<div style="font-size:9px;color:var(--txt3);font-family:monospace;padding:3px 0">No TAF data</div>';
+  var h='<div style="margin-top:5px">';
+  periods.forEach(function(p,i){
+    var endH=periods[i+1]?periods[i+1].startH:(p.startH+6)%24;
+    var inWin=depUtcH!=null&&etaUtcH!=null&&p.startH<=etaUtcH&&endH>depUtcH;
+    var col=CAT_COL[p.cat]||'#888',bg=CAT_BG[p.cat]||'transparent';
+    var wStr=p.wdir==='VRB'?'VRB/'+p.wspd+'kt':(p.wdir!=null?String(p.wdir).padStart(3,'0')+'°/'+p.wspd+'kt'+(p.wgst?'G'+p.wgst:''):'calm');
+    var cStr=p.ceilHt>=99999?'CLR':(p.ceilHt<1000?p.ceilHt:Math.round(p.ceilHt/100)*100)+'ft';
+    var vStr=p.vis>=6?'6+sm':p.vis+'sm';
+    h+='<div style="display:flex;align-items:center;gap:5px;padding:3px 6px;margin-bottom:2px;border-radius:3px;background:'+bg+';border-left:3px solid '+col+(inWin?';outline:1px solid '+col:'')+';">'
+      +'<span style="color:var(--txt3);font-family:monospace;font-size:8px;min-width:26px">'+String(p.startH).padStart(2,'0')+'Z</span>'
+      +'<span style="color:'+col+';font-family:monospace;font-size:9px;font-weight:bold;min-width:30px">'+p.cat+'</span>'
+      +'<span style="color:var(--txt2);font-family:monospace;font-size:8px;flex:1">'+wStr+' '+cStr+' '+vStr+(p.wx?' '+p.wx:'')+'</span>'
+      +(inWin?'<span style="color:'+col+';font-size:8px;font-family:monospace">✈</span>':'')
+      +'</div>';
+  });
+  h+='</div>';
+  return h;
+}
 function buildRwyTableHTML(p){
   var _am=p.am,_wdir=_am?.wdir==='VRB'?null:(_am?.wdir!=null?parseInt(_am.wdir):null),_wspd=_am?.wspd||0,_vrb=_am?.wdir==='VRB';
   var _calm=!_vrb&&_wspd<3,r=p.favRwy;
