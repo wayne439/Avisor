@@ -113,7 +113,7 @@ body{color:var(--txt);font-family:var(--sans);font-size:13px;user-select:none}
 .panel{display:none;flex:1;overflow-y:auto;padding:14px}
 .panel.on{display:block}
 /* Map tab: flex column + explicit min-height so desktop layout never collapses to 0×0 (blank map) */
-#p-map.panel.on{display:flex;flex-direction:column;position:absolute;top:80px;left:260px;right:0;bottom:0;z-index:10;padding:0;overflow:hidden}@media(max-width:600px){#p-map.panel.on{left:0;top:60px}.map-container{height:calc(100vh - 60px)}}
+#p-map.panel.on{display:flex;flex-direction:column;position:absolute;top:80px;left:260px;right:0;bottom:0;z-index:10;padding:0;overflow:hidden}
 #p-map.panel.on #d-map{flex:1 1 auto;display:flex!important;flex-direction:column;min-height:min(480px,calc(100vh - 150px));overflow:hidden}
 #p-map #map-container{flex:1 1 auto;width:100%;height:calc(100vh - 120px);min-height:min(360px,calc(100vh - 220px));position:relative;background:#0a0e1a;z-index:0}
 .map-subbar{display:flex;gap:6px;align-items:center;padding:5px 10px;background:#060810;border-bottom:2px solid #1e2a3a;flex-shrink:0;flex-wrap:wrap}
@@ -319,15 +319,17 @@ canvas#cgc{display:block;width:100%;height:auto}
 
 @media(max-width:600px){
   html,body{height:auto;min-height:100%;overflow:auto}
-  .app{height:auto;min-height:100dvh}
+  .app{height:auto;min-height:100dvh;padding-top:90px}
+  .topbar{position:fixed;top:0;left:0;right:0;z-index:200;height:50px}
+  .tabbar{position:fixed;top:50px;left:0;right:0;z-index:150;height:40px;overflow-x:auto}
   .body{flex-direction:column}
   .body{overflow:visible}
   .left{width:100%;max-height:56dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;border-right:none;border-bottom:1px solid var(--line)}
   .left-footer{position:sticky;bottom:0;z-index:5;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 18px rgba(0,0,0,.25)}
   .right{min-height:44dvh}
-  #p-map.panel.on{min-height:min(72dvh,640px)}
-  #p-map.panel.on #d-map{min-height:min(52dvh,520px)}
-  #p-map #map-container{min-height:min(240px,38dvh)}
+  #p-map.panel.on{position:fixed!important;left:0!important;right:0!important;top:90px!important;bottom:0!important;min-height:unset}
+  #p-map.panel.on #d-map{min-height:unset}
+  #p-map #map-container{height:calc(100dvh - 90px)!important;min-height:unset}
   .map-subbar{padding:8px 10px!important;gap:8px!important}
   .map-subbar label{font-size:8px!important;white-space:nowrap}
   .map-subbar .map-subbar-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-end}
