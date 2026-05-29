@@ -922,6 +922,7 @@ canvas#cgc{display:block;width:100%;height:auto}
         <div class="map-subbar-actions">
           <label style="font-family:monospace;font-size:9px;color:#7a9aaa;cursor:pointer"><input type="checkbox" id="map-show-vis" checked onchange="renderMap()"> VFR</label>
           <label style="font-family:monospace;font-size:9px;color:#7a9aaa;cursor:pointer"><input type="checkbox" id="map-show-circle" checked onchange="renderMap()"> VOR rings</label>
+          <label style="font-family:monospace;font-size:9px;color:#ff9944;cursor:pointer"><input type="checkbox" id="map-show-sigmet" onchange="renderMap()"> AIRMETs</label>
           <button type="button" onclick="mapFitRoute()" style="padding:4px 9px;background:#0a1525;border:1px solid #334455;color:#7acfff;font-family:monospace;font-size:9px;cursor:pointer">FIT</button>
           <button type="button" onclick="openFFApp&&openFFApp()" style="padding:4px 9px;background:#001a00;border:1px solid #00aa44;color:#00e878;font-family:monospace;font-size:9px;cursor:pointer">&#9992; FF</button>
         </div>
@@ -2414,6 +2415,30 @@ function buildPatternBriefHTML(p){
   var syn=p.arr&&p.arr.rwysSynthetic?'<div class="warn info" style="margin-top:8px"><b>ℹ</b> Runway ends may be <b>estimated</b> for this airport — verify lengths and designators in ForeFlight.</div>':'';
   return rows+procHint+syn+'<div style="margin-top:10px;font-size:10px;color:var(--txt3)">Pattern canvas + leg-by-leg text: use the <b style=color:var(--blu)>APPROACH &amp; PATTERN</b> tab. <b>ATC always overrides</b> pattern direction and altitude.</div>';
 }
+function calcSunTimes(lat,lon,dateObj){
+  try{
+    var D=dateObj||new Date();
+    var JD=D.getTime()/86400000+2440587.5;
+    var n=JD-2451545.0;
+    var L=((280.46+0.9856474*n)%360+360)%360;
+    var g=((357.528+0.9856003*n)%360+360)%360*Math.PI/180;
+    var lam=(L+1.915*Math.sin(g)+0.02*Math.sin(2*g))*Math.PI/180;
+    var dec=Math.asin(Math.sin(23.439*Math.PI/180)*Math.sin(lam));
+    var latR=lat*Math.PI/180;
+    var cosH=(Math.sin(-0.0145)-Math.sin(latR)*Math.sin(dec))/(Math.cos(latR)*Math.cos(dec));
+    if(cosH<-1||cosH>1)return null;
+    var H=Math.acos(cosH)*180/Math.PI;
+    var B=2*Math.PI/365*(n+0.5);
+    var E=(-7.655*Math.sin(B)+9.873*Math.sin(2*B+3.588)+0.439*Math.sin(4*B+0.07))/60;
+    var noon=12-lon/15-E;
+    var sunriseH=noon-H/15,sunsetH=noon+H/15;
+    var cosHc=(Math.sin(-6*Math.PI/180)-Math.sin(latR)*Math.sin(dec))/(Math.cos(latR)*Math.cos(dec));
+    var Hc=Math.acos(Math.max(-1,Math.min(1,cosHc)))*180/Math.PI;
+    var ctH=noon+Hc/15;
+    function toHHMM(h){h=((h%24)+24)%24;var hh=Math.floor(h);var mm=Math.round((h-hh)*60);if(mm>=60){hh++;mm=0;}return('0'+hh).slice(-2)+':'+('0'+mm).slice(-2);}
+    return{sunrise:toHHMM(sunriseH),sunset:toHHMM(sunsetH),civilTwilight:toHHMM(ctH),sunsetDecH:sunsetH,civilTwilightDecH:ctH};
+  }catch(e){return null;}
+}
 function renderBrief(p){
   show('brief');
   var fuelStopLabel = getFuelStop&&getFuelStop() ? '&#9981; '+getFuelStop() : '—';
@@ -2448,11 +2473,23 @@ function renderBrief(p){
   if(_barrBody){
     var _oatB=p.am?.temp!=null?Number(p.am.temp):null,_elevB=p.arr?.elev||0,_daStrB='—';
     if(_oatB!=null){var _isaB=15-1.98*(_elevB/1000);var _daB=Math.round(_elevB+120*(_oatB-_isaB));_daStrB=_daB.toLocaleString()+' ft';}
+    // Sunrise/sunset
+    var _sunHtml='';
+    if(p.arr&&p.arr.lat!=null&&p.arr.lon!=null){
+      var _st=calcSunTimes(p.arr.lat,p.arr.lon,new Date());
+      if(_st){
+        var _nightWarn='';
+        var _etaDecH=_depUtcH+((p.eteMin||60)/60);
+        var _ctDec=_st.civilTwilightDecH;
+        if(_etaDecH>_ctDec||(_etaDecH<6&&_ctDec>18)){_nightWarn='<span style="color:#ff9944"> &#9888; ETA after civil twilight</span>';}
+        _sunHtml=dr('Sunrise / Sunset','<span style="color:var(--txt2)">'+_st.sunrise+'Z &nbsp;/&nbsp; '+_st.sunset+'Z</span>')+dr('End civil twilight','<span style="color:#ff9944">'+_st.civilTwilight+'Z</span>'+_nightWarn);
+      }
+    }
     // Arrival frequencies
     var _arrFreqDb=typeof mergedFreqRecord==='function'?mergedFreqRecord(p.arrIcao):{};
     var _freqLine=[['ATIS',_arrFreqDb.atis,'var(--sky)'],['TWR',_arrFreqDb.twr,'var(--grn)'],['CTAF',_arrFreqDb.ctaf,'var(--grn)'],['AWOS',_arrFreqDb.awos,'var(--sky)'],['APCH',_arrFreqDb.app,'var(--amb)']].filter(function(x){return x[1];}).map(function(x){return'<span style="font-family:monospace;font-size:9px;margin-right:10px"><span style="color:var(--txt3)">'+x[0]+'</span> <span style="color:'+x[2]+'">'+x[1]+'</span></span>';}).join('');
     var _freqHtml=_freqLine?'<div style="margin-top:6px;padding:4px;background:var(--bg3,#0d1018);border-radius:3px">'+_freqLine+'</div>':'';
-    _barrBody.innerHTML=dr('Airport','<b>'+escHtml(p.arrIcao)+'</b> '+escHtml((p.arr&&p.arr.name)||''))+dr('Wind',p.arrWind,p.am?.wspd>15?'a':'')+dr('Conditions',skyFmt(p.am))+dr('Field elev',(_elevB).toLocaleString()+' ft MSL')+dr('Density alt',_daStrB)+_freqHtml+'<div style="font-family:monospace;font-size:8px;color:var(--txt3);margin-top:6px;padding:4px;background:var(--bg3,#0d1018);border-radius:3px;word-break:break-all">'+escHtml(p.am?.rawOb||'No METAR')+'</div>'+(_arrTafPeriods.length?'<div style="font-size:8px;color:var(--txt3);font-family:monospace;margin-top:6px;margin-bottom:2px">TAF FORECAST (✈ = your arrival window)</div>'+buildTafTimelineHTML(_arrTafPeriods,_depUtcH,_etaUtcH):'');
+    _barrBody.innerHTML=dr('Airport','<b>'+escHtml(p.arrIcao)+'</b> '+escHtml((p.arr&&p.arr.name)||''))+dr('Wind',p.arrWind,p.am?.wspd>15?'a':'')+dr('Conditions',skyFmt(p.am))+dr('Field elev',(_elevB).toLocaleString()+' ft MSL')+dr('Density alt',_daStrB)+_sunHtml+_freqHtml+'<div style="font-family:monospace;font-size:8px;color:var(--txt3);margin-top:6px;padding:4px;background:var(--bg3,#0d1018);border-radius:3px;word-break:break-all">'+escHtml(p.am?.rawOb||'No METAR')+'</div>'+(_arrTafPeriods.length?'<div style="font-size:8px;color:var(--txt3);font-family:monospace;margin-top:6px;margin-bottom:2px">TAF FORECAST (✈ = your arrival window)</div>'+buildTafTimelineHTML(_arrTafPeriods,_depUtcH,_etaUtcH):'');
   }
   // Arrival runway table
   var _brwyBadge=document.getElementById('brief-rwy-badge');
@@ -3624,6 +3661,83 @@ function addChatMsg(role,txt){
   d.innerHTML=`<div class="msg-lbl">${role==='ai'?'PilotAvisor AI':'YOU'}</div><div class="msg-b">${fmtMsg(txt)}</div>`;
   m.appendChild(d);m.scrollTop=m.scrollHeight;
 }
+// ===== OFFLINE AVIATION KNOWLEDGE BASE =====
+var AVIATION_KB=[
+  {tags:['pattern','enter','entry','join','downwind','45','gp45','midfield','upwind','circuit','traffic pattern'],fn:function(p){
+    var arr=p?p.arrIcao:'destination';var ac=p&&p.ac?p.ac.name:'your aircraft';
+    var rwy=p&&p.favRwy?('RWY '+p.favRwy.id+', '+(p.favRwy.pat==='R'?'right':'left')+' traffic'):'check ATIS';
+    return '**Pattern Entry - '+arr+'**\n\n**Favored runway:** '+rwy+'\n\n**Standard VFR entry (AC 90-66C):** Arrive at pattern altitude on the 45 entry side. Fly the 45 to midfield downwind then fly the standard rectangular pattern.\n\n**GP45 entry:** Cross midfield at/above pattern altitude, exit upwind, descend to pattern altitude, turn inbound on the 45 to downwind - entry point ~**0.8 nm** from the runway threshold.\n\n**Pattern altitude:** 1,000 ft AGL for piston singles ('+ac+'), 1,500 ft AGL for twins. Check Chart Supplement for published altitudes.\n\n**CTAF call:** "[Airport] Traffic, N12345, entering 45 downwind runway XX, [airport]." State airport name first and last.';
+  }},
+  {tags:['crosswind','xwind','wind limit','max wind','cross wind','crosswind component'],fn:function(p){
+    var am=p&&p.am;var rwy=p&&p.favRwy;var arr=p?p.arrIcao:'destination';
+    var windInfo='';
+    if(am&&am.wdir&&am.wdir!=='VRB'&&am.wspd){var wdir=parseInt(am.wdir),wspd=parseInt(am.wspd);if(rwy){var ang=((wdir-(rwy.hdg||0)+360)%360)*Math.PI/180;var xw=Math.round(Math.abs(wspd*Math.sin(ang)));var hw=Math.round(wspd*Math.cos(ang));windInfo='\n\n**'+arr+' current:** Wind '+wdir+'@ '+wspd+'kt - **'+xw+'kt crosswind**, **'+(hw>=0?hw+'kt headwind':Math.abs(hw)+'kt tailwind')+'** on RWY '+rwy.id+'.';}else windInfo='\n\n**'+arr+':** Wind '+wdir+'@ '+wspd+'kt.';}else if(am&&am.wdir==='VRB'){windInfo='\n\n**'+arr+':** Variable winds - treat as crosswind from any direction.';}
+    return '**Crosswind Calculation**'+windInfo+'\n\n**Formula:** XW = Speed x |sin(wind angle to runway)| HW = Speed x cos(wind angle)\n\n**Demonstrated crosswind limits:**\n- C172SP: **15 kt** | PA-28: **17 kt** | SR22T: **21 kt** | Bonanza: **17 kt**\n\n"Demonstrated" means a test pilot flew it - not an approved maximum. Add half the gust spread in gusty conditions. Personal minimums matter most.';
+  }},
+  {tags:['density altitude','density alt','hot','high da','performance','takeoff distance','landing distance','pressure altitude'],fn:function(p){
+    var am=p&&p.am;var arr=p?p.arrIcao:'destination';var daInfo='';
+    if(am&&am.temp!=null&&p&&p.arr){var elev=p.arr.elev||0;var oat=Number(am.temp);var isa=15-1.98*(elev/1000);var da=Math.round(elev+120*(oat-isa));daInfo='\n\n**'+arr+'** ('+elev.toLocaleString()+' ft): OAT '+oat+'C = **DA '+da.toLocaleString()+' ft**. See Performance section in Brief tab.';}
+    return '**Density Altitude**'+daInfo+'\n\n**Formula:** DA = Elev + 120 x (OAT - ISA) | ISA = 15C - 2C per 1,000 ft\n\n**Performance penalties:**\n- +10% takeoff ground roll per 1,000 ft DA\n- +12% takeoff over 50 ft per 1,000 ft DA\n- +5% landing distance per 1,000 ft DA\n\n**High-elevation airports:** KPRC 5,045 ft, KGCN 6,609 ft, KDEN 5,431 ft. A hot summer day adds 3,000-5,000 ft effective DA.\n\nIf DA > 5,000 ft: use full runway, rotate at book Vr, do not rush the liftoff.';
+  }},
+  {tags:['vfr minimums','vfr min','visibility minimum','ceiling requirement','class b','class c','class d','class e','class g','airspace','flight category','mvfr','ifr','lifr'],fn:function(p){
+    return '**VFR Weather Minimums (FAR 91.155)**\n\n| Airspace | Visibility | Cloud Clearance |\n|---|---|---|\n| Class B | 3 sm | Clear of clouds |\n| Class C | 3 sm | 500 below, 1,000 above, 2,000 horiz |\n| Class D | 3 sm | 500 below, 1,000 above, 2,000 horiz |\n| Class E >=10,000 MSL | 5 sm | 1,000 below, 1,000 above, 1 sm horiz |\n| Class E <10,000 MSL | 3 sm | 500 below, 1,000 above, 2,000 horiz |\n| Class G day <1,200 AGL | 1 sm | Clear of clouds |\n| Class G night <1,200 AGL | 3 sm | 500 below, 1,000 above, 2,000 horiz |\n\n**Flight categories:**\n- VFR: ceiling >1,000 ft AND vis >3 sm\n- MVFR: ceiling 500-1,000 ft OR vis 1-3 sm\n- IFR: ceiling 200-500 ft OR vis 1/2-1 sm\n- LIFR: ceiling <200 ft OR vis <1/2 sm';
+  }},
+  {tags:['ctaf','radio call','announce','uncontrolled airport','advisory frequency','multicom','position report','traffic call'],fn:function(p){
+    var arr=p?p.arrIcao:'[Airport]';var rwy=p&&p.favRwy?p.favRwy.id:'XX';
+    return '**CTAF Calls - '+arr+'**\n\n1. **10 miles out:** "'+arr+' Traffic, N12345, 10 miles northwest, inbound runway '+rwy+', '+arr+'."\n2. **45 entry/downwind:** "...entering 45 downwind runway '+rwy+', '+arr+'."\n3. **Turning base:** "...turning base runway '+rwy+', '+arr+'."\n4. **Final:** "...final runway '+rwy+', '+arr+'."\n5. **Clear of runway:** "...clear runway '+rwy+', taxi parking, '+arr+'."\n\n**Key rules:** Listen before transmitting. State airport name first and last. CTAF is advisory only. Keep landing light and strobes on even in daylight.';
+  }},
+  {tags:['fuel','reserve','fuel required','endurance','far 91.151','how much fuel','fuel planning'],fn:function(p){
+    var tf=p?p.tripFuel:null;var rf=p?p.resFuel:null;var tot=p?p.totalFuel:null;
+    var planInfo=tf?'\n\nYour plan: **'+tf+' gal trip** + **'+rf+' gal reserve** = **'+tot+' gal total**.':'';
+    return '**Fuel Requirements (FAR 91.151)**'+planInfo+'\n\n- **Day VFR:** Fuel to destination + **30 min reserve** at cruise\n- **Night VFR:** Fuel to destination + **45 min reserve** at cruise\n- **IFR:** Destination + alternate + **45 min reserve**\n\nFAR 91.151 is a legal floor - most CFIs recommend a personal 1-hour reserve. Avgas weighs **6 lbs/gal**. Fuel burn increases ~5% per 1,000 ft below optimal altitude.';
+  }},
+  {tags:['emergency','engine fail','engine out','forced landing','mayday','engine failure','restart engine','pan pan'],fn:function(p){
+    var ac=p&&p.ac?p.ac.name:'your aircraft';
+    return '**Engine Failure - '+ac+'**\n\n**Immediate actions (memory items):**\n1. **Pitch for best glide** - ~65-75 KIAS most GA singles (check POH)\n2. **Pick a landing area** - ~1.5 nm glide range per 1,000 ft AGL\n3. **Attempt restart:** Fuel selector BOTH, mixture RICH, carb heat ON, cycle ignition\n4. **Declare:** Squawk 7700 | MAYDAY MAYDAY MAYDAY, [callsign], engine failure, [position], [altitude], [souls on board], [intentions]\n\n**Forced landing:** Land into wind on flat terrain. Fuel off, mixture ICO, mags off, master off just before touchdown. Flaps full on short final. Unlatch door before touchdown.\n\nAlways use your specific POH emergency checklist.';
+  }},
+  {tags:['weight','balance','wb','cg','center of gravity','loading','max gross','gross weight','aft cg'],fn:function(p){
+    var ac=p&&p.ac?p.ac.name:'your aircraft';
+    return '**Weight and Balance - '+ac+'**\n\n**Why it matters:**\n- Aft CG: reduced pitch stability, higher stall speed, can be unrecoverable\n- Forward CG: harder to flare, limited by elevator authority at low speed\n- Over max gross: higher stall speeds, longer takeoff roll, degraded climb\n\n**Formula:** CG = Sum(Arm x Weight) / Total Weight\n\n**Common traps:** Forgetting fuel weight (avgas = 6 lb/gal), underestimating passenger weight, full fuel + full pax often over gross.\n\nUse the W and B tab to compute CG and see the envelope diagram.';
+  }},
+  {tags:['metar','decode weather','taf','forecast','read metar','altimeter','altim','rawob','raw metar'],fn:function(p){
+    var dm=p&&p.dm;var am=p&&p.am;var info='';
+    if(dm&&p)info+='\n\n**Departure ('+p.depIcao+'):** '+(p.depWind||'no wind data');
+    if(am&&p)info+='\n**Arrival ('+p.arrIcao+'):** '+(p.arrWind||'no wind data');
+    return '**Weather / METAR Decode**'+info+'\n\n**METAR order:** Station | Time | Auto | Wind | Vis | Weather | Sky | Temp/Dew | Altimeter | Remarks\n\n- **Wind:** 27015G22KT = from 270 at 15 kt, gusting 22 kt\n- **Visibility:** 10SM = 10 statute miles\n- **Sky:** FEW/SCT/BKN/OVC = 1-2/3-4/5-7/8 oktas cover. Height in hundreds of ft AGL\n- **Temp/Dew:** 22/14 = 22C temp, 14C dew point. Close spread = fog/precip risk\n- **Altimeter:** A2992 = 29.92 inHg\n\nFull METAR + TAF raw text is in the WEATHER tab.';
+  }},
+  {tags:['altitude','cruise altitude','hemispheric','odd thousand','even thousand','vfr altitude','91.159','cruise level'],fn:function(p){
+    var alt=p?p.alt:null;var crs=p?p.crs:null;var planInfo='';
+    if(alt&&crs!=null){var rule=crs>=0&&crs<180?'odd thousands + 500 ft (eastbound, 0-179)':'even thousands + 500 ft (westbound, 180-359)';planInfo='\n\nYour plan: **'+alt.toLocaleString()+' ft** on course **'+Math.round(crs)+'** - '+rule+'.';}
+    return '**VFR Cruise Altitudes (FAR 91.159)**'+planInfo+'\n\n- **Eastbound (0-179):** 3,500 / 5,500 / 7,500 / 9,500 / 11,500 ft\n- **Westbound (180-359):** 4,500 / 6,500 / 8,500 / 10,500 ft\n\nApplies above 3,000 ft AGL. Higher = better TAS, lower fuel burn, fewer traffic conflicts.';
+  }},
+  {tags:['night','sunset','sunrise','civil twilight','night currency','legal night','night vfr','fly at night'],fn:function(p){
+    return '**Night VFR**\n\n**Legal night (FAR 1.1):** Evening civil twilight to morning civil twilight. Civil twilight ends ~30 minutes after official sunset.\n\n**Night currency (FAR 61.57b):** 3 takeoffs + 3 full-stop landings at night within the past 90 days to carry passengers.\n\n**Equipment:** Position lights, anti-collision light (strobe/beacon). Landing light required if for hire.\n\nThe Brief tab shows sunrise, sunset, and end of civil twilight for your arrival airport, with a warning if your ETA is after civil twilight.';
+  }},
+  {tags:['stall','spin','slow flight','maneuvering speed','va ','turbulence','rough air','structural'],fn:function(p){
+    var ac=p&&p.ac?p.ac.name:'your aircraft';
+    return '**Stalls and Maneuvering Speed**\n\n**Stall recovery:** Reduce AOA (forward pressure), level wings, add full power, minimize altitude loss.\n\n**Maneuvering Speed (Va):** Maximum speed for full control deflection in turbulence. Decreases with lighter weight. In turbulence, slow to Va and avoid abrupt or combined full inputs.\n\n**'+ac+' Va:** Check your POH at your actual weight - typically 95-110 KIAS for GA singles.\n\n**Spins:** Most GA aircraft require utility category certification for intentional spins. Recovery: full opposite rudder, brisk forward stick, recover from the resulting dive.';
+  }},
+  {tags:['squawk','transponder','mode c','ads-b','1200','7700','7600','7500'],fn:function(p){
+    return '**Transponder and ADS-B**\n\n**VFR codes:** 1200 (VFR default) | 7700 (emergency) | 7600 (lost comms) | 7500 (hijack - do not dial accidentally)\n\n**ADS-B Out required (FAR 91.225):** Class A/B/C airspace, Class E above 10,000 ft MSL, within 30 nm of Class B airports (Mode C veil).\n\n**ADS-B In (traffic/weather):** Optional but strongly recommended. Receive TIS-B traffic and FIS-B weather (METARs, TAFs, PIREPs, AirMETs, SIGMETs) in-cockpit for free via a portable receiver.';
+  }},
+  {tags:['foreflight','fpl','export','download flight plan','fpl file','garmin pilot'],fn:function(p){
+    var wpts=typeof STATE!=='undefined'&&STATE&&STATE.waypoints?STATE.waypoints.length:'all';
+    return '**Export to ForeFlight / Garmin Pilot**\n\n1. Tap the **FPL FILE** tab\n2. Click **Download .fpl**\n3. AirDrop the file to your iPad then tap to open in ForeFlight\n4. All '+wpts+' waypoints appear on the ForeFlight map\n\nAlternately, email the .fpl to yourself and tap the attachment on your iPad. The same .fpl format also imports into Garmin Pilot.';
+  }},
+  {tags:['pirep','pilot report','turbulence report','icing report','rides','ride report'],fn:function(p){
+    return '**PIREPs (Pilot Reports)**\n\n**Reading a PIREP:** UA /OV DEN /TM 1530 /FL 095 /TP C172 /SK SCT045 /TB LGT\n- OV=over DEN | TM=1530Z | FL=9,500 ft | TP=C172 | SK=scattered 4,500 | TB=light turbulence\n\n**Turbulence:** Smooth - Light - Moderate - Severe - Extreme\n**Icing:** Trace - Light - Moderate - Severe\n\n**Where to find:** aviationweather.gov PIREPs, or the ForeFlight map layer.\n\nFile a PIREP if you experience notable conditions - the absence of PIREPs is not the same as the absence of hazards.';
+  }},
+  {tags:['atc','clearance','readback','approach control','tower frequency','ground control','departure frequency','flight following'],fn:function(p){
+    var arr=p?p.arrIcao:'[Arr]';
+    return '**ATC Phraseology**\n\n**Required readbacks:** Altitude assignments, altimeter settings, runway assignments, taxi instructions across active runways, hold-short instructions, frequency changes.\n\n**Requesting flight following:** "[Facility], [N-number], [type], [position], [altitude], VFR to [destination], request flight following."\n\n**ATIS:** Get '+arr+' ATIS before entering the terminal area. Note active runway, ceiling, vis, wind, altimeter. Use the code on first call: "with information Bravo."\n\n**Declaring emergency:** No authorization needed. MAYDAY MAYDAY MAYDAY on current frequency.\n\nATC LIVE tab: Transcribe radio calls in-cockpit using your device microphone.';
+  }}
+];
+function matchAviationKB(query,plan){
+  var lo=query.toLowerCase();var best=null,bestScore=0;
+  for(var i=0;i<AVIATION_KB.length;i++){var e=AVIATION_KB[i];var sc=0;for(var j=0;j<e.tags.length;j++){if(lo.includes(e.tags[j]))sc++;}if(sc>bestScore){bestScore=sc;best=e;}}
+  if(best&&bestScore>0){try{return best.fn(plan);}catch(er){return null;}}
+  return null;
+}
 async function sendChat(){
   const inp=document.getElementById('chat-input');const msg=inp.value.trim();if(!msg)return;
   if(!STATE.plan){addChatMsg('ai','Build a flight plan first — enter route and click Build Flight Plan.');return;}
@@ -3631,16 +3745,12 @@ async function sendChat(){
   document.getElementById('chat-send').disabled=true;
   STATE.hist.push({role:'user',content:msg});
   if(!key){
-    const lo=msg.toLowerCase();const p=STATE.plan;let r='';
-    if(lo.includes('altitude')||lo.includes('why'))r=`Cruising at **${p.alt.toLocaleString()} ft MSL** in the ${p.ac.name}.${p.tfloor>0?` Terrain floor ${p.tfloor.toLocaleString()} ft — altitude includes safety buffer.`:''} Add API key for full AI reasoning.`;
-    else if(lo.includes('fuel'))r=`Trip: **${p.tripFuel} gal** | Reserve: **${p.resFuel} gal** | Total: **${p.totalFuel} gal** (reserve at 75% power per FAR 91.151)`;
-    else if(lo.includes('fpl')||lo.includes('foreflight'))r=`Go to 📁 FPL FILE tab — click "Download .fpl". AirDrop to your iPad and tap to open in ForeFlight. All ${STATE.waypoints.length} waypoints load on the map.`;
-    else if(lo.includes('weather')||lo.includes('metar'))r=`Dep (${p.depIcao}): ${p.depWind}, ${skyFmt(p.dm)}\nArr (${p.arrIcao}): ${p.arrWind}, ${skyFmt(p.am)}\nFull METARs in WEATHER tab.`;
-    else if(lo.includes('weight')||lo.includes('balance')||lo.includes('wb'))r=`W&B profile for ${p.ac.name} is in ⚖ W&B tab. Enter station weights to compute CG and see the envelope diagram.`;
-    else if(lo.includes('poh'))r=`Upload your aircraft POH PDF in 📖 POH AI tab — ask any question and get answers referenced to your exact manual pages.`;
-    else if(lo.includes('atc'))r=`ATC Transcription is in 🎙 ATC LIVE tab. It uses your browser’s SpeechRecognition engine (often **requires network** in Chrome; differs from fully offline native apps). Tap START and feed mic or wired audio from your radio — **verify clearances by ear.**`;
-    else r=`**${p.primary}** | Alt: **${p.alt.toLocaleString()} ft** | **${p.eteMin} min** | **${p.totalFuel} gal** | **${STATE.waypoints.length} waypoints in .fpl**\n\nAdd Anthropic API key for full AI responses to any aviation question.`;
-    STATE.hist.push({role:'assistant',content:r});addChatMsg('ai',r);document.getElementById('chat-send').disabled=false;return;
+    var _kbPlan=STATE.plan;var _kbR=matchAviationKB(msg,_kbPlan);
+    if(!_kbR){
+      if(_kbPlan)_kbR='**'+_kbPlan.primary+'** | Alt: **'+_kbPlan.alt.toLocaleString()+' ft** | **'+_kbPlan.eteMin+' min** | **'+_kbPlan.totalFuel+' gal** | **'+STATE.waypoints.length+' waypoints**\n\nAsk me: pattern entry, crosswind, density altitude, VFR minimums, CTAF calls, fuel planning, emergencies, W&B, METAR decoding. Add an Anthropic API key for full AI responses.';
+      else _kbR='Build a flight plan first, then ask about pattern entry, crosswind, density altitude, VFR minimums, fuel, CTAF calls, emergencies, weight and balance, or METAR decoding.';
+    }
+    STATE.hist.push({role:'assistant',content:_kbR});addChatMsg('ai',_kbR);document.getElementById('chat-send').disabled=false;return;
   }
   try{
     const pohCtx=STATE.pohText?`\nPOH loaded: ${STATE.pohFile} (${STATE.pohPages} pages).\n`:'';
@@ -4783,6 +4893,17 @@ function mapFitRoute(){
   if(c.length===1)_map.setView(c[0],avisorClampZoomForAisCharts(10));
   else{_map.fitBounds(L.latLngBounds(c).pad(0.18));var mz=avisorActiveAisChartMinZ();if(mz&&_map.getZoom()<mz)_map.setZoom(mz);}
 }
+var _sigmetData=null,_sigmetLoadTime=0;
+async function fetchSigmetData(){
+  var now=Date.now();
+  if(_sigmetData&&now-_sigmetLoadTime<300000)return _sigmetData;
+  try{
+    var base=location.protocol==='file:'?'https://aviationweather.gov':'';
+    var r=await fetchJSONTimeout(base+'/awc-api/data/airsigmet?format=json',null,10000);
+    if(!r||!r.ok)return null;
+    var d=await r.json();_sigmetData=d;_sigmetLoadTime=Date.now();return d;
+  }catch(e){return null;}
+}
 function renderMap(){
   var sw=STATE.waypoints||[];
   if(!_map)return;
@@ -4831,6 +4952,30 @@ function renderMap(){
   if(dest&&dest.lat&&rwy){var hdg=rwy.hdg||180,isLeft=(rwy.pat||'L')==='L';var ea=((hdg+(isLeft?-90:90)+360)%360)*Math.PI/180;var d=0.8/3440.065;var eLat=dest.lat+Math.cos(ea)*d*(180/Math.PI);var eLon=dest.lon+Math.sin(ea)*d*(180/Math.PI)/Math.cos(dest.lat*Math.PI/180);var lf=wpts[wpts.length-2]||wpts[0];_mapLayers.push(L.polyline([[lf.lat,lf.lon],[eLat,eLon]],{color:'#00e878',weight:1.5,dashArray:'6 5',opacity:0.7}).addTo(_map));_mapLayers.push(L.marker([eLat,eLon],{icon:L.divIcon({html:'<svg width="18" height="18"><polygon points="9,1 17,17 1,17" fill="none" stroke="#00e878" stroke-width="2"/></svg>',iconSize:[18,18],iconAnchor:[9,9],className:''}),title:'Pattern Entry (GP45)'}).bindPopup('<b>GP45</b> — 45° pattern entry, '+(isLeft?'left':'right')+' downwind RWY '+(rwy.id||'??')+'<br><span style="font-size:10px;color:#888">'+eLat.toFixed(4)+'N '+Math.abs(eLon).toFixed(4)+'W</span>',{className:'avisor-popup'}).addTo(_map));}
   // Navlog
   var ne=document.getElementById('map-navlog');if(ne&&STATE.plan){var gs=S.plan.gs||S.plan.ac.tas,gph=S.plan.ac.gph;var nh='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:10px"><tr style="background:#0a0f1a;color:#7a9aaa"><th style="padding:3px 7px;text-align:left">WYPT</th><th style="padding:3px 7px">TYPE</th><th style="padding:3px 7px">DTK</th><th style="padding:3px 7px">DIST</th><th style="padding:3px 7px">ETE</th><th style="padding:3px 7px">FUEL</th></tr>';wpts.forEach(function(w,i){var bg=i%2===0?'#0a0c12':'#0d1018';var col=i===0?'#00e878':i===wpts.length-1?'#ff6060':'#dde5f5';var dtk='---',dist='---',ete='---',fuel='---';if(i>0){var prev=wpts[i-1];var d=gcDist(prev.lat,prev.lon,w.lat,w.lon);dtk=String(Math.round(crsB(prev.lat,prev.lon,w.lat,w.lon))).padStart(3,'0')+'M';dist=Math.round(d)+'nm';var em=d/gs*60;ete=em<60?Math.round(em)+'m':(Math.floor(em/60)+'h'+Math.round(em%60)+'m');fuel=(d/gs*gph).toFixed(1)+'g';}nh+='<tr style="background:'+bg+';color:'+col+'"><td style="padding:3px 7px;font-weight:bold">'+w.id+'</td><td style="padding:3px 7px;opacity:0.7">'+({apt:'APT',vor:'VOR',fix:'FIX',vis:'VFR'}[w.type]||'FIX')+'</td><td style="padding:3px 7px">'+dtk+'</td><td style="padding:3px 7px">'+dist+'</td><td style="padding:3px 7px">'+ete+'</td><td style="padding:3px 7px">'+fuel+'</td></tr>';});nh+='</table></div>';ne.innerHTML=nh;}
+  // AirMETs/SIGMETs overlay
+  var _showSigmet=document.getElementById('map-show-sigmet')&&document.getElementById('map-show-sigmet').checked;
+  if(_showSigmet){
+    var _sigLayers=_mapLayers;
+    fetchSigmetData().then(function(data){
+      if(!data)return;
+      var _hazColors={CONVECTIVE:'#ff3333',TURB:'#ff8c00',TURBULENCE:'#ff8c00',ICE:'#44ddff',ICING:'#44ddff',IFR:'#8888ff',LLWS:'#ff44ff',MTN_OBSCN:'#aaaaaa'};
+      var _feats=Array.isArray(data)?data:(data.features||data.data||[]);
+      _feats.forEach(function(feat){
+        var props=feat.properties||feat;
+        var area=props.area||feat.area;
+        var pts=area&&(area.points||area);
+        if(!pts||!Array.isArray(pts)||pts.length<3)return;
+        var latLons=pts.map(function(pt){return[parseFloat(pt.lat||pt[0]),parseFloat(pt.lon||pt[1])];}).filter(function(c){return isFinite(c[0])&&isFinite(c[1]);});
+        if(latLons.length<3)return;
+        var haz=String(props.hazard||props.hazardType||props.type||'TURB').toUpperCase().split(/[\s,_]/)[0];
+        var col=_hazColors[haz]||'#ff8c00';
+        var tip=(props.alphaChar||'')+(props.hazard?' '+props.hazard:'')+(props.severity?' '+props.severity:'');
+        var lyr=L.polygon(latLons,{color:col,weight:1.5,fillColor:col,fillOpacity:0.1,opacity:0.75,dashArray:'6 4'});
+        if(tip.trim())lyr.bindTooltip(tip.trim(),{sticky:true,className:'avisor-popup'});
+        lyr.addTo(_map);_sigLayers.push(lyr);
+      });
+    }).catch(function(){});
+  }
   // Label
   var named=(STATE.waypoints||[]).filter(function(w){return w.type!=='vis';}).map(function(w){return w.id;}).join(' → ');
   var lbl=document.getElementById('map-route-label');
