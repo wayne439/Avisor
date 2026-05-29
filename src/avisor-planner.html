@@ -566,6 +566,10 @@ canvas#cgc{display:block;width:100%;height:auto}
           <button type="button" class="bsm" onclick="tab('approach')" style="flex:1;margin-top:2px">Full Approach Tab →</button>
         </div>
       </div>
+      <div class="card" id="brief-perf-card" style="border-color:#2a3a5a">
+        <div class="card-h" style="display:flex;align-items:center;justify-content:space-between"><span class="card-title">Performance</span><span class="badge" id="brief-perf-badge" style="background:#1a2540">—</span></div>
+        <div class="card-b" id="brief-perf-body"><div style="color:var(--txt3);font-size:10px;font-family:monospace">Build a plan to see takeoff &amp; landing performance.</div></div>
+      </div>
       <div class="card c-b">
         <div class="card-h"><span class="card-title">Recommended Route</span><span class="badge b-b" id="risk-badge">LOW RISK</span></div>
         <div class="card-b">
@@ -1047,13 +1051,15 @@ if(typeof pdfjsLib!=='undefined')
 // AIRCRAFT PERFORMANCE
 // ══════════════════════════════════════════════════════════════════
 const ACPERF={
-  sr22t:  {name:'Cirrus SR22T',        tas:185,gph:18.5,climb:1000,alts:[10000,12000,14000,16000,18000]},
-  bonanza:{name:'Beechcraft Bonanza G36',tas:172,gph:15.8,climb:950, alts:[8000,10000,12000,14000]},
-  tbm940: {name:'Daher TBM 940',       tas:320,gph:58.0,climb:1800,alts:[22000,24000,26000,28000,30000]},
-  c172sp: {name:'Cessna 172SP',        tas:122,gph:8.4, climb:730, alts:[6000,8000,10000]},
-  pa28:   {name:'Piper PA-28-181',     tas:130,gph:9.5, climb:750, alts:[6000,8000,10000,12000]},
-  c182t:  {name:'Cessna 182T',         tas:145,gph:13.0,climb:924, alts:[8000,10000,12000,14000]},
-  da40:   {name:'Diamond DA40 NG',     tas:147,gph:9.2, climb:1090,alts:[8000,10000,12000]},
+  // toGr/to50 = takeoff ground roll / over-50ft obstacle (ft, sea level, std atm, max gross, no wind)
+  // ldGr/ld50 = landing ground roll / from 50ft (ft, sea level, std atm, max gross, no wind)
+  sr22t:  {name:'Cirrus SR22T',          tas:185,gph:18.5,climb:1000,alts:[10000,12000,14000,16000,18000],toGr:1065,to50:2000,ldGr:1040,ld50:2165},
+  bonanza:{name:'Beechcraft Bonanza G36',tas:172,gph:15.8,climb:950, alts:[8000,10000,12000,14000],        toGr:1040,to50:1960,ldGr:840, ld50:1690},
+  tbm940: {name:'Daher TBM 940',         tas:320,gph:58.0,climb:1800,alts:[22000,24000,26000,28000,30000],toGr:1050,to50:2100,ldGr:1350,ld50:2200},
+  c172sp: {name:'Cessna 172SP',          tas:122,gph:8.4, climb:730, alts:[6000,8000,10000],              toGr:960, to50:1685,ldGr:575, ld50:1295},
+  pa28:   {name:'Piper PA-28-181',       tas:130,gph:9.5, climb:750, alts:[6000,8000,10000,12000],        toGr:1000,to50:1650,ldGr:785, ld50:1600},
+  c182t:  {name:'Cessna 182T',           tas:145,gph:13.0,climb:924, alts:[8000,10000,12000,14000],       toGr:820, to50:1350,ldGr:590, ld50:1335},
+  da40:   {name:'Diamond DA40 NG',       tas:147,gph:9.2, climb:1090,alts:[8000,10000,12000],              toGr:1220,to50:1945,ldGr:1250,ld50:2110},
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -1312,6 +1318,60 @@ function windComponents(windDir,windSpd,rwyHdg){
   if(windDir==null||windDir==='VRB'||windSpd==null)return{hw:null,xw:null,vrb:windDir==='VRB'};
   var angle=((windDir-rwyHdg+360)%360)*Math.PI/180;
   return{hw:Math.round(windSpd*Math.cos(angle)),xw:Math.round(Math.abs(windSpd*Math.sin(angle))),vrb:false};
+}
+function calcPerformance(apt,rwy,metar,ac){
+  if(!ac||!ac.to50||!apt||!rwy)return null;
+  var elev=apt.elev||0;
+  var oat=metar?.temp!=null?Number(metar.temp):null;
+  var isa=15-1.98*(elev/1000);
+  var da=oat!=null?Math.round(elev+120*(oat-isa)):elev;
+  var wdir=metar?.wdir==='VRB'?null:(metar?.wdir!=null?parseInt(metar.wdir):null);
+  var wspd=metar?.wspd||0;
+  var wc=windComponents(wdir,wspd,rwy.hdg||0);
+  var hw=wc.hw!=null?wc.hw:0;
+  var daKft=Math.max(0,da/1000);
+  var toWF=hw>=0?Math.max(0.5,1-(hw/9)*0.10):Math.min(3,1+(Math.abs(hw)/2)*0.10);
+  var ldWF=hw>=0?Math.max(0.65,1-(hw/9)*0.05):Math.min(3,1+(Math.abs(hw)/2)*0.10);
+  var toGr=Math.round(ac.toGr*(1+daKft*0.10)*toWF);
+  var to50=Math.round(ac.to50*(1+daKft*0.12)*toWF);
+  var ldGr=Math.round(ac.ldGr*(1+daKft*0.05)*ldWF);
+  var ld50=Math.round(ac.ld50*(1+daKft*0.05)*ldWF);
+  var rwyLen=rwy.len||0;
+  return{da,elev,oat,isa,toGr,to50,ldGr,ld50,rwyLen,toMargin:rwyLen-to50,ldMargin:rwyLen-ld50,hw,xw:wc.xw||0,wdir,wspd};
+}
+function buildPerfHTML(depPerf,depIcao,depRwy,arrPerf,arrIcao,arrRwy,ac){
+  function pf(n){return n!=null?n.toLocaleString()+' ft':'—';}
+  function marginBadge(margin){
+    if(margin==null)return'';
+    var col=margin<0?'#ff6060':margin<500?'#ffaa00':'#00e878';
+    var lbl=margin<0?'SHORT':margin<500?'TIGHT':'OK';
+    return' <span style="color:'+col+';font-size:8px">['+lbl+' '+(margin>=0?'+':'')+margin.toLocaleString()+'ft]</span>';
+  }
+  function col(val){return val<0?'#ff6060':val<500?'#ffaa00':'#00e878';}
+  var html='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+  // Departure
+  html+='<div><div style="font-size:9px;color:var(--sky);font-family:monospace;letter-spacing:.5px;margin-bottom:6px">DEPARTURE</div>';
+  if(depPerf&&depRwy){
+    html+='<div style="font-size:9px;color:var(--txt3);font-family:monospace;margin-bottom:5px">'+depIcao+' RWY '+depRwy.id+'<br>DA '+depPerf.da.toLocaleString()+' ft'+(depPerf.oat!=null?' · '+depPerf.oat+'°C':'')+(depPerf.hw!==0?' · '+(depPerf.hw>0?depPerf.hw+'kt HW':Math.abs(depPerf.hw)+'kt TW'):'')+'</div>';
+    html+=dr('TO ground roll',pf(depPerf.toGr));
+    html+='<div class="row"><span class="rl">TO over 50ft</span><span class="rv" style="color:'+col(depPerf.toMargin)+'">'+pf(depPerf.to50)+'</span></div>';
+    html+=dr('RWY available',pf(depPerf.rwyLen));
+    html+='<div style="padding:4px 0;border-top:1px solid var(--brd);margin-top:2px;font-family:monospace;font-size:10px;font-weight:bold;color:'+col(depPerf.toMargin)+'">Margin: '+(depPerf.toMargin>=0?'+':'')+depPerf.toMargin.toLocaleString()+' ft'+(depPerf.toMargin<0?' ⛔':depPerf.toMargin<500?' ⚠':' ✓')+'</div>';
+  }else{html+='<div style="color:var(--txt3);font-size:10px">No data</div>';}
+  html+='</div>';
+  // Arrival
+  html+='<div><div style="font-size:9px;color:var(--grn);font-family:monospace;letter-spacing:.5px;margin-bottom:6px">ARRIVAL</div>';
+  if(arrPerf&&arrRwy){
+    html+='<div style="font-size:9px;color:var(--txt3);font-family:monospace;margin-bottom:5px">'+arrIcao+' RWY '+arrRwy.id+'<br>DA '+arrPerf.da.toLocaleString()+' ft'+(arrPerf.oat!=null?' · '+arrPerf.oat+'°C':'')+(arrPerf.hw!==0?' · '+(arrPerf.hw>0?arrPerf.hw+'kt HW':Math.abs(arrPerf.hw)+'kt TW'):'')+'</div>';
+    html+='<div class="row"><span class="rl">Ldg from 50ft</span><span class="rv" style="color:'+col(arrPerf.ldMargin)+'">'+pf(arrPerf.ld50)+'</span></div>';
+    html+=dr('Ldg ground roll',pf(arrPerf.ldGr));
+    html+=dr('RWY available',pf(arrPerf.rwyLen));
+    html+='<div style="padding:4px 0;border-top:1px solid var(--brd);margin-top:2px;font-family:monospace;font-size:10px;font-weight:bold;color:'+col(arrPerf.ldMargin)+'">Margin: '+(arrPerf.ldMargin>=0?'+':'')+arrPerf.ldMargin.toLocaleString()+' ft'+(arrPerf.ldMargin<0?' ⛔':arrPerf.ldMargin<500?' ⚠':' ✓')+'</div>';
+  }else{html+='<div style="color:var(--txt3);font-size:10px">No data</div>';}
+  html+='</div>';
+  html+='</div>';
+  html+='<div style="margin-top:8px;font-size:8px;color:var(--txt3);font-family:monospace;line-height:1.5">'+ac.name+' POH sea-level values · DA &amp; wind-corrected estimates · ⚠ always verify with actual POH performance charts before flight</div>';
+  return html;
 }
 function filterProcsForRunway(procs,rwy){
   if(!procs||!procs.length||!rwy||!rwy.id)return procs;
@@ -2157,6 +2217,16 @@ async function buildPlan(){
     if(am?.fltCat==='IFR'||am?.fltCat==='LIFR')hazards.push(`Destination currently ${am.fltCat} — review approach minima and alternates.`);
     if(rules==='VFR'&&(arr.elev||0)>5000)hazards.push(`High-elevation destination ${arr.elev.toLocaleString()} ft — density altitude affects performance.`);
     if(dm?.wspd>20)hazards.push(`Dep wind ${wfmt(dm)} — verify crosswind component is within aircraft limits.`);
+    // Performance hazards
+    if(ac.to50){
+      var _depFR=bestRwy(dep,wdir(dm),null);
+      var _depP=calcPerformance(dep,_depFR,dm,ac);
+      var _arrP=calcPerformance(arr,favRwy,am,ac);
+      if(_depP&&_depP.toMargin<0)hazards.push(`⛔ PERF: Departure runway ${_depFR.id} (${_depFR.len.toLocaleString()}ft) may be too short — TO distance ${_depP.to50.toLocaleString()}ft at DA ${_depP.da.toLocaleString()}ft. Verify POH.`);
+      else if(_depP&&_depP.toMargin<500)hazards.push(`⚠ PERF: Departure runway ${_depFR.id} tight — only ${_depP.toMargin}ft margin at DA ${_depP.da.toLocaleString()}ft.`);
+      if(_arrP&&_arrP.ldMargin<0)hazards.push(`⛔ PERF: Arrival runway ${favRwy.id} (${favRwy.len.toLocaleString()}ft) may be too short — landing distance ${_arrP.ld50.toLocaleString()}ft at DA ${_arrP.da.toLocaleString()}ft. Verify POH.`);
+      else if(_arrP&&_arrP.ldMargin<500)hazards.push(`⚠ PERF: Arrival runway ${favRwy.id} tight — only ${_arrP.ldMargin}ft margin at DA ${_arrP.da.toLocaleString()}ft.`);
+    }
     if(location.protocol==='file:')hazards.push('Page opened as file:// — many browsers block weather, NOTAMs, and map tiles. Use http://localhost (see orange banner) or `npm run dev` in avisor-native-shell.');
     if(!dm&&!am)hazards.push('METAR/TAF did not load — check internet, CORS (use http server), or AviationWeather.gov status.');
     if((!dn||!dn.length)&&(!an||!an.length)){
@@ -2291,6 +2361,22 @@ function renderBrief(p){
   if(_brwyBody){
     var _r=p.favRwy,_patAlt=(p.arr?.elev||0)+(p.arr?.pagl||1000);
     _brwyBody.innerHTML=dr('Pattern altitude',_patAlt.toLocaleString()+' ft MSL')+dr('Entry',_r?'45° entry RWY '+_r.id+', '+(_r.pat==='R'?'right':'left')+' traffic':'Check ATIS')+buildRwyTableHTML(p);
+  }
+  // Performance card
+  var _perfBody=document.getElementById('brief-perf-body'),_perfBadge=document.getElementById('brief-perf-badge');
+  if(_perfBody&&p.ac&&p.ac.to50){
+    var _depFavRwy=bestRwy(p.dep,wdir(p.dm),null);
+    var _depPerf=calcPerformance(p.dep,_depFavRwy,p.dm,p.ac);
+    var _arrPerf=calcPerformance(p.arr,p.favRwy,p.am,p.ac);
+    _perfBody.innerHTML=buildPerfHTML(_depPerf,p.depIcao,_depFavRwy,_arrPerf,p.arrIcao,p.favRwy,p.ac);
+    if(_perfBadge){
+      var _wm=Math.min(_depPerf?_depPerf.toMargin:999999,_arrPerf?_arrPerf.ldMargin:999999);
+      _perfBadge.textContent=_wm<0?'⛔ TOO SHORT':_wm<500?'⚠ TIGHT':'✓ OK';
+      _perfBadge.style.background=_wm<0?'#6b1a1a':_wm<500?'#6b3900':'#003d1a';
+      _perfBadge.style.color=_wm<0?'#ff8080':_wm<500?'#ffbb55':'#00e878';
+    }
+  }else if(_perfBody){
+    _perfBody.innerHTML='<div style="color:var(--txt3);font-size:10px;font-family:monospace">Performance data not available for this aircraft type.</div>';
   }
   // Show fuel stop in hazards/info if set
   if(getFuelStop&&getFuelStop()){
