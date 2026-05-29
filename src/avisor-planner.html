@@ -1205,7 +1205,6 @@ const APCHDB={
 // ══════════════════════════════════════════════════════════════════
 const APTS={
   KSDL:{ident:'KSDL',name:'Scottsdale',elev:1510,lat:33.6229,lon:-111.9106,rwys:[{id:'03',hdg:30,len:8249,pat:'L'},{id:'21',hdg:210,len:8249,pat:'L'}],pagl:1000},
-  KPRC:{ident:'KPRC',name:'Prescott Regional/Love Field',elev:5045,lat:34.6548,lon:-112.4192,rwys:[{id:'03L',hdg:24,len:7616,pat:'L'},{id:'21R',hdg:204,len:7616,pat:'R'},{id:'03R',hdg:24,len:4823,pat:'R'},{id:'21L',hdg:204,len:4823,pat:'L'}],pagl:1000},
   KCHD:{ident:'KCHD',name:'Chandler',elev:1243,lat:33.2691,lon:-111.8110,rwys:[{id:'04R',hdg:40,len:4871,pat:'L'},{id:'22L',hdg:220,len:4871,pat:'L'}],pagl:1000},
   KASE:{ident:'KASE',name:'Aspen/Pitkin County',elev:7820,lat:39.2232,lon:-106.8690,rwys:[{id:'15',hdg:150,len:8006,pat:'L'},{id:'33',hdg:330,len:8006,pat:'R'}],pagl:1000,mtn:true},
   KSAF:{ident:'KSAF',name:'Santa Fe Regional',elev:6348,lat:35.6171,lon:-106.0894,rwys:[{id:'02',hdg:20,len:8366,pat:'L'},{id:'20',hdg:200,len:8366,pat:'L'}],pagl:1000},
@@ -1858,7 +1857,23 @@ function _normRwyRef(s){
   if(m){ var n=parseInt(m[1],10); if(n>=1&&n<=36){ var b=n===36?'36':String(n).padStart(2,'0'); return m[2]?b+m[2]:b; } }
   return s;
 }
-var FAA_ADIP_RWY_DB={}; // Optional manual export map keyed by ICAO/FAA id.
+var FAA_ADIP_RWY_DB={}; // FAA runway data keyed by ICAO — lazily populated from faa-runways-by-ident.json
+var _faaRwyLoadPromise=null;
+async function ensureFaaRunways(){
+  if(Object.keys(FAA_ADIP_RWY_DB).length>100)return FAA_ADIP_RWY_DB;
+  if(_faaRwyLoadPromise)return _faaRwyLoadPromise;
+  _faaRwyLoadPromise=(async function(){
+    try{
+      var base=location.protocol==='file:'?'https://aviorapp.com':'';
+      var r=await fetch(base+'/data/faa-runways-by-ident.json');
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      var data=await r.json();
+      Object.assign(FAA_ADIP_RWY_DB,data);
+    }catch(e){console.warn('FAA runway data load failed:',e&&e.message);}
+    return FAA_ADIP_RWY_DB;
+  })();
+  return _faaRwyLoadPromise;
+}
 var _ourAirportsRunwaysByIdent=null;
 var _ourAirportsLoadPromise=null;
 function _parseCsvLine(line){
@@ -1990,6 +2005,7 @@ async function loadAptForBuild(icao){
       if(ax.elev!=null) base.elev=ax.elev;
     }
     if(!base.rwys||!base.rwys.length){
+      await ensureFaaRunways();
       var adipRw=FAA_ADIP_RWY_DB[icao]||FAA_ADIP_RWY_DB[icao.replace(/^K/,'')];
       if(adipRw&&adipRw.length) base.rwys=adipRw.slice();
     }
@@ -2015,6 +2031,7 @@ async function loadAptForBuild(icao){
       if(ax2.elev!=null) base2.elev=ax2.elev;
     }
     if(!base2.rwys||!base2.rwys.length){
+      await ensureFaaRunways();
       var adip2=FAA_ADIP_RWY_DB[kicao]||FAA_ADIP_RWY_DB[icao];
       if(adip2&&adip2.length) base2.rwys=adip2.slice();
     }
@@ -3426,7 +3443,6 @@ var NAVCOORDS={
 // ══ APT DATABASE ══════════════════════════════════════════════════
 var APT={
   KSDL:{ident:"KSDL",name:"Scottsdale",elev:1510,lat:33.6229,lon:-111.9106,rwys:[{id:"03",hdg:30,len:8249,pat:"L"},{id:"21",hdg:210,len:8249,pat:"L"}],pagl:1000},
-  KPRC:{ident:"KPRC",name:"Prescott Regional/Love Field",elev:5045,lat:34.6548,lon:-112.4192,rwys:[{id:"03L",hdg:24,len:7616,pat:"L"},{id:"21R",hdg:204,len:7616,pat:"R"},{id:"03R",hdg:24,len:4823,pat:"R"},{id:"21L",hdg:204,len:4823,pat:"L"}],pagl:1000},
   KEKS:{ident:"KEKS",name:"Ennis-Big Sky",elev:5423,lat:45.2757,lon:-111.6489,rwys:[{id:"16",hdg:163,len:6600,pat:"R"},{id:"34",hdg:343,len:6600,pat:"L"}],pagl:1000},
   "18AZ":{ident:"18AZ",name:"Sky Ranch At Carefree",elev:2569,lat:33.8186,lon:-111.8981,rwys:[{id:"03",hdg:30,len:2460,pat:"L"},{id:"21",hdg:210,len:2460,pat:"L"}],pagl:1000,pvt:true,nearestWx:"KSDL"},
   KPHX:{ident:"KPHX",name:"Phoenix Sky Harbor",elev:1135,lat:33.4343,lon:-112.0116,rwys:[{id:"08",hdg:80,len:11489,pat:"L"},{id:"26",hdg:260,len:11489,pat:"L"}],pagl:1500},
