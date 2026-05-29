@@ -64,6 +64,13 @@ body{color:var(--txt);font-family:var(--sans);font-size:13px;user-select:none}
 .field input.icao-inv{border-color:var(--red)!important}
 .field input.icao-ok{border-color:var(--grn)!important}
 .icao-msg{font-family:var(--mono);font-size:8px;margin-top:3px;min-height:14px;line-height:1.35;color:var(--txt2)}
+.icao-suggest{position:absolute;left:0;right:0;top:100%;z-index:9999;background:#0d1018;border:1px solid #1e2d44;border-radius:0 0 6px 6px;max-height:180px;overflow-y:auto;display:none;box-shadow:0 6px 18px rgba(0,0,0,.6)}
+.icao-suggest.open{display:block}
+.icao-suggest .sug-item{padding:6px 9px;font-family:monospace;font-size:11px;cursor:pointer;border-bottom:1px solid #1a2236;display:flex;gap:8px;align-items:baseline}
+.icao-suggest .sug-item:last-child{border-bottom:none}
+.icao-suggest .sug-item:hover,.icao-suggest .sug-item.sug-active{background:#132035}
+.icao-suggest .sug-id{color:#00c8f0;min-width:52px;font-weight:700}
+.icao-suggest .sug-name{color:#a0b8d0;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .field select option{background:var(--sky3)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .tog-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
@@ -423,15 +430,17 @@ canvas#cgc{display:block;width:100%;height:auto}
     <div class="section-title">Route</div>
     <div class="field"><label>Date of Flight</label><input type="date" id="flt-date" class="date-input" style="-webkit-appearance:none;-webkit-text-fill-color:inherit"></div>
     <div class="row2">
-      <div class="field">
+      <div class="field" style="position:relative">
         <label>From ICAO</label>
-        <input id="dep" value="KSDL" maxlength="8" spellcheck="false" autocomplete="off" oninput="onRouteIcaoInput('dep')" onblur="onRouteIcaoBlur('dep')">
+        <input id="dep" value="KSDL" maxlength="8" spellcheck="false" autocomplete="off" oninput="onRouteIcaoInput('dep')" onblur="onRouteIcaoBlur('dep')" onkeydown="_icaoSuggestKey('dep',event)">
         <div id="dep-icao-msg" class="icao-msg" aria-live="polite"></div>
+        <div id="dep-suggest" class="icao-suggest"></div>
       </div>
-      <div class="field">
+      <div class="field" style="position:relative">
         <label>To ICAO</label>
-        <input id="arr" value="KASE" maxlength="8" spellcheck="false" autocomplete="off" oninput="onRouteIcaoInput('arr')" onblur="onRouteIcaoBlur('arr')">
+        <input id="arr" value="KASE" maxlength="8" spellcheck="false" autocomplete="off" oninput="onRouteIcaoInput('arr')" onblur="onRouteIcaoBlur('arr')" onkeydown="_icaoSuggestKey('arr',event)">
         <div id="arr-icao-msg" class="icao-msg" aria-live="polite"></div>
+        <div id="arr-suggest" class="icao-suggest"></div>
       </div>
     </div>
     <div class="field" style="position:relative">
@@ -1028,14 +1037,76 @@ function validateRouteIcaoField(which){
     msg.style.color='var(--red)';
   }
 }
+var _icaoSuggestActive={dep:-1,arr:-1};
+function _icaoSuggestSearch(which){
+  var el=document.getElementById(which);
+  var box=document.getElementById(which+'-suggest');
+  if(!el||!box) return;
+  var raw=el.value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(raw.length<2){box.innerHTML='';box.classList.remove('open');return;}
+  if(typeof AIRPORTS_DB==='undefined'){box.innerHTML='';box.classList.remove('open');return;}
+  var matches=[];
+  var keys=Object.keys(AIRPORTS_DB);
+  // 1. ICAO prefix matches (highest priority)
+  for(var i=0;i<keys.length&&matches.length<6;i++){
+    var k=keys[i];
+    if(k.indexOf(raw)===0){var r=AIRPORTS_DB[k];matches.push({id:k,name:r[0],state:r[4]||''});}
+  }
+  // 2. Name substring matches (if still room)
+  if(matches.length<8&&raw.length>=3){
+    var lo=raw.toLowerCase();
+    for(var j=0;j<keys.length&&matches.length<8;j++){
+      var kk=keys[j];
+      if(kk.indexOf(raw)===0) continue;
+      var rr=AIRPORTS_DB[kk];
+      if(rr&&String(rr[0]||'').toLowerCase().indexOf(lo)>=0) matches.push({id:kk,name:rr[0],state:rr[4]||''});
+    }
+  }
+  if(matches.length===0){box.innerHTML='';box.classList.remove('open');return;}
+  box.innerHTML=matches.map(function(m,idx){
+    return '<div class="sug-item" data-id="'+m.id+'" data-idx="'+idx+'" onmousedown="event.preventDefault()" onclick="_icaoSuggestPick(\''+which+'\',\''+m.id+'\')">'
+      +'<span class="sug-id">'+m.id+'</span><span class="sug-name">'+escHtml(m.name)+(m.state?' &middot; '+escHtml(m.state):'')+'</span></div>';
+  }).join('');
+  _icaoSuggestActive[which]=-1;
+  box.classList.add('open');
+}
+function _icaoSuggestPick(which,id){
+  var el=document.getElementById(which);
+  var box=document.getElementById(which+'-suggest');
+  if(el) el.value=id;
+  if(box){box.innerHTML='';box.classList.remove('open');}
+  validateRouteIcaoField(which);
+  scheduleAirportRefresh();
+}
+function _icaoSuggestClose(which){
+  var box=document.getElementById(which+'-suggest');
+  if(box){box.innerHTML='';box.classList.remove('open');}
+  _icaoSuggestActive[which]=-1;
+}
+function _icaoSuggestKey(which,ev){
+  var box=document.getElementById(which+'-suggest');
+  if(!box||!box.classList.contains('open')) return;
+  var items=box.querySelectorAll('.sug-item');
+  if(!items.length) return;
+  if(ev.key==='ArrowDown'){ev.preventDefault();_icaoSuggestActive[which]=Math.min(_icaoSuggestActive[which]+1,items.length-1);}
+  else if(ev.key==='ArrowUp'){ev.preventDefault();_icaoSuggestActive[which]=Math.max(_icaoSuggestActive[which]-1,0);}
+  else if(ev.key==='Enter'||ev.key==='Tab'){
+    var idx=_icaoSuggestActive[which];
+    if(idx>=0&&items[idx]){ev.preventDefault();_icaoSuggestPick(which,items[idx].dataset.id);return;}
+  }else if(ev.key==='Escape'){_icaoSuggestClose(which);return;}
+  items.forEach(function(it,i){it.classList.toggle('sug-active',i===_icaoSuggestActive[which]);});
+  if(_icaoSuggestActive[which]>=0) items[_icaoSuggestActive[which]].scrollIntoView({block:'nearest'});
+}
 function onRouteIcaoInput(which){
   var el=document.getElementById(which);
   if(!el) return;
   el.value=normalizeFormIcao(el.value);
   clearTimeout(_icaoValidateTimer);
+  _icaoSuggestSearch(which);
   _icaoValidateTimer=setTimeout(function(){validateRouteIcaoField(which);},300);
 }
 function onRouteIcaoBlur(which){
+  setTimeout(function(){_icaoSuggestClose(which);},180);
   validateRouteIcaoField(which);
   scheduleAirportRefresh();
 }
@@ -4817,16 +4888,16 @@ function initMap(){
   _map=L.map('map-container',{zoomControl:false,attributionControl:false,preferCanvas:false});
   var isFileMode=(location&&location.protocol==='file:');
   var faaSec=null,ifrLow=null;
-  try{
-    if(!isFileMode&&L.esri&&L.esri.tiledMapLayer){
-      faaSec=L.esri.tiledMapLayer({url:'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/VFR_Sectional/MapServer',minZoom:6,maxZoom:14,maxNativeZoom:12});faaSec.addTo(_map);
-      ifrLow=L.esri.tiledMapLayer({url:'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/IFR_AreaLow/MapServer',minZoom:7,maxZoom:12,maxNativeZoom:12});
-    }
-  }catch(e){console.warn('Esri chart layers',e);}
   var skyVec=L.tileLayer('https://t.skyvector.com/api/Charts/VFR/{z}/{x}/{y}',{maxZoom:11,tileSize:512,errorTileUrl:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',subdomains:'abc'});
   var topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17,subdomains:'abc'});
   var sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
   var night=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19});
+  try{
+    if(!isFileMode&&L.esri&&L.esri.tiledMapLayer){
+      faaSec=L.esri.tiledMapLayer({url:'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/VFR_Sectional/MapServer',minZoom:6,maxZoom:14,maxNativeZoom:12});
+      ifrLow=L.esri.tiledMapLayer({url:'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/IFR_AreaLow/MapServer',minZoom:7,maxZoom:12,maxNativeZoom:12});
+    }
+  }catch(e){console.warn('Esri chart layers',e);}
   var airspL=L.layerGroup();
   var baseLayers={};
   if(faaSec) baseLayers['FAA Sectional (AIS)']=faaSec;
@@ -4835,7 +4906,8 @@ function initMap(){
   baseLayers['Topo / relief']=topo;
   baseLayers['Satellite']=sat;
   baseLayers['Night']=night;
-  var def=(isFileMode?topo:(faaSec||topo));
+  // Always default to FAA Sectional; fall back to topo only in file: mode or if ESRI unavailable
+  var def=(isFileMode||!faaSec)?topo:faaSec;
   def.addTo(_map);
   if(isFileMode&&typeof toast==='function') toast('FILE MODE: map limited. Use http://localhost for FAA sectionals.');
   var skyOn=false;
